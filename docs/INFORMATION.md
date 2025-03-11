@@ -11,10 +11,10 @@
 
 
 ### Ziele
-1. Leitfäden testbar machen
-2. Test-Script-Ressourcen mit Unit-Tests überprüfen.
-3. In Zukunft Testressourcen automatisch aus Leitfäden herausparsen.
-    a. Zunächst eigene kleine Leitfäden mit Testressourcen schreiben (zum Testen).
+1. Leitfäden testbar machen.  
+2. Test-Script-Ressourcen mit Unit-Tests überprüfen.  
+3. In Zukunft Testressourcen automatisch aus Leitfäden herausparsen.  
+    a. Zunächst eigene kleine Leitfäden mit Testressourcen schreiben (zum Testen). 
 
 ### Erste TODOs 11.03
 1. Test-Script-Ressourcen laden und in Python verarbeiten
