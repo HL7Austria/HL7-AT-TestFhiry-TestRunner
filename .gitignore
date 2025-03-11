@@ -1,0 +1,41 @@
+# Bytecode-Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtuelle Umgebungen
+venv/
+env/
+*.venv
+*.env
+
+# IDE-spezifische Dateien
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Log- und Debug-Dateien
+logs/
+*.log
+debug.log
+
+# Build-Artefakte
+dist/
+build/
+*.egg-info/
+
+# Test- und Coverage-Daten
+.coverage
+htmlcov/
+*.pytest_cache/
+.nosetests/
+.tox/
+
+# Sonstige lokale Dateien
+.DS_Store
+Thumbs.db
+
+# Falls Docker genutzt wird (optional)
+docker-compose.override.yml
