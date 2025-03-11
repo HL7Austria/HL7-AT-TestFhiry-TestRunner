@@ -4,4 +4,5 @@
    - Wo die Tests ausgeführt
 4. Wer wird unsere Anwendung benützen
 5. Wird die Anwendung automatisch durchgeführt, oder werden die Leitfäden händisch eingeschleußt
-6. 
+6. Was sind die Deadlines
+7. 
