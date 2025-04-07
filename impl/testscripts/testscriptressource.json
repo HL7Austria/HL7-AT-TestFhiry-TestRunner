@@ -1,0 +1,26 @@
+{
+  "resourceType": "TestScript",
+  "id": "minimal-testscript",
+  "url": "http://example.org/fhir/TestScript/minimal-testscript",
+  "name": "MinimalTestScript",
+  "status": "draft",
+  "date": "2025-04-07",
+  "publisher": "Example Publisher",
+  "description": "A minimal valid TestScript resource",
+  "test": [
+    {
+      "name": "SimpleTest",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "code": "read"
+            },
+            "resource": "Patient",
+            "targetId": "example"
+          }
+        }
+      ]
+    }
+  ]
+}
