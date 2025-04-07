@@ -1,4 +1,3 @@
 # StudienprojektHL7
 
-Branch erstellen: 
-<TicketNummer>-<KurzerText>
+Branch erstellen: <TicketNummer>-<KurzerText>
