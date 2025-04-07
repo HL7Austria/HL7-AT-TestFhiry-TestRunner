@@ -1,0 +1,13 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches:
+      - 5-KleinePipelineBasteln
+
+jobs:
+  test-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ich laufe nur auf ci-testing 🚀
+        run: echo "Dieser Workflow läuft nur, wenn auf 5-KleinePipelineBasteln gepusht wird."
