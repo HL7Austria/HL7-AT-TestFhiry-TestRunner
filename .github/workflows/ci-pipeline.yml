@@ -3,7 +3,7 @@ name: Continuous Deployment
 on:
   push:
     branches:
-      - 5-KleinePipelineBasteln
+      - 6-PostmanInPipeline
 
 jobs:
   test-job:
