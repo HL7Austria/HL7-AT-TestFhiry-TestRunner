@@ -5,13 +5,13 @@ base_url = "https://build.fhir.org/"
 
 # Dateinamen der TestScript-Beispiele
 testscript_files = [
-    "testscript-example.xml",
-    "testscript-example-history.xml",
-    "testscript-example-multisystem.xml",
-    "testscript-example-readtest.xml",
-    "testscript-example-readcommon.xml",
-    "testscript-example-search.xml",
-    "testscript-example-update.xml"
+    "testscript-example.json",
+    "testscript-example-history.json",
+    "testscript-example-multisystem.json",
+    "testscript-example-readtest.json",
+    "testscript-example-readcommon.json",
+    "testscript-example-search.json",
+    "testscript-example-update.json"
 ]
 
 testscript_contents = {}
@@ -27,4 +27,4 @@ for filename in testscript_files:
         print(f"Fehler beim Laden von {filename}: Status {response.status_code}")
 
 
-print(testscript_contents["testscript-example-history.xml"])
+print(testscript_contents["testscript-example-history.json"])
