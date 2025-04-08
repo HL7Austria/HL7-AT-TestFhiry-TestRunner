@@ -6,8 +6,8 @@ URL = "https://hapi.fhir.org/baseR5/Patient/"
 
 # Header for the HTTP request
 HEADERS = {
-    "Content-Type": "application/fhir+json",  # Der Content-Type für FHIR-Daten
-    "Accept": "application/fhir+json"  # Wir erwarten auch FHIR-Daten als Antwort
+    "Content-Type": "application/fhir+json",  # content type for FHIR Data
+    "Accept": "application/fhir+json"  # We expect FHIR data in response
 }
 
 
