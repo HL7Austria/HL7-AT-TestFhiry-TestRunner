@@ -232,7 +232,7 @@
 	"variable": [
 		{
 			"key": "BASE_URL",
-			"value": "https://hapi.fhir.org/baseR5",
+			"value": "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir",
 			"type": "string"
 		},
 		{
