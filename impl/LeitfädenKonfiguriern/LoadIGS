@@ -1,0 +1,16 @@
+# Reads the file with the URL
+# Expectation: the URL is written in the first row and there is only one
+
+file_path = "leitfaden.txt"
+
+def read_first_line(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        first_line = f.readline().strip()
+        if not first_line:
+            raise ValueError(f"Error: First line in '{path}' is empty.")
+        return first_line
+
+IGS_URL = read_first_line(file_path)
+
+if __name__ == "__main__":
+    print("Leitfaden - URL:", IGS_URL)
