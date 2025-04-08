@@ -16,7 +16,7 @@ HEADERS = {
 json_data = '{"resourceType": "Patient", "id": "example", "name": [{"family": "Bodingbauer", "given": ["Julia"]}]}'
 patient = Patient.parse_raw(json_data)
 
-print(patient.name[0].family)  # Output: Julia
+print(patient.name[0].family)  # Output: Bodingbauer
 #----------------------------- PARSE DATA FROM JSON ----------------------------------------
 
 #----------------------------- CREATE PATIENT ----------------------------------------
