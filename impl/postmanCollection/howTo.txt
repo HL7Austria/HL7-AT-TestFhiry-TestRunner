@@ -1,0 +1,5 @@
+In a workspace -> click on Import
+choose the "FHIR Patient Collection.json" and import.
+
+After running the Collection a json is made with the testcases. 
+If a test failes the resulting json will have the total Failes as "totalFail".

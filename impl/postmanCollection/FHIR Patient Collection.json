@@ -1,0 +1,244 @@
+{
+	"info": {
+		"_postman_id": "a02dfd12-7821-441e-aa3b-4a77702d8e0b",
+		"name": "FHIR Patienten Collection",
+		"description": "Eine Collection um dann vereinfacht in eine Pipeline einzufügen\n\nDer [https://hapi.fhir.org/baseR5](https://hapi.fhir.org/baseR5)  \nServer gibt bei bearbeiten u. löschen einen Serverfehler zurück (obwohl im Hintergrund der gewünschte Request auch durchgeführt wird)\n\nDer [http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir](http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir)\n\nServer funktioniert auch ohne Serverfehler.\n\nAlso wird dieser jetzt bevorzugt",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "42785491"
+	},
+	"item": [
+		{
+			"name": "Patienten holen",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Überprüfen, ob der Statuscode 200 ist\r",
+							"pm.test(\"Statuscode ist 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob die Antwort ein JSON ist\r",
+							"pm.test(\"Antwort ist JSON\", function () {\r",
+							"    pm.response.to.be.json;\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob der `resourceType` ein Bundle ist\r",
+							"pm.test(\"resourceType ist 'Bundle'\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    pm.expect(jsonData.resourceType).to.eql(\"Bundle\");\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob das `id`-Feld existiert\r",
+							"pm.test(\"Das Bundle hat eine ID\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    pm.expect(jsonData).to.have.property(\"id\").that.is.a(\"string\");\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob das `type`-Feld \"searchset\" ist\r",
+							"pm.test(\"Bundle type ist 'searchset'\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    pm.expect(jsonData.type).to.eql(\"searchset\");\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob das `meta.lastUpdated`-Feld existiert und eine gültige Datumszeichenfolge ist\r",
+							"pm.test(\"meta.lastUpdated ist vorhanden und gültig\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    pm.expect(jsonData.meta).to.have.property(\"lastUpdated\").that.is.a(\"string\");\r",
+							"});\r",
+							"\r",
+							"// Überprüfen, ob es `entry`-Elemente gibt (kann sich ändern, daher keine feste Anzahl)\r",
+							"pm.test(\"Einträge im Bundle vorhanden\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    pm.expect(jsonData).to.have.property(\"entry\").that.is.an(\"array\");\r",
+							"});\r",
+							"\r",
+							"// Falls es `entry`-Elemente gibt, prüfe, ob jeder Eintrag ein Patient-Resource hat\r",
+							"pm.test(\"Jeder Eintrag enthält eine Patient-Resource\", function () {\r",
+							"    var jsonData = pm.response.json();\r",
+							"    if (jsonData.entry && jsonData.entry.length > 0) {\r",
+							"        jsonData.entry.forEach(function(entry) {\r",
+							"            pm.expect(entry.resource.resourceType).to.eql(\"Patient\");\r",
+							"            pm.expect(entry.resource).to.have.property(\"id\").that.is.a(\"string\");\r",
+							"        });\r",
+							"    }\r",
+							"});\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL}}/Patient",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"Patient"
+					]
+				},
+				"description": "Alle bestehenden Patienten holen mit Tests ob Patienten valide sind."
+			},
+			"response": []
+		},
+		{
+			"name": "Einen Patient erstellen",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let response = pm.response.json();\r",
+							"pm.collectionVariables.set(\"patientID\", response.id);\r",
+							"\r",
+							"pm.test(\"Statuscode ist 201\", function () {\r",
+							"    pm.response.to.have.status(201);\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"resourceType\": \"Patient\",\r\n  \"identifier\": [\r\n    {\r\n      \"system\": \"urn:oid:1.2.40.0.10.1.4.3.1\",\r\n      \"value\": \"1234010100\"\r\n    }\r\n  ],\r\n  \"name\": [\r\n    {\r\n      \"family\": \"Mustermann\",\r\n      \"given\": [\"Max\"]\r\n    }\r\n  ],\r\n  \"gender\": \"male\",\r\n  \"birthDate\": \"1900-01-01\",\r\n  \"address\": [\r\n    {\r\n      \"line\": [\"Landstrasse 1 Stock 9 Tür 42\"],\r\n      \"city\": \"Linz\",\r\n      \"postalCode\": \"4020\",\r\n      \"country\": \"AUT\"\r\n    }\r\n  ]\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{BASE_URL}}/Patient",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"Patient"
+					]
+				},
+				"description": "vor Patienten bearbeiten und Patienten löschen ausführen!!\n\nHier wird die patientID collectionVariable befüllt --> in Script"
+			},
+			"response": []
+		},
+		{
+			"name": "Patient bearbeiten",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Statuscode ist 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"resourceType\" : \"Patient\",\r\n  \"id\" : \"{{patientID}}\",\r\n  \"identifier\": [\r\n    {\r\n      \"system\": \"urn:oid:1.2.40.0.10.1.4.3.1\",\r\n      \"value\": \"1234010100\"\r\n    }\r\n  ],\r\n  \"name\" : [\r\n    {\r\n      \"family\" : \"Muster\",\r\n      \"given\" : [\r\n        \"Sabine\"\r\n      ],\r\n      \"prefix\" : [\r\n        \"DI\"\r\n      ]\r\n    }\r\n  ],\r\n  \"telecom\" : [\r\n    {\r\n      \"system\" : \"email\",\r\n      \"value\" : \"office@hl7.at\",\r\n      \"use\" : \"work\"\r\n    },\r\n    {\r\n      \"system\" : \"phone\",\r\n      \"value\" : \"+436501234567890\",\r\n      \"use\" : \"home\"\r\n    }\r\n  ],\r\n  \"gender\" : \"male\",\r\n  \"birthDate\" : \"1930-03-06\",\r\n  \"address\" : [\r\n    {\r\n      \"use\" : \"home\",\r\n      \"type\" : \"both\",\r\n      \"line\" : [\r\n        \"Landstrasse 5 Stock 3 Tür 26\"\r\n      ],\r\n      \"_line\" : [\r\n        {\r\n          \"extension\" : [\r\n            {\r\n              \"url\" : \"http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName\",\r\n              \"valueString\" : \"Landstrasse\"\r\n            },\r\n            {\r\n              \"url\" : \"http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber\",\r\n              \"valueString\" : \"5\"\r\n            },\r\n            {\r\n              \"url\" : \"http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-additionalLocator\",\r\n              \"valueString\" : \"Stock 3 Tür 26\"\r\n            },\r\n            {\r\n              \"url\" : \"http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-address-additionalInformation\",\r\n              \"valueString\" : \"Lift vorhanden\"\r\n            }\r\n          ]\r\n        }\r\n      ],\r\n      \"city\" : \"Linz\",\r\n      \"state\" : \"Oberösterreich\",\r\n      \"postalCode\" : \"4020\",\r\n      \"country\" : \"AUT\"\r\n    }\r\n  ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{BASE_URL}}/Patient/{{patientID}}",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"Patient",
+						"{{patientID}}"
+					]
+				},
+				"description": "Der zuvor erstellte Patient wird bearbeitet.\n\nTest überprüft ob der Patient wirklich bearbeitet wurde"
+			},
+			"response": []
+		},
+		{
+			"name": "Patient löschen",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Statuscode ist 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL}}/Patient/{{patientID}}",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"Patient",
+						"{{patientID}}"
+					]
+				},
+				"description": "Am Ende ausführen!!\n\nLöscht den vorher erstellten Patienten."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "BASE_URL",
+			"value": "https://hapi.fhir.org/baseR5",
+			"type": "string"
+		},
+		{
+			"key": "patientID",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
