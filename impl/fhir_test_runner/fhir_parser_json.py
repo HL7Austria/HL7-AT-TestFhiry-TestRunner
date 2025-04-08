@@ -17,6 +17,7 @@ json_data = '{"resourceType": "Patient", "id": "example", "name": [{"family": "B
 patient = Patient.parse_raw(json_data)
 
 print(patient.name[0].family)  # Output: Julia
+#----------------------------- PARSE DATA FROM JSON ----------------------------------------
 
 #----------------------------- CREATE PATIENT ----------------------------------------
 # Create patient
