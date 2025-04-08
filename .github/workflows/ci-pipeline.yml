@@ -11,3 +11,23 @@ jobs:
     steps:
       - name: Ich laufe nur auf ci-testing 🚀
         run: echo "Dieser Workflow läuft nur, wenn auf 5-KleinePipelineBasteln gepusht wird."
+
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Newman
+        run: npm install -g newman
+
+      - name: Run Postman Collection
+        run: |
+          newman run impl/postmanCollection/FHIR Patient Collection.json \
+          --reporters cli,junit \
+          --reporter-junit-export newman-results.xml
