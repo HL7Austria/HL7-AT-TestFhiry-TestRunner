@@ -28,6 +28,6 @@ jobs:
 
       - name: Run Postman Collection
         run: |
-          newman run impl/postmanCollection/FHIR Patient Collection.json \
+          newman run impl/postmanCollection/FHIR_Patient_Collection.json \
           --reporters cli,junit \
           --reporter-junit-export newman-results.xml
