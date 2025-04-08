@@ -14,7 +14,7 @@ HEADERS = {
 #----------------------------- PARSE DATA FROM JSON ----------------------------------------
 # Parse Data from JSON
 json_data = '{"resourceType": "Patient", "id": "example", "name": [{"family": "Bodingbauer", "given": ["Julia"]}]}'
-patient = Patient.parse_raw(json_data)
+patient = Patient.model_validate_json(json_data)
 
 print(patient.name[0].family)  # Output: Bodingbauer
 #----------------------------- PARSE DATA FROM JSON ----------------------------------------
