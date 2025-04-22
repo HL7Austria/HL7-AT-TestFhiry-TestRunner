@@ -3,6 +3,6 @@
     "https://build.fhir.org/"
   ],
   "Server": [
-    "https://hapi.fhir.org/baseR4"
+    "https://fhir-r4-test.hl7.at/baseR4"
   ]
 }
