@@ -3,11 +3,9 @@ from bs4 import BeautifulSoup
 import os
 
 def save_test_scripts():
-    # Create directory for JSON files
-    json_dir = "test_script_json_files"
-    if not os.path.exists(json_dir):
-        os.makedirs(json_dir)
-        print(f"\nCreated directory: {json_dir}")
+    # Use the specific directory path
+    json_dir = "impl/testscripts/test_script_json_files"
+    print(f"\nUsing directory: {json_dir}")
     
     # Base URL
     base_url = "https://fhir.hl7.at/r4-core-80-include-testscripts"
@@ -56,5 +54,5 @@ def save_test_scripts():
 if __name__ == "__main__":
     print("Starting TestScript save process...")
     save_test_scripts()
-    print("\nDone! Check 'test_script_json_files' directory for saved files.")
+    print("\nDone! Check 'impl/testscripts/test_script_json_files' directory for saved files.")
 
