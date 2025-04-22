@@ -1,0 +1,8 @@
+{
+  "IG": [
+    "https://build.fhir.org/"
+  ],
+  "Server": [
+    "https://exampleforserver.com"
+  ]
+}

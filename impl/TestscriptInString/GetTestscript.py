@@ -1,9 +1,21 @@
+import json
 import requests
 
-#URL
-base_url = "https://build.fhir.org/"
+# Load config file
+try:
+    with open("config.json", "r") as file:
+        config = json.load(file)
+except FileNotFoundError:
+    print("Error: 'config.json' file not found.")
+    exit(1)
+except json.JSONDecodeError as e:
+    print(f"Error: Failed to parse 'config.json': {e}")
+    exit(1)
 
-# Dateinamen der TestScript-Beispiele
+# Use the first IG URL as base URL
+base_url = config["IG"][0]
+
+# List of TestScript filenames
 testscript_files = [
     "testscript-example.json",
     "testscript-example-history.json",
@@ -16,15 +28,15 @@ testscript_files = [
 
 testscript_contents = {}
 
-# Alle Inhalte per HTTP abrufen und als String speichern
-
+# Download each file via HTTP and store content as string
 for filename in testscript_files:
     url = base_url + filename
-    response = requests.get(url)
-    if response.status_code == 200:
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise exception for non-2xx responses
         testscript_contents[filename] = response.text
-    else:
-        print(f"Fehler beim Laden von {filename}: Status {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to load '{filename}' from '{url}': {e}")
 
-
-print(testscript_contents["testscript-example-history.json"])
+# Print one example to verify
+print(testscript_contents.get("testscript-example-multisystem.json", "Error: File could not be loaded. ."))
