@@ -2,14 +2,15 @@ from fhir.resources.patient import Patient
 import json
 import requests
 
-URL = "https://hapi.fhir.org/baseR5/Patient/"
+from configuration.read_config_file import read_config_file
+
+URL = read_config_file("Server") +"/Patient/"
 
 # Header for the HTTP request
 HEADERS = {
     "Content-Type": "application/fhir+json",  # content type for FHIR Data
     "Accept": "application/fhir+json"  # We expect FHIR data in response
 }
-
 
 #----------------------------- PARSE DATA FROM JSON ----------------------------------------
 # Parse Data from JSON
@@ -23,7 +24,6 @@ print(patient.name[0].family)  # Output: Bodingbauer
 # Create patient
 new_patient = Patient(
     resourceType="Patient",  # Type of resource
-    id="new-example",  # ID for new Patient
     name=[{
         "family": "ASDFASDF",
         "given": ["JULIA BBB"]
