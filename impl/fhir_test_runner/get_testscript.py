@@ -1,19 +1,11 @@
 import json
 import requests
 
-# Load config file
-try:
-    with open("config.json", "r") as file:
-        config = json.load(file)
-except FileNotFoundError:
-    print("Error: 'config.json' file not found.")
-    exit(1)
-except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse 'config.json': {e}")
-    exit(1)
 
-# Use the first IG URL as base URL
-base_url = config["IG"][0]
+from configuration.read_config_file import read_config_file
+
+# read
+base_url = read_config_file("IG")
 
 # List of TestScript filenames
 testscript_files = [
