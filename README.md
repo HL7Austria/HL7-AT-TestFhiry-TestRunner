@@ -13,4 +13,19 @@ Links zu Leitfäden, auf die wir bereits Zugriff haben und die wir unterstützen
 Testscripts in Leitfaden:
 + https://fhir.hl7.at/r4-core-80-include-testscripts/tests.html
 
+---
 
+In diesem Projekt werden alle TestScripts aus dem Leitfaden als JSON-Dateien im folgenden Ordner gespeichert:  
+```
+impl/testscripts/test_script_json_files
+```
+
+Um die JSON-Dateien zu aktualisieren, muss das folgende Python-Skript ausgeführt werden:  
+```
+impl/testscripts/parse_testScripts_save_as_json.py
+```
+
+Anschließend befinden sich alle aktualisierten JSON-Dateien im Unterordner:  
+```
+impl/testscripts/test_script_json_files
+```
