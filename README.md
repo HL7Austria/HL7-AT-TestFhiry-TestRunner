@@ -10,5 +10,7 @@ Links zu Leitfäden, auf die wir bereits Zugriff haben und die wir unterstützen
 + https://fhir.hl7.at/
 + https://fhir.hl7.at/index_other.html
 
+Testscripts in Leitfaden:
++ https://fhir.hl7.at/r4-core-80-include-testscripts/tests.html
 
 
