@@ -1,0 +1,95 @@
+{
+  "resourceType" : "TestScript",
+  "id" : "testscript-patient-update-at-core",
+  "text" : {
+    "status" : "generated",
+    "div" : "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p><b>Generated Narrative: TestScript</b><a name=\"testscript-patient-update-at-core\"> </a></p><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">Resource TestScript &quot;testscript-patient-update-at-core&quot; </p></div><p><b>url</b>: <code>http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/TestScript/testscript-patient-update-at-core</code></p><p><b>version</b>: 1.1.0</p><p><b>name</b>: HL7® AT Core TestScript - Patient Update</p><p><b>title</b>: HL7® AT Core TestScript - Patient Update</p><p><b>status</b>: active</p><p><b>date</b>: 2023-02-21</p><p><b>publisher</b>: HL7® Austria</p><p><b>contact</b>: Technical Committee for FHIR® at HL7® Austria: <a href=\"mailto:mailto:tc-fhir@hl7.at\">mailto:tc-fhir@hl7.at</a></p><p><b>description</b>: TestScript updating an existing patient resource conformant to the AT Core Patient profile on a FHIR Server using the JSON format. FHIR Client may use any input patient resource, but the script can provide an example patient: Andreas Bucher - HL7ATCorePatientExample04 with an updated PI value of “11-22-33-44”. Expected Result:  Server accepts update of Patient resource that is conformant to the AT Core Patient profile. The testscript uses a variable for the resource ID value which should match the Id of the resource being updated.</p><p><b>copyright</b>: This FHIR Test Script is licensed under Creative Commons (CC0) 'No Rights Reserved'. Learn more at https://creativecommons.org/licenses</p><h3>Origins</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Index</b></td><td><b>Profile</b></td></tr><tr><td style=\"display: none\">*</td><td>1</td><td>FHIR Client (Details: http://terminology.hl7.org/CodeSystem/testscript-profile-origin-types code FHIR-Client = 'FHIR Client', stated as 'null')</td></tr></table><h3>Destinations</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Index</b></td><td><b>Profile</b></td></tr><tr><td style=\"display: none\">*</td><td>1</td><td>FHIR Server (Details: http://terminology.hl7.org/CodeSystem/testscript-profile-destination-types code FHIR-Server = 'FHIR Server', stated as 'null')</td></tr></table><blockquote><p><b>fixture</b></p><blockquote><p><b>id</b></p>patient-update</blockquote><p><b>autocreate</b>: false</p><p><b>autodelete</b>: false</p><p><b>resource</b>: <a href=\"Patient-HL7ATCorePatientUpdateTestExample.html\">Patient-HL7ATCorePatientUpdateTestExample.html</a></p></blockquote><p><b>profile</b>: <a href=\"http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient\">http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient</a> &quot;HL7ATCorePatient&quot;</p><h3>Variables</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Name</b></td><td><b>Description</b></td><td><b>Hint</b></td></tr><tr><td style=\"display: none\">*</td><td>patientResourceId</td><td>Enter the patient FHIR resource id the FHIR Client will send to the FHIR Server.</td><td>[Resource Id]</td></tr></table><blockquote><p><b>test</b></p><blockquote><p><b>id</b></p>Step1-UpdatePatient</blockquote><p><b>name</b>: UpdatePatient</p><p><b>description</b>: Update a patient resource conformant to the AT Core Patient profile.</p><blockquote><p><b>action</b></p><h3>Operations</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Type</b></td><td><b>Resource</b></td><td><b>Description</b></td><td><b>Accept</b></td><td><b>ContentType</b></td><td><b>Destination</b></td><td><b>EncodeRequestUrl</b></td><td><b>Origin</b></td><td><b>Params</b></td><td><b>ResponseId</b></td><td><b>SourceId</b></td></tr><tr><td style=\"display: none\">*</td><td>Update (Details: http://terminology.hl7.org/CodeSystem/testscript-operation-codes code update = 'Update', stated as 'null')</td><td>Patient</td><td>Update patient resource.</td><td>json</td><td>json</td><td>1</td><td>true</td><td>1</td><td>/${patientResourceId}</td><td>create-response</td><td>patient-update</td></tr></table></blockquote><blockquote><p><b>action</b></p><h3>Asserts</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Description</b></td><td><b>Direction</b></td><td><b>ValidateProfileId</b></td><td><b>WarningOnly</b></td></tr><tr><td style=\"display: none\">*</td><td>Validate that the returned resource conforms to the base FHIR Patient profile.</td><td>request</td><td>at-core-patient-profile</td><td>false</td></tr></table></blockquote><blockquote><p><b>action</b></p><h3>Asserts</h3><table class=\"grid\"><tr><td style=\"display: none\">-</td><td><b>Description</b></td><td><b>Direction</b></td><td><b>Operator</b></td><td><b>ResponseCode</b></td><td><b>WarningOnly</b></td></tr><tr><td style=\"display: none\">*</td><td>Confirm that the returned HTTP status is 200(OK).</td><td>response</td><td>equals</td><td>200</td><td>false</td></tr></table></blockquote></blockquote></div>"
+  },
+  "url" : "http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/TestScript/testscript-patient-update-at-core",
+  "version" : "1.1.0",
+  "name" : "HL7® AT Core TestScript - Patient Update",
+  "title" : "HL7® AT Core TestScript - Patient Update",
+  "status" : "active",
+  "date" : "2023-02-21",
+  "publisher" : "HL7® Austria",
+  "contact" : [{
+    "name" : "Technical Committee for FHIR® at HL7® Austria",
+    "telecom" : [{
+      "system" : "email",
+      "value" : "mailto:tc-fhir@hl7.at"
+    }]
+  }],
+  "description" : "TestScript updating an existing patient resource conformant to the AT Core Patient profile on a FHIR Server using the JSON format. FHIR Client may use any input patient resource, but the script can provide an example patient: Andreas Bucher - HL7ATCorePatientExample04 with an updated PI value of “11-22-33-44”. Expected Result:  Server accepts update of Patient resource that is conformant to the AT Core Patient profile. The testscript uses a variable for the resource ID value which should match the Id of the resource being updated.",
+  "copyright" : "This FHIR Test Script is licensed under Creative Commons (CC0) 'No Rights Reserved'. Learn more at https://creativecommons.org/licenses",
+  "origin" : [{
+    "index" : 1,
+    "profile" : {
+      "system" : "http://terminology.hl7.org/CodeSystem/testscript-profile-origin-types",
+      "code" : "FHIR-Client"
+    }
+  }],
+  "destination" : [{
+    "index" : 1,
+    "profile" : {
+      "system" : "http://terminology.hl7.org/CodeSystem/testscript-profile-destination-types",
+      "code" : "FHIR-Server"
+    }
+  }],
+  "fixture" : [{
+    "id" : "patient-update",
+    "autocreate" : false,
+    "autodelete" : false,
+    "resource" : {
+      "reference" : "Patient-HL7ATCorePatientUpdateTestExample.html"
+    }
+  }],
+  "profile" : [{
+    "id" : "at-core-patient-profile",
+    "reference" : "http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"
+  }],
+  "variable" : [{
+    "name" : "patientResourceId",
+    "description" : "Enter the patient FHIR resource id the FHIR Client will send to the FHIR Server.",
+    "hint" : "[Resource Id]"
+  }],
+  "test" : [{
+    "id" : "Step1-UpdatePatient",
+    "name" : "UpdatePatient",
+    "description" : "Update a patient resource conformant to the AT Core Patient profile.",
+    "action" : [{
+      "operation" : {
+        "type" : {
+          "system" : "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+          "code" : "update"
+        },
+        "resource" : "Patient",
+        "description" : "Update patient resource.",
+        "accept" : "json",
+        "contentType" : "json",
+        "destination" : 1,
+        "encodeRequestUrl" : true,
+        "origin" : 1,
+        "params" : "/${patientResourceId}",
+        "responseId" : "create-response",
+        "sourceId" : "patient-update"
+      }
+    },
+    {
+      "assert" : {
+        "description" : "Validate that the returned resource conforms to the base FHIR Patient profile.",
+        "direction" : "request",
+        "validateProfileId" : "at-core-patient-profile",
+        "warningOnly" : false
+      }
+    },
+    {
+      "assert" : {
+        "description" : "Confirm that the returned HTTP status is 200(OK).",
+        "direction" : "response",
+        "operator" : "equals",
+        "responseCode" : "200",
+        "warningOnly" : false
+      }
+    }]
+  }]
+}
