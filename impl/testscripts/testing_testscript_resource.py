@@ -3,11 +3,14 @@ import requests
 import pytest
 
 FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
+saved_resource_id = ""
+
 
 # Hilfsfunktion zum Laden von JSON-Dateien
 def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 # Mapping von Kurzformen wie "json" zu FHIR-konformen MIME-Types
 def parse_fhir_header(value, header_type):
@@ -23,18 +26,29 @@ def parse_fhir_header(value, header_type):
 
 # Operation ausführen
 def execute_operation(operation, resource):
+
     method = operation.get("type", {}).get("code", "").lower()
     resource_type = operation.get("resource")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
     headers = {
         "Content-Type": parse_fhir_header(operation.get("contentType"), "Content-Type"),
         "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
-
     }
 
     print(f"Executing: {method.upper()} {url}")
     if method == "create":
         response = requests.post(url, headers=headers, json=resource)
+        global saved_resource_id
+        try:
+            saved_resource_id = response.json().get("id")
+        except ValueError:
+            location = response.headers.get("Location", "")
+            if location:
+                saved_resource_id = location.rstrip("/").split("/")[-3]
+                print(f"ID from Location header: {saved_resource_id}")
+            else:
+                raise ValueError("No ID found in response or Location header")
+
     elif method == "update":
         resource_id = resource.get("id")
         response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
@@ -47,12 +61,14 @@ def execute_operation(operation, resource):
     print(f"Response: {response.status_code}")
     return response
 
+
 # Assertion prüfen
 def validate_response(assertion, response):
     expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
     status_code = str(response.status_code)
     print(f"Asserting response code {status_code} in {expected_codes}")
     assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
+
 
 # Fixture für dynamische Testdaten
 @pytest.fixture(params=[
@@ -65,13 +81,14 @@ def testscript_data(request):
     resource = load_json(resource_path)
     return testscript, resource
 
+
 # Der eigentliche Testfall – strukturiert in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
     # GIVEN
     testscript, resource = testscript_data
 
     for test in testscript.get("test", []):
-        print(f"\n🧪 Test: {test.get('name')}")
+        print(f"\n Test: {test.get('name')}")
         response = None
 
         for action in test.get("action", []):
@@ -80,10 +97,32 @@ def test_fhir_operations(testscript_data):
                 operation = action["operation"]
                 response = execute_operation(operation, resource)
 
+                #  Extension: If it was a CREATE operation, then check GET
+                method = operation.get("type", {}).get("code", "").lower()
+                resource_type = operation.get("resource")
+                if method == "create":
+                    global saved_resource_id
+                    assert saved_resource_id, "No ID was saved after create"
+
+                    # GET zur Verifikation
+                    read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
+                    print(f"Verifying created resource via GET: {read_url}")
+                    get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
+
+                    # Ausgabe & Assertion
+                    print(f"Response: {get_response.status_code}")
+                    try:
+                        data = get_response.json()
+                        assert data.get("id") == saved_resource_id, "GET returned different ID"
+                        assert data.get("resourceType") == resource_type, "ResourceType mismatch"
+                    except ValueError:
+                        assert False, "GET response is not valid JSON"
+
+
             # THEN – Wenn Assertion
             elif "assert" in action:
                 assertion = action["assert"]
                 if assertion.get("direction") == "response":
                     validate_response(assertion, response)
                 elif assertion.get("direction") == "request":
-                    pass  # ggf. später erweitern
+                    pass
