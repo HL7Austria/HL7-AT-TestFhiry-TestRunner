@@ -6,13 +6,13 @@ FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
 saved_resource_id = ""
 
 
-# Hilfsfunktion zum Laden von JSON-Dateien
+# Help function for loading JSON files
 def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# Mapping von Kurzformen wie "json" zu FHIR-konformen MIME-Types
+# Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
 def parse_fhir_header(value, header_type):
     if not value:
         return "application/fhir+json"
@@ -21,12 +21,11 @@ def parse_fhir_header(value, header_type):
         return "application/fhir+json"
     elif value == "xml":
         return "application/fhir+xml"
-    return value  # fallback: nutze, was auch immer drinsteht
+    return value  # fallback: use whatever it says
 
 
-# Operation ausführen
+# Execute operation
 def execute_operation(operation, resource):
-
     method = operation.get("type", {}).get("code", "").lower()
     resource_type = operation.get("resource")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
@@ -62,7 +61,7 @@ def execute_operation(operation, resource):
     return response
 
 
-# Assertion prüfen
+# Check assertion
 def validate_response(assertion, response):
     expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
     status_code = str(response.status_code)
@@ -70,7 +69,7 @@ def validate_response(assertion, response):
     assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 
-# Fixture für dynamische Testdaten
+# Fixture for dynamic test data
 @pytest.fixture(params=[
     ("TestScript-testscript-patient-create-at-core.json", "Patient-HL7ATCorePatientUpdateTestExample.json"),
     ("TestScript-testscript-patient-update-at-core.json", "Patient-HL7ATCorePatientUpdateTestExample.json")
@@ -82,7 +81,7 @@ def testscript_data(request):
     return testscript, resource
 
 
-# Der eigentliche Testfall – strukturiert in GIVEN-WHEN-THEN
+# The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
     # GIVEN
     testscript, resource = testscript_data
@@ -104,12 +103,12 @@ def test_fhir_operations(testscript_data):
                     global saved_resource_id
                     assert saved_resource_id, "No ID was saved after create"
 
-                    # GET zur Verifikation
+                    # GET for verification
                     read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
                     print(f"Verifying created resource via GET: {read_url}")
                     get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
 
-                    # Ausgabe & Assertion
+                    # Output & Assertion
                     print(f"Response: {get_response.status_code}")
                     try:
                         data = get_response.json()
@@ -119,7 +118,7 @@ def test_fhir_operations(testscript_data):
                         assert False, "GET response is not valid JSON"
 
 
-            # THEN – Wenn Assertion
+            # THEN - If Assertion
             elif "assert" in action:
                 assertion = action["assert"]
                 if assertion.get("direction") == "response":
