@@ -1,0 +1,1 @@
+# TODO: Class for loading the IG from Folder

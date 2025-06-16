@@ -13,7 +13,7 @@ def read_config_file():
 
 def save_example_instances():
     # Use the specific directory path
-    json_dir = "Example_Instances"
+    json_dir = os.path.join("..", "Example_Instances")
 
     # Create directory if it doesn't exist
     os.makedirs(json_dir, exist_ok=True)
@@ -60,7 +60,7 @@ def save_example_instances():
 
 def save_test_scripts():
     # Use the specific directory path
-    json_dir = "TestScripts"
+    json_dir = os.path.join("..", "Test_Scripts")
     print(f"\nUsing directory: {json_dir}")
     os.makedirs(json_dir, exist_ok=True)
     # Base URL
