@@ -10,7 +10,6 @@ def read_config_file():
     url = config["url"]
     return url
 
-
 def save_example_instances():
     # Use the specific directory path
     json_dir = os.path.join("..", "Example_Instances")
@@ -31,31 +30,24 @@ def save_example_instances():
         href = link.get('href')
         if href and (href.startswith('Patient-') or href.startswith('Organization-')):
 
-            # Convert to JSON URL
-            json_url = f"{base_url}/{href.replace('.html', '.json.html')}"
+            # Convert to direct JSON URL
+            json_url = f"{base_url}/{href.replace('.html', '.json')}"
 
-            # Get JSON content
+            # Get JSON content directly
             json_response = requests.get(json_url)
 
             if json_response.status_code == 200:
-                # Parse JSON page
-                json_soup = BeautifulSoup(json_response.text, 'html.parser')
-                json_content = json_soup.find('pre')
+                # Get filename and create full path
+                filename = href.replace('.html', '.json')
+                filepath = os.path.join(json_dir, filename)
+                print(f"Saving to file: {filepath}")
 
-                if json_content:
-                    # Get filename and create full path
-                    filename = href.replace('.html', '.json')
-                    filepath = os.path.join(json_dir, filename)
-                    print(f"Saving to file: {filepath}")
-
-                    # Save JSON content to file
-                    with open(filepath, 'w', encoding='utf-8') as f:
-                        f.write(json_content.get_text())
-                    print("File saved successfully!")
-                else:
-                    print("No JSON content found in response")
+                # Save JSON content to file
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(json_response.text)
+                print("File saved successfully!")
             else:
-                print("Failed to get JSON content")
+                print(f"Failed to get JSON content from {json_url}")
 
 
 def save_test_scripts():
@@ -76,30 +68,23 @@ def save_test_scripts():
         href = link.get('href')
         if href and href.startswith('TestScript-'):
 
-            # Convert to JSON URL
-            json_url = f"{base_url}/{href.replace('.html', '.json.html')}"
+            # Convert to direct JSON URL
+            json_url = f"{base_url}/{href.replace('.html', '.json')}"
 
-            # Get JSON content
+            # Get JSON content directly
             json_response = requests.get(json_url)
 
             if json_response.status_code == 200:
-                # Parse JSON page
-                json_soup = BeautifulSoup(json_response.text, 'html.parser')
-                json_content = json_soup.find('pre')
+                # Get filename and create full path
+                filename = href.replace('.html', '.json')
+                filepath = os.path.join(json_dir, filename)
 
-                if json_content:
-                    # Get filename and create full path
-                    filename = href.replace('.html', '.json')
-                    filepath = os.path.join(json_dir, filename)
-
-                    # Save JSON content to file
-                    with open(filepath, 'w', encoding='utf-8') as f:
-                        f.write(json_content.get_text())
-                    print("File saved successfully!")
-                else:
-                    print("No JSON content found in response")
+                # Save JSON content to file
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(json_response.text)
+                print("File saved successfully!")
             else:
-                print("Failed to get JSON content")
+                print(f"Failed to get JSON content from {json_url}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import json
 import requests
 import pytest
+from Transactions.transactions import build_whole_transaction_bundle
 
 FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
 saved_resource_id = ""
