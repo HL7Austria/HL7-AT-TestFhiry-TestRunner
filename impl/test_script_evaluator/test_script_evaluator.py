@@ -2,6 +2,7 @@ import json
 import requests
 import pytest
 
+
 FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
 saved_resource_id = ""
 

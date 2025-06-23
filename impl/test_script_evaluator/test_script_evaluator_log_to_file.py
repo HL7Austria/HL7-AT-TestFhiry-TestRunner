@@ -4,20 +4,23 @@ import pytest
 import os
 from datetime import datetime
 
-
 FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
 saved_resource_id = ""
-LOG_FILE_PATH = "test_results.txt"
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+log_filename = f"test_results_{timestamp}.txt"
+LOG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Results", log_filename))
+
+LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
+
 def log_to_file(message):
     print(message)
     with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
         f.write(message + "\n")
-
 
 
 # Help function for loading JSON files
@@ -48,7 +51,6 @@ def execute_operation(operation, resource):
         "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
     }
 
-
     log_to_file(f"Executing: {method.upper()} {url}")
 
     if method == "create":
@@ -74,7 +76,6 @@ def execute_operation(operation, resource):
         response = requests.get(f"{url}/{resource_id}", headers=headers)
     else:
         raise NotImplementedError(f"Method {method} not implemented")
-
 
     log_to_file(f"Response: {response.status_code}")
     return response
@@ -153,4 +154,3 @@ def test_fhir_operations(testscript_data):
         except AssertionError as e:
             log_to_file(f"FAILED: {str(e)}")
             raise  # re-raise to keep pytest aware of test failure
-
