@@ -68,7 +68,3 @@ def build_whole_transaction_bundle():
     bundle_json = json.dumps(bundle, indent=2, ensure_ascii=False)
     return bundle_json
 
-
-if __name__ == "__main__":
-    bundle_json = build_whole_transaction_bundle()
-    print(bundle_json)
