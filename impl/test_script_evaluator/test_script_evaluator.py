@@ -7,7 +7,9 @@ from Transactions.transactions import  *
 from model.configuration import Configuration
 
 
+
 FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5" # Configuration.server
+
 saved_resource_id = ""
 BASE_DIR = Path(__file__).resolve().parent.parent
 
