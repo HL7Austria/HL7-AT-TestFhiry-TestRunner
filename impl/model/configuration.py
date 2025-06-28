@@ -1,29 +1,34 @@
 import json
+import os
 
 
 class Configuration:
-    def __init__(self, server, url, path, output_type):
-        self.server = server
-        self.url = url
-        self.path = path
-        self.output_type = output_type
+    def __init__(self, config_path):
+        self.config_path = config_path
+        self._config_data = self._load_config()
 
     def _load_config(self):
-        with open(self.config_path, "r") as f:
+        if not os.path.exists(self.config_path):
+            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+        with open(self.config_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     @property
-    def url(self):
-        return self.url
+    def server(self):
+        return self._config_data.get("server", "https://hapi.fhir.org/baseR5")
 
     @property
-    def server(self):
-        return self.server
+    def url(self):
+        return self._config_data.get("url", "")
 
     @property
     def path(self):
-        return self.path
+        return self._config_data.get("path", "")
 
     @property
     def output_type(self):
-        return self.output_type
+        value = self._config_data.get("log_format", "txt").lower()
+        if value not in ["txt", "html", "pdf"]:
+            print(f"Unknown log_format '{value}', defaulting to 'txt'")
+            return "txt"
+        return value

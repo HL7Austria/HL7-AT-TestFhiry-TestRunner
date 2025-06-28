@@ -1,15 +1,24 @@
 import json
+from pathlib import Path
+
 import requests
 import pytest
+from Transactions.transactions import  *
+from model.configuration import Configuration
 
 
-FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
+
+FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5" # Configuration.server
+
 saved_resource_id = ""
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Help function for loading JSON files
 def load_json(path):
-    with open(path, "r", encoding="utf-8") as f:
+    full_path = BASE_DIR / path
+    print(f"Lade JSON: {full_path}")
+    with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -72,8 +81,8 @@ def validate_response(assertion, response):
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-    ("TestScript-testscript-patient-create-at-core.json", "Patient-HL7ATCorePatientUpdateTestExample.json"),
-    ("TestScript-testscript-patient-update-at-core.json", "Patient-HL7ATCorePatientUpdateTestExample.json")
+    ("Test_Scripts/TestScript-testscript-patient-create-at-core.json", "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    ("Test_Scripts/TestScript-testscript-patient-update-at-core.json", "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
 ])
 def testscript_data(request):
     testscript_path, resource_path = request.param
@@ -84,6 +93,16 @@ def testscript_data(request):
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
+
+    # Build Transaction Bundle
+    bundle = build_whole_transaction_bundle()
+
+    response = requests.post(
+        FHIR_SERVER_BASE,
+        headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
+        json=json.loads(bundle)
+    )
+
     # GIVEN
     testscript, resource = testscript_data
 
