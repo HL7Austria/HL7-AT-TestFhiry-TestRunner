@@ -68,3 +68,7 @@ def build_whole_transaction_bundle():
     bundle_json = json.dumps(bundle, indent=2, ensure_ascii=False)
     return bundle_json
 
+
+bundle = build_whole_transaction_bundle()
+print(bundle)
+
