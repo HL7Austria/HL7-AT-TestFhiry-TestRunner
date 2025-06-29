@@ -7,7 +7,7 @@ from datetime import datetime
 from Transactions.transactions import *
 from model.configuration import Configuration
 
-FHIR_SERVER_BASE = "https://hapi.fhir.org/baseR5"
+FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
