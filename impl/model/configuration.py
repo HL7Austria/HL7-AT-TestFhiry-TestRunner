@@ -15,7 +15,8 @@ class Configuration:
 
     @property
     def server(self):
-        return self._config_data.get("server", "https://hapi.fhir.org/baseR5")
+        #return self._config_data.get("server", "https://hapi.fhir.org/baseR5")
+        return self._config_data.get("server", "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir")
 
     @property
     def url(self):
