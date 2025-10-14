@@ -138,7 +138,9 @@ def validate_response(assertion, response):
      #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
      #("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
      # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ("Test_Scripts/TestScript-testscript-assert-contentType.json",
+    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+    #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
 ])
 def testscript_data(request):
