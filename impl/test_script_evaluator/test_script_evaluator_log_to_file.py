@@ -134,15 +134,15 @@ def validate_response(assertion, response):
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-     #("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-     #("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
-     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-    #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
-    "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-])
+    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
+    #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    ])
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
