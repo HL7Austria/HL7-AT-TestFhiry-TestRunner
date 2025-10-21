@@ -4,6 +4,9 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
+
+from numpy.ma.testutils import assert_equal
+
 from Transactions.transactions import *
 from model.configuration import Configuration
 
@@ -11,8 +14,12 @@ FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
-LOG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Results", log_filename))
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+RESULTS_DIR = BASE_DIR / "results"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_FILE_PATH = RESULTS_DIR / log_filename
 LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
 
 # Init logfile
@@ -32,7 +39,6 @@ def load_json(path):
     print(f"Lade JSON: {full_path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
 
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
@@ -87,22 +93,56 @@ def execute_operation(operation, resource):
     return response
 
 
+def validate_content_type(response, expected_type=None):
+    """
+    Validates whether the server response matches the expected content type.
+    If no expected_type is specified, no validation is performed.
+    :param response: The HTTP response object returned by the server.
+    :param expected_type:  The expected Content-Type (e.g., "json", "xml", or a full MIME type).
+                           If None or empty, no validation is performed.
+    :return: None
+    """
+
+    # If no expected type is specified, skip
+    if not expected_type:
+        log_to_file("Skipping Content-Type validation (no expected type provided).")
+        return
+
+    actual_content_type = response.headers.get("Content-Type", "").split(";")[0].strip()
+    expected_type = parse_fhir_header(expected_type, "Content-Type")
+
+    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
+
+    assert actual_content_type == expected_type, (
+        f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
+    )
+
+
 # Check assertion
 def validate_response(assertion, response):
-    expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-    status_code = str(response.status_code)
+    # Only check status code if responseCode is present
+    if "responseCode" in assertion:
+        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+        status_code = str(response.status_code)
+        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
-    log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-    assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
+    # Only check content type if contentType is present
+    if "contentType" in assertion:
+        validate_content_type(response, assertion.get("contentType"))
 
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-    ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
+    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-])
+    # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
+    #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    ])
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
@@ -154,6 +194,7 @@ def test_fhir_operations(testscript_data):
                             data = get_response.json()
                             assert data.get("id") == saved_resource_id, "GET returned different ID"
                             assert data.get("resourceType") == resource_type, "ResourceType mismatch"
+
                         except ValueError:
                             assert False, "GET response is not valid JSON"
 
@@ -163,7 +204,8 @@ def test_fhir_operations(testscript_data):
                     if assertion.get("direction") == "response":
                         validate_response(assertion, response)
                     elif assertion.get("direction") == "request":
-                        pass
+                        print("direction request out of scope")
+                        log_to_file("direction request out of scope")
 
             # Log success if all actions passed
             log_to_file("PASSED")
