@@ -138,10 +138,12 @@ def validate_response(assertion, response):
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    ("Test_Scripts/TestScript-testscript-stopTestOnFail.json",
+     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     ])
 def testscript_data(request):
     testscript_path, resource_path = request.param
@@ -165,7 +167,7 @@ def test_fhir_operations(testscript_data):
     testscript, resource = testscript_data
 
     for test in testscript.get("test", []):
-
+        stop_test_on_fail = test.get("stopTestOnFail", False)
         log_to_file(f"\n Test: {test.get('name')}")
         response = None
 
@@ -202,7 +204,14 @@ def test_fhir_operations(testscript_data):
                 elif "assert" in action:
                     assertion = action["assert"]
                     if assertion.get("direction") == "response":
-                        validate_response(assertion, response)
+                        try:
+
+                            validate_response(assertion, response)
+                        except AssertionError as e:
+                            log_to_file(f"ASSERTION FAILED: {str(e)}")
+                            if stop_test_on_fail:
+                                pytest.fail(f"Test stopped due to stopTestOnFail: {str(e)}",pytrace=False)
+
                     elif assertion.get("direction") == "request":
                         print("direction request out of scope")
                         log_to_file("direction request out of scope")
