@@ -15,8 +15,10 @@ saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-RESULTS_DIR = BASE_DIR / "results"
+RESULTS_DIR = BASE_DIR / "Results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE_PATH = RESULTS_DIR / log_filename
@@ -39,6 +41,7 @@ def load_json(path):
     print(f"Lade JSON: {full_path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
@@ -194,7 +197,6 @@ def test_fhir_operations(testscript_data):
                             data = get_response.json()
                             assert data.get("id") == saved_resource_id, "GET returned different ID"
                             assert data.get("resourceType") == resource_type, "ResourceType mismatch"
-
                         except ValueError:
                             assert False, "GET response is not valid JSON"
 
