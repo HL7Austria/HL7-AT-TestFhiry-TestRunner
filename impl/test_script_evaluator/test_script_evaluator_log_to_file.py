@@ -8,6 +8,7 @@ from datetime import datetime
 from numpy.ma.testutils import assert_equal
 
 from Transactions.transactions import *
+from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
@@ -134,8 +135,8 @@ def validate_response(assertion, response):
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    #("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
@@ -152,73 +153,117 @@ def testscript_data(request):
     return testscript, resource
 
 
+def execute_test_actions(test, resource):
+    """Execute all actions for a single test with stopTestOnFail handling"""
+    stop_test_on_fail = test.get("stopTestOnFail", False)
+    test_name = test.get('name', 'Unnamed Test')
+    log_to_file(f"\n=== Starting Test: {test_name} (stopTestOnFail: {stop_test_on_fail}) ===")
+
+    response = None
+    test_passed = True
+
+    for action_index, action in enumerate(test.get("action", [])):
+        try:
+            # WHEN – Operation
+            if "operation" in action:
+                operation = action["operation"]
+                response = execute_operation(operation, resource)
+
+                # Extension: If it was a CREATE operation, then check GET
+                method = operation.get("type", {}).get("code", "").lower()
+                resource_type = operation.get("resource")
+                if method == "create":
+                    global saved_resource_id
+                    assert saved_resource_id, "No ID was saved after create"
+
+                    # GET for verification
+                    read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
+                    log_to_file(f"Verifying created resource via GET: {read_url}")
+                    get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
+
+                    # Output & Assertion
+                    log_to_file(f"Response: {get_response.status_code}")
+                    try:
+                        data = get_response.json()
+                        assert data.get("id") == saved_resource_id, "GET returned different ID"
+                        assert data.get("resourceType") == resource_type, "ResourceType mismatch"
+                    except ValueError:
+                        assert False, "GET response is not valid JSON"
+
+            # THEN - Assertion
+            elif "assert" in action:
+                assertion = action["assert"]
+                if assertion.get("direction") == "response":
+                    try:
+                        validate_response(assertion, response)
+                        log_to_file(f"✓ Assertion {action_index + 1} passed")
+                    except AssertionError as e:
+                        log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
+                        if stop_test_on_fail:
+                            # Stop this test immediately
+                            raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+                        else:
+                            # Continue with next action but mark test as failed
+                            test_passed = False
+
+                elif assertion.get("direction") == "request":
+                    log_to_file("direction request out of scope")
+
+        except TestExecutionError:
+            # Re-raise to stop the test
+            raise
+        except Exception as e:
+            log_to_file(f"✗ ERROR in action {action_index + 1}: {str(e)}")
+            if stop_test_on_fail:
+                raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+            else:
+                test_passed = False
+
+    return test_passed
+
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-    # Build Transaction Bundle
-    bundle = build_whole_transaction_bundle()
-
-    response = requests.post(
-        FHIR_SERVER_BASE,
-        headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
-        json=json.loads(bundle)
-    )
+    # Build Transaction Bundle (if needed)
+    # bundle = build_whole_transaction_bundle()
+    # response = requests.post(
+    #     FHIR_SERVER_BASE,
+    #     headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
+    #     json=json.loads(bundle)
+    # )
 
     # GIVEN
     testscript, resource = testscript_data
 
+    overall_results = []
+
     for test in testscript.get("test", []):
-        stop_test_on_fail = test.get("stopTestOnFail", False)
-        log_to_file(f"\n Test: {test.get('name')}")
-        response = None
+        test_name = test.get('name', 'Unnamed Test')
 
         try:
-            for action in test.get("action", []):
-                # WHEN – Wenn Operation
-                if "operation" in action:
-                    operation = action["operation"]
-                    response = execute_operation(operation, resource)
+            test_passed = execute_test_actions(test, resource)
 
-                    #  Extension: If it was a CREATE operation, then check GET
-                    method = operation.get("type", {}).get("code", "").lower()
-                    resource_type = operation.get("resource")
-                    if method == "create":
-                        global saved_resource_id
-                        assert saved_resource_id, "No ID was saved after create"
+            if test_passed:
+                log_to_file(f"✓ TEST PASSED: {test_name}")
+                overall_results.append((test_name, True))
+            else:
+                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                overall_results.append((test_name, False))
 
-                        # GET for verification
-                        read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
-                        log_to_file(f"Verifying created resource via GET: {read_url}")
-                        get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
+        except TestExecutionError as e:
+            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+            overall_results.append((test_name, False))
+            # Continue with next test even if this one was stopped
 
-                        # Output & Assertion
-                        log_to_file(f"Response: {get_response.status_code}")
-                        try:
-                            data = get_response.json()
-                            assert data.get("id") == saved_resource_id, "GET returned different ID"
-                            assert data.get("resourceType") == resource_type, "ResourceType mismatch"
+    # Final summary
+    log_to_file("\n" + "=" * 50)
+    log_to_file("TEST SUMMARY:")
+    for test_name, passed in overall_results:
+        status = "PASSED" if passed else "FAILED"
+        log_to_file(f"  {test_name}: {status}")
 
-                        except ValueError:
-                            assert False, "GET response is not valid JSON"
+    log_to_file("Test execution completed")
 
-                # THEN - If Assertion
-                elif "assert" in action:
-                    assertion = action["assert"]
-                    if assertion.get("direction") == "response":
-                        try:
-
-                            validate_response(assertion, response)
-                        except AssertionError as e:
-                            log_to_file(f"ASSERTION FAILED: {str(e)}")
-                            if stop_test_on_fail:
-                                pytest.fail(f"Test stopped due to stopTestOnFail: {str(e)}",pytrace=False)
-
-                    elif assertion.get("direction") == "request":
-                        print("direction request out of scope")
-                        log_to_file("direction request out of scope")
-
-            # Log success if all actions passed
-            log_to_file("PASSED")
-
-        except AssertionError as e:
-            log_to_file(f"FAILED: {str(e)}")
-            raise  # re-raise to keep pytest aware of test failure
+    # Fail the pytest if any test failed
+    failed_tests = [name for name, passed in overall_results if not passed]
+    if failed_tests:
+       pytest.fail(f"Following tests failed: {', '.join(failed_tests)}")
