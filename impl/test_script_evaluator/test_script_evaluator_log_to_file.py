@@ -147,14 +147,11 @@ def validate_response(assertion, response):
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ("Test_Scripts/TestScript-testscript-autodelete.json",
+    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     ])
-
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
@@ -164,7 +161,6 @@ def testscript_data(request):
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # Build Transaction Bundle
     bundle = build_whole_transaction_bundle()
 
@@ -174,10 +170,10 @@ def test_fhir_operations(testscript_data):
         json=json.loads(bundle)
     )
 
+    print( response.json())
     # GIVEN
     testscript, resource = testscript_data
     fixtures = get_fixture(testscript)
-
 
 
     for test in testscript.get("test", []):
