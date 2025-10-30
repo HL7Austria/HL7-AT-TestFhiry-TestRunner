@@ -7,8 +7,8 @@ from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
 
-from impl.Transactions.transactions import *
-from impl.model.configuration import Configuration
+from Transactions.transactions import *
+from model.configuration import Configuration
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -120,12 +120,6 @@ def validate_content_type(response, expected_type=None):
         f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
     )
 
-def get_fixture(testscript):
-    fixtures = []
-    for fixture in testscript.get("fixture", []):
-        fixtures.append(fixture)
-    return fixtures
-
 
 # Check assertion
 def validate_response(assertion, response):
@@ -147,14 +141,11 @@ def validate_response(assertion, response):
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ("Test_Scripts/TestScript-testscript-autodelete.json",
+    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     ])
-
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
@@ -164,7 +155,6 @@ def testscript_data(request):
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # Build Transaction Bundle
     bundle = build_whole_transaction_bundle()
 
@@ -176,9 +166,6 @@ def test_fhir_operations(testscript_data):
 
     # GIVEN
     testscript, resource = testscript_data
-    fixtures = get_fixture(testscript)
-
-
 
     for test in testscript.get("test", []):
 
@@ -228,9 +215,3 @@ def test_fhir_operations(testscript_data):
         except AssertionError as e:
             log_to_file(f"FAILED: {str(e)}")
             raise  # re-raise to keep pytest aware of test failure
-
-    #for fixture in fixtures:
-     #   if fixture.get("autodelete", True):
-    # schauen wie man die patienten auseinander sehen kann
-
-
