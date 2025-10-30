@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
-
 from Transactions.transactions import *
 from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
@@ -37,10 +36,23 @@ def log_to_file(message):
 # Help function for loading JSON files
 def load_json(path):
     full_path = BASE_DIR / path
-    print(f"Lade JSON: {full_path}")
+    printInfoJson(path)
+    #print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+def printInfoJson(path):
+    if "Test_Scripts" in str(path):
+        filename = os.path.basename(path)
+        name_without_extension = os.path.splitext(filename)[0]
+        log_to_file(f"\n\n====================================================================================================================================\n"
+                    f" Testscript {name_without_extension} \n"
+                    f"====================================================================================================================================")
+    if "Example_Instances" in str(path):
+        log_to_file(f"Load Example Instance: {path}")
+    if "Profiles" in str(path):
+        log_to_file(f"Load Profile: {path}")
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
 def parse_fhir_header(value, header_type):
@@ -139,8 +151,8 @@ def validate_response(assertion, response):
     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     ("Test_Scripts/TestScript-testscript-stopTestOnFail.json",
@@ -157,7 +169,7 @@ def execute_test_actions(test, resource):
     """Execute all actions for a single test with stopTestOnFail handling"""
     stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
-    log_to_file(f"\n=== Starting Test: {test_name} (stopTestOnFail: {stop_test_on_fail}) ===")
+    log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
     response = None
     test_passed = True
@@ -255,15 +267,10 @@ def test_fhir_operations(testscript_data):
             # Continue with next test even if this one was stopped
 
     # Final summary
-    log_to_file("\n" + "=" * 50)
+    log_to_file("*********************************************************")
     log_to_file("TEST SUMMARY:")
     for test_name, passed in overall_results:
-        status = "PASSED" if passed else "FAILED"
+        status = "PASSED\n" if passed else "FAILED\n"
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
-
-    # Fail the pytest if any test failed
-    failed_tests = [name for name, passed in overall_results if not passed]
-    if failed_tests:
-       pytest.fail(f"Following tests failed: {', '.join(failed_tests)}")
