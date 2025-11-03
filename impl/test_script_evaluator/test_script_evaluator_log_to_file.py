@@ -46,9 +46,7 @@ def printInfoJson(path):
     if "Test_Scripts" in str(path):
         filename = os.path.basename(path)
         name_without_extension = os.path.splitext(filename)[0]
-        log_to_file(f"\n\n====================================================================================================================================\n"
-                    f" Testscript {name_without_extension} \n"
-                    f"====================================================================================================================================")
+        log_to_file(f"\n\n=========== Starting Testscript: {name_without_extension} ===========")
     if "Example_Instances" in str(path):
         log_to_file(f"Load Example Instance: {path}")
     if "Profiles" in str(path):
@@ -235,13 +233,6 @@ def execute_test_actions(test, resource):
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-    # Build Transaction Bundle (if needed)
-    # bundle = build_whole_transaction_bundle()
-    # response = requests.post(
-    #     FHIR_SERVER_BASE,
-    #     headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
-    #     json=json.loads(bundle)
-    # )
 
     # GIVEN
     testscript, resource = testscript_data
@@ -267,10 +258,10 @@ def test_fhir_operations(testscript_data):
             # Continue with next test even if this one was stopped
 
     # Final summary
-    log_to_file("*********************************************************")
-    log_to_file("TEST SUMMARY:")
+    log_to_file("======================")
+    log_to_file("Test Summary:")
     for test_name, passed in overall_results:
-        status = "PASSED\n" if passed else "FAILED\n"
+        status = "PASSED" if passed else "FAILED"
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
