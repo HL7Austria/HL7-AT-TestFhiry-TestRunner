@@ -66,9 +66,8 @@ def execute_operation(operation, resource):
         "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
     }
 
-    log_to_file(f"Executing: {method.upper()} {url}")
-
     if method == "create":
+        log_to_file(f"Executing: {method.upper()} {url}")
         response = requests.post(url, headers=headers, json=resource)
         global saved_resource_id
         try:
@@ -77,17 +76,16 @@ def execute_operation(operation, resource):
             location = response.headers.get("Location", "")
             if location:
                 saved_resource_id = location.rstrip("/").split("/")[-3]
-
                 log_to_file(f"ID from Location header: {saved_resource_id}")
-
             else:
                 raise ValueError("No ID found in response or Location header")
-
     elif method == "update":
         resource_id = resource.get("id")
+        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
     elif method == "read":
         resource_id = resource.get("id")
+        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
     else:
         raise NotImplementedError(f"Method {method} not implemented")
@@ -137,12 +135,12 @@ def validate_response(assertion, response):
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+     #("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+     ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     ])
