@@ -253,7 +253,7 @@ python test_script_evaluator_log_to_file.py
 
 | Rolle | Name | E-Mail |
 |-------|------|--------|
-| **Projektbetreuung** | Assistenzprofessorin Dr. Anna Lin | 📧 [Anna.Lin@fh-hagenberg.at](mailto:Anna.Lin@fh-hagenberg.at) |
+| **Projektbetreuung** | Anna Lin, M.Sc. | 📧 [Anna.Lin@fh-hagenberg.at](mailto:Anna.Lin@fh-hagenberg.at) |
 | **Projektteam (Hauptkontakt)** | Laura Ziebermayr | 📧 [s2310458022@students.fh-hagenberg.at](mailto:s2310458022@students.fh-hagenberg.at) |
 
 
