@@ -70,5 +70,3 @@ def build_whole_transaction_bundle():
 
 
 bundle = build_whole_transaction_bundle()
-print(bundle)
-

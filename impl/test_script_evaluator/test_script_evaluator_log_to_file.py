@@ -5,10 +5,9 @@ from pathlib import Path
 import os
 from datetime import datetime
 
-
-
 from numpy.ma.testutils import assert_equal
 from Transactions.transactions import *
+from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 
@@ -40,11 +39,21 @@ def log_to_file(message):
 # Help function for loading JSON files
 def load_json(path):
     full_path = BASE_DIR / path
-    print(f"Lade JSON: {full_path}")
+    printInfoJson(path)
+    #print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
+def printInfoJson(path):
+    if "Test_Scripts" in str(path):
+        filename = os.path.basename(path)
+        name_without_extension = os.path.splitext(filename)[0]
+        log_to_file(f"\n\n=========== Starting Testscript: {name_without_extension} ===========")
+    if "Example_Instances" in str(path):
+        log_to_file(f"Load Example Instance: {path}")
+    if "Profiles" in str(path):
+        log_to_file(f"Load Profile: {path}")
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
 def parse_fhir_header(value, header_type):
@@ -155,26 +164,87 @@ def testscript_data(request):
     return testscript, resource
 
 
+def execute_test_actions(test, resource):
+    """Execute all actions for a single test with stopTestOnFail handling"""
+    stop_test_on_fail = test.get("stopTestOnFail", False)
+    test_name = test.get('name', 'Unnamed Test')
+    log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
+
+    response = None
+    test_passed = True
+
+    for action_index, action in enumerate(test.get("action", [])):
+        try:
+            # WHEN – Operation
+            if "operation" in action:
+                operation = action["operation"]
+                response = execute_operation(operation, resource)
+
+                # Extension: If it was a CREATE operation, then check GET
+                method = operation.get("type", {}).get("code", "").lower()
+                resource_type = operation.get("resource")
+                if method == "create":
+                    global saved_resource_id
+                    assert saved_resource_id, "No ID was saved after create"
+
+                    # GET for verification
+                    read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
+                    log_to_file(f"Verifying created resource via GET: {read_url}")
+                    get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
+
+                    # Output & Assertion
+                    log_to_file(f"Response: {get_response.status_code}")
+                    try:
+                        data = get_response.json()
+                        assert data.get("id") == saved_resource_id, "GET returned different ID"
+                        assert data.get("resourceType") == resource_type, "ResourceType mismatch"
+                    except ValueError:
+                        assert False, "GET response is not valid JSON"
+
+            # THEN - Assertion
+            elif "assert" in action:
+                assertion = action["assert"]
+                if assertion.get("direction") == "response":
+                    try:
+                        validate_response(assertion, response)
+                        log_to_file(f"✓ Assertion {action_index + 1} passed")
+                    except AssertionError as e:
+                        log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
+                        if stop_test_on_fail:
+                            # Stop this test immediately
+                            raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+                        else:
+                            # Continue with next action but mark test as failed
+                            test_passed = False
+
+                elif assertion.get("direction") == "request":
+                    log_to_file("direction request out of scope")
+
+        except TestExecutionError:
+            # Re-raise to stop the test
+            raise
+        except Exception as e:
+            log_to_file(f"✗ ERROR in action {action_index + 1}: {str(e)}")
+            if stop_test_on_fail:
+                raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+            else:
+                test_passed = False
+
+    return test_passed
+
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-    # Build Transaction Bundle
-    bundle = build_whole_transaction_bundle()
-
-    response = requests.post(
-        FHIR_SERVER_BASE,
-        headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
-        json=json.loads(bundle)
-    )
 
     # GIVEN
     testscript, resource = testscript_data
 
-    for test in testscript.get("test", []):
+    overall_results = []
 
-        log_to_file(f"\n Test: {test.get('name')}")
-        response = None
+    for test in testscript.get("test", []):
+        test_name = test.get('name', 'Unnamed Test')
 
         try:
+            test_passed = execute_test_actions(test, resource)
             for action in test.get("action", []):
                 # WHEN – Wenn Operation
                 if "operation" in action:
@@ -216,9 +286,23 @@ def test_fhir_operations(testscript_data):
                     if direction == "response" or not direction:
                         validate_response(assertion, response)
 
-            # Log success if all actions passed
-            log_to_file("PASSED")
+            if test_passed:
+                log_to_file(f"✓ TEST PASSED: {test_name}")
+                overall_results.append((test_name, True))
+            else:
+                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                overall_results.append((test_name, False))
 
-        except AssertionError as e:
-            log_to_file(f"FAILED: {str(e)}")
-            raise  # re-raise to keep pytest aware of test failure
+        except TestExecutionError as e:
+            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+            overall_results.append((test_name, False))
+            # Continue with next test even if this one was stopped
+
+    # Final summary
+    log_to_file("======================")
+    log_to_file("Test Summary:")
+    for test_name, passed in overall_results:
+        status = "PASSED" if passed else "FAILED"
+        log_to_file(f"  {test_name}: {status}")
+
+    log_to_file("Test execution completed")
