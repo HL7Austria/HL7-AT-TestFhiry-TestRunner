@@ -1,4 +1,6 @@
 import json
+from http import HTTPStatus
+
 import requests
 import pytest
 from pathlib import Path
@@ -9,14 +11,12 @@ from numpy.ma.testutils import assert_equal
 from Transactions.transactions import *
 from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
-from impl.Transactions.transactions import build_whole_transaction_bundle
+from Transactions.transactions import build_whole_transaction_bundle
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
-
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = BASE_DIR / "Results"
@@ -40,7 +40,7 @@ def log_to_file(message):
 def load_json(path):
     full_path = BASE_DIR / path
     printInfoJson(path)
-    #print(f"Load: {path}")
+    # print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -54,6 +54,7 @@ def printInfoJson(path):
         log_to_file(f"Load Example Instance: {path}")
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
+
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
 def parse_fhir_header(value, header_type):
@@ -132,12 +133,48 @@ def validate_content_type(response, expected_type=None):
 
 # Check assertion
 def validate_response(assertion, response):
-    # Only check status code if responseCode is present
-    if "responseCode" in assertion:
-        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-        status_code = str(response.status_code)
-        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
+    operator = assertion.get("operator")
+
+    # Set actual_value dynamically
+    if "headerField" in assertion:
+        header_name = assertion["headerField"]
+        actual_value = response.headers.get(header_name, "")
+    elif "responseCode" in assertion:
+        actual_value = str(response.status_code) # as a string so that ‘in’ and ‘equals’ work
+    elif "value" in assertion:
+        actual_value = HTTPStatus(response.status_code).phrase.lower()
+    elif "headerField" in assertion:
+        header_name = assertion["headerField"]
+        actual_value = response.headers.get(header_name, "")
+    else:
+        actual_value = None
+
+    # Expected value
+    if "responseCode" in assertion or "headerField" in assertion or "value" in assertion:
+        expected_value = str(assertion.get("responseCode") or assertion.get("value") or "")
+
+    log_to_file(f"Checking: actual='{actual_value}', expected='{expected_value}', operator='{operator}'")
+
+    if operator == "in":
+        assert actual_value in expected_value.split(
+            ","), f"Assertion failed: {actual_value} not in {expected_value.split(",")}"
+    elif operator == "notIn":
+        assert actual_value not in expected_value.split(
+            ","), f"Assertion failed: {actual_value} in {expected_value.split(",")}"
+    elif operator == "equals":
+        assert actual_value == expected_value, f"Assertion failed: {actual_value} not equals {expected_value}"
+    elif operator == "notEquals":
+        assert actual_value != expected_value, f"Assertion failed: {actual_value} equals {expected_value}"
+    elif operator == "greaterThan":
+        # TODO
+        pass
+    elif operator == "lessThan":
+        # TODO
+        pass
+    elif operator == "contains":
+        assert any(v.strip() in actual_value for v in expected_value.split(",")), f"Assertion failed: {actual_value} equals {expected_value.split(",")}"
+    elif operator == "notContains":
+        assert all(v.strip() not in actual_value for v in expected_value.split(",")), f"Assertion failed: {actual_value} equals {expected_value.split(",")}"
 
     # Only check content type if contentType is present
     if "contentType" in assertion:
@@ -150,13 +187,18 @@ def validate_response(assertion, response):
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-   # ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    # ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    # ("Test_Scripts/TestScript-testscript-stopTestOnFail.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+    ("Test_Scripts/TestScript-testscript-operator.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ])
+
+])
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
@@ -232,9 +274,9 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # GIVEN
     testscript, resource = testscript_data
 
