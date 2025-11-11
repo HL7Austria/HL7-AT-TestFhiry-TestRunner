@@ -9,6 +9,7 @@ from numpy.ma.testutils import assert_equal
 from Transactions.transactions import *
 from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
+from impl.Transactions.transactions import build_whole_transaction_bundle
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -145,15 +146,15 @@ def validate_response(assertion, response):
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
-     #("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-     #"Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-     ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
-     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    #("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
+    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
+    # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
+    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
+   # ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
     # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
     #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    ("Test_Scripts/TestScript-testscript-stopTestOnFail.json",
+    ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
      "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
     ])
 def testscript_data(request):
@@ -274,11 +275,16 @@ def test_fhir_operations(testscript_data):
                 # THEN - If Assertion
                 elif "assert" in action:
                     assertion = action["assert"]
-                    if assertion.get("direction") == "response":
+                    direction = assertion.get("direction", "").lower()
+
+                    # Completely skip if direction is 'request' (out of scope)
+                    if direction == "request":
+                        log_to_file("Skipping assertion (direction: request – out of scope).")
+                        continue  #
+
+                    # Validate normal response assertions
+                    if direction == "response" or not direction:
                         validate_response(assertion, response)
-                    elif assertion.get("direction") == "request":
-                        print("direction request out of scope")
-                        log_to_file("direction request out of scope")
 
             if test_passed:
                 log_to_file(f"✓ TEST PASSED: {test_name}")
