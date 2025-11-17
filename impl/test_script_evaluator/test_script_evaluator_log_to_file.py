@@ -6,9 +6,9 @@ import os
 from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
-from Transactions.transactions import *
-from exception.TestExecutionError import TestExecutionError
-from model.configuration import Configuration
+from impl.Transactions.transactions import *
+from impl.exception.TestExecutionError import TestExecutionError
+from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
@@ -143,20 +143,48 @@ def validate_response(assertion, response):
     if "contentType" in assertion:
         validate_content_type(response, assertion.get("contentType"))
 
+def get_fixture(testscript):
+    fixtures = []
+    for fixture in testscript.get("fixture", []):
+        fixtures.append(fixture)
+    #print(fixtures)
+    return fixtures
+
+
+def get_testscripts_from_config():
+    CONFIG_PATH = "../config.json"
+
+    # Config laden
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    request = []
+
+    for ts_path in config.get("testscripts", []):
+        with open("../"+ts_path, "r", encoding="utf-8") as f:
+            testscript = json.load(f)
+
+        fixtures = get_fixture(testscript)
+
+        if fixtures:
+            for fixture in fixtures: # TODO anschauen und vielleicht noch ändern
+                fixture_ref = fixture.get("resource", {}).get("reference")
+
+                if fixture_ref:
+                    fixture_name = os.path.basename(fixture_ref)
+
+                    fixture_name = os.path.splitext(fixture_name)[0] + ".json"
+
+                    fixture_path = os.path.join("Example_Instances", fixture_name)
+
+                    fixture_path = fixture_path.replace("\\", "/")
+                    request.append((ts_path, fixture_path))
+
+    return request
+
 
 # Fixture for dynamic test data
-@pytest.fixture(params=[
-    # ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    # ("Test_Scripts/TestScript-testscript-patient-update-at-core.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-   # ("Test_Scripts/TestScript-testscript-assert-contentType-json.json",
-    # "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    # ("Test_Scripts/TestScript-testscript-assert-contentType-xml.json",
-    #   "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json"),
-    ("Test_Scripts/TestScript-testscript-patient-create-at-core.json",
-     "Example_Instances/Patient-HL7ATCorePatientUpdateTestExample.json")
-    ])
+@pytest.fixture(params=get_testscripts_from_config())
 def testscript_data(request):
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
