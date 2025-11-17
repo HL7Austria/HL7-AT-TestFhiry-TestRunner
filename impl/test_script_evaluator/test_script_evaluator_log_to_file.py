@@ -7,8 +7,8 @@ from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
 
-from Transactions.transactions import *
-from model.configuration import Configuration
+from impl.Transactions.transactions import *
+from impl.model.configuration import Configuration
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -133,7 +133,6 @@ def validate_response(assertion, response):
     # Only check content type if contentType is present
     if "contentType" in assertion:
         validate_content_type(response, assertion.get("contentType"))
-
 
 # Fixture for dynamic test data
 @pytest.fixture(params=[
