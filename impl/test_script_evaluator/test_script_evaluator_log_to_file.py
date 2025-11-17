@@ -153,31 +153,49 @@ def get_fixture(testscript):
 
 def get_testscripts_from_config():
     CONFIG_PATH = "../config.json"
+    TESTSCRIPT_FOLDER = "../Test_Scripts"
 
     # Config laden
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        config = json.load(f)
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        config = {}
+
+    # Testscripts aus der Config, wenn vorhanden
+    testscripts = config.get("testscripts", [])
+
+    if not testscripts:
+        testscripts = [
+            os.path.join(TESTSCRIPT_FOLDER, f).replace("\\", "/")
+            for f in os.listdir(TESTSCRIPT_FOLDER)
+            if f.endswith(".json")
+        ]
+        print(testscripts)
 
     request = []
 
-    for ts_path in config.get("testscripts", []):
-        with open("../"+ts_path, "r", encoding="utf-8") as f:
+    for ts_path in testscripts:
+        with open(ts_path, "r", encoding="utf-8") as f:
             testscript = json.load(f)
 
         fixtures = get_fixture(testscript)
 
         if fixtures:
-            for fixture in fixtures: # TODO anschauen und vielleicht noch ändern
+            for fixture in fixtures:
                 fixture_ref = fixture.get("resource", {}).get("reference")
 
                 if fixture_ref:
+                    # Dateiname extrahieren (ohne Pfad)
                     fixture_name = os.path.basename(fixture_ref)
 
+                    # Endung .html → .json ändern
                     fixture_name = os.path.splitext(fixture_name)[0] + ".json"
 
+                    # Prefix 'Example_Instances/' hinzufügen
                     fixture_path = os.path.join("Example_Instances", fixture_name)
-
                     fixture_path = fixture_path.replace("\\", "/")
+                    ts_path = ts_path.replace("../", "")
                     request.append((ts_path, fixture_path))
 
     return request
