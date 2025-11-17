@@ -7,12 +7,13 @@ from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
 from Transactions.transactions import *
-from exception.TestExecutionError import TestExecutionError
+#from exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
+saved_source_id = {}
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 
@@ -65,6 +66,28 @@ def parse_fhir_header(value, header_type):
     elif value == "xml":
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
+
+def parse_source_id(testscript, resource):
+    # find sourceId
+    for var in testscript.get("variable", []):
+        if var.get("name") != "sourceId":
+            continue
+
+        # direct
+        if "sourceId" in var:
+            saved_source_id["sourceId"] = var["sourceId"]
+            log_to_file(f"SourceId set directly: {saved_source_id['sourceId']}")
+            return saved_source_id["sourceId"]
+
+        # from resource.id
+        if var.get("path") == "id":
+            saved_source_id["sourceId"] = resource.get("id")
+            log_to_file(f"SourceId loaded from resource.id: {saved_source_id['sourceId']}")
+            return saved_source_id["sourceId"]
+
+    log_to_file("No SourceId found.")
+    return None
+
 
 
 # Execute operation
@@ -237,6 +260,7 @@ def test_fhir_operations(testscript_data):
 
     # GIVEN
     testscript, resource = testscript_data
+    parse_source_id(testscript, resource)
 
     overall_results = []
 
