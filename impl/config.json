@@ -1,4 +1,5 @@
 {
   "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
-  "path": ""
+  "path": "",
+  "testscripts": ["Test_Scripts/TestScript-testscript-patient-create-at-core.json"]
 }

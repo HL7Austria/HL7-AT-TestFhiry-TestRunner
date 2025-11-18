@@ -3,7 +3,6 @@ import uuid
 import os
 
 
-
 def load_resources_from_file(filename):
     with open(filename, encoding="utf-8") as f:
         data = json.load(f)
@@ -26,9 +25,6 @@ def prefix_references_with_urn_uuid(obj):
     elif isinstance(obj, list):
         for item in obj:
             prefix_references_with_urn_uuid(item)
-
-
-
 
 def create_bundle_entry(resource):
     resource_type = resource.get("resourceType")
