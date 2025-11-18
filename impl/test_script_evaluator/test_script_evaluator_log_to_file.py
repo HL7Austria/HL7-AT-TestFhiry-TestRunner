@@ -155,7 +155,8 @@ def testscript_data(request):
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
     # Build Transaction Bundle
-    bundle = build_whole_transaction_bundle()
+    filenames = ["Patient-HL7ATCorePatientCreateTestExample.json", "Patient-HL7ATCorePatientExample01.json"]
+    bundle = build_whole_transaction_bundle(filenames)
 
     response = requests.post(
         FHIR_SERVER_BASE,

@@ -63,18 +63,21 @@ def build_transaction_bundle(resources):
         "entry": entries
     }
 
-def build_whole_transaction_bundle():
+def build_whole_transaction_bundle(filenames):
+    print(filenames)
     folder = "../Example_Instances"
     all_resources = []
+    files = []
+    for file in filenames:
+        files.append(os.path.join(folder, file))
 
-    for filename in os.listdir(folder):
-        if filename.endswith(".json"):
-            filepath = os.path.join(folder, filename)
-            try:
-                resources = load_resources_from_file(filepath)
-                all_resources.extend(resources)
-            except Exception as e:
-                print(f"Fehler beim Laden von {filename}: {e}")
+
+    for filename in files:
+        try:
+            resources = load_resources_from_file(filename)
+            all_resources.extend(resources)
+        except Exception as e:
+            print(f"Fehler beim Laden von {filename}: {e}")
 
     bundle = build_transaction_bundle(all_resources)
 
@@ -82,4 +85,4 @@ def build_whole_transaction_bundle():
     return bundle_json
 
 
-bundle = build_whole_transaction_bundle()
+#bundle = build_whole_transaction_bundle()
