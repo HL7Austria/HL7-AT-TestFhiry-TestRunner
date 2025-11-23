@@ -7,7 +7,7 @@ from datetime import datetime
 
 from numpy.ma.testutils import assert_equal
 from Transactions.transactions import *
-#from exception.TestExecutionError import TestExecutionError
+from impl.exception.TestExecutionError import TestExecutionError
 from model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 
@@ -67,28 +67,23 @@ def parse_fhir_header(value, header_type):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
-def parse_source_id(testscript, resource):
-    # find sourceId
+
+def parse_source_ids(testscript):
+    """
+    Parses sourceId from TestScript.variable and stores them.
+    """
+    # Loop through all variables in the TestScript
     for var in testscript.get("variable", []):
-        if var.get("name") != "sourceId":
-            continue
+        # Extract variable name and sourceId
+        var_name = var.get("name")
+        source_id = var.get("sourceId")
 
-        # direct
-        if "sourceId" in var:
-            saved_source_id["sourceId"] = var["sourceId"]
-            log_to_file(f"SourceId set directly: {saved_source_id['sourceId']}")
-            return saved_source_id["sourceId"]
-
-        # from resource.id
-        if var.get("path") == "id":
-            saved_source_id["sourceId"] = resource.get("id")
-            log_to_file(f"SourceId loaded from resource.id: {saved_source_id['sourceId']}")
-            return saved_source_id["sourceId"]
-
-    log_to_file("No SourceId found.")
-    return None
-
-
+        # Only store if both name and sourceId exist
+        if var_name and source_id:
+            # Store in global dictionary
+            saved_source_id[var_name] = source_id
+            # Log the mapping
+            log_to_file(f"Variable '{var_name}' -> sourceId: '{source_id}'")
 
 # Execute operation
 def execute_operation(operation, resource):
@@ -260,8 +255,8 @@ def test_fhir_operations(testscript_data):
 
     # GIVEN
     testscript, resource = testscript_data
-    parse_source_id(testscript, resource)
-
+    parse_source_ids(testscript)
+    print(f"\n Saved Variable SourceId: {saved_source_id}")
     overall_results = []
 
     for test in testscript.get("test", []):
