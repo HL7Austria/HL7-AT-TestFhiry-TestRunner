@@ -10,6 +10,7 @@ from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
+from impl.model.fixture import Fixture
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -24,6 +25,8 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE_PATH = RESULTS_DIR / log_filename
 LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
+
+fixtures = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
