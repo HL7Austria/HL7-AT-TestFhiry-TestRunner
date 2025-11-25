@@ -26,7 +26,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE_PATH = RESULTS_DIR / log_filename
 LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
 
-fixtures = []
+FIXTURES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -149,7 +149,6 @@ def get_fixture(testscript):
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
-    #print(fixtures)
     return fixtures
 
 
@@ -295,7 +294,7 @@ def save_fixtures(filenames):
         resp = res.get("response")
         res_loc = resp.get("location")
         res_id = res_loc.split("/")[1]
-        fixtures.append(Fixture(fix_path, res_id))
+        FIXTURES.append(Fixture(fix_path, res_id))
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
@@ -378,4 +377,4 @@ def test_fhir_operations(testscript_data):
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
-    fixtures = [] #reset for next testscript
+    FIXTURES.clear() #reset for next testscript
