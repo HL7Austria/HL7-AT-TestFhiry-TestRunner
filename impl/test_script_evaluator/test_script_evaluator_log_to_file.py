@@ -69,7 +69,6 @@ def parse_fhir_header(value, header_type):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
-
 # Execute operation
 def execute_operation(operation, resource):
     method = operation.get("type", {}).get("code", "").lower()
@@ -300,7 +299,6 @@ def save_fixtures(filenames):
 
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # GIVEN
     testscript, resource = testscript_data
 
@@ -380,3 +378,4 @@ def test_fhir_operations(testscript_data):
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
+    fixtures = [] #reset for next testscript
