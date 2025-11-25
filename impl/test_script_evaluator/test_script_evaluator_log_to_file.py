@@ -281,10 +281,7 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
-# The actual test case - structured in GIVEN-WHEN-THEN
-def test_fhir_operations(testscript_data):
-    # Build Transaction Bundle
-    filenames = ["Patient-HL7ATCorePatientCreateTestExample.json", "Patient-HL7ATCorePatientExample01.json"]
+def save_fixtures(filenames):
     bundle = build_whole_transaction_bundle(filenames)
 
     response = requests.post(
@@ -293,10 +290,29 @@ def test_fhir_operations(testscript_data):
         json=json.loads(bundle)
     )
 
+    results = response.json().get("entry")
+
+    for fix_path, res in zip(filenames, results):
+        resp = res.get("response")
+        res_loc = resp.get("location")
+        res_id = res_loc.split("/")[1]
+        fixtures.append(Fixture(fix_path, res_id))
+
+# The actual test case - structured in GIVEN-WHEN-THEN
+def test_fhir_operations(testscript_data):
+
     # GIVEN
     testscript, resource = testscript_data
 
     overall_results = []
+
+    filenames = ["Organization-Organization-example-f001-burgers.json",
+                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientExample01.json"]
+    # dass ist die liste an fixtures die dann weitergegeben wird an transactions
+    # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
+    # --> für den Test zumindest, nachher macht das autocreate
+    save_fixtures(filenames)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
+    #  --> in der Fixture kann unter source_id  die id die es in diesen Testscript hat gespeichert werden!!
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')

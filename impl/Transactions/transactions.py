@@ -31,15 +31,6 @@ def create_bundle_entry(resource):
     resource_id = resource.get("id", str(uuid.uuid4()))
     full_url = f"urn:uuid:{resource_type}/{resource_id}"
 
-    #add identifier "FH_id_full_url"
-    resource["identifier"].append({
-            "system": "FH_Hagenberg",
-            "value": "FH_id_" + full_url,
-            "assigner": {
-                "display": "Fh_Hagenberg_TestFhiry"
-            }
-        })
-
     return {
         "fullUrl": full_url,
         "resource": resource,
@@ -60,7 +51,6 @@ def build_transaction_bundle(resources):
     }
 
 def build_whole_transaction_bundle(filenames):
-    print(filenames)
     folder = "../Example_Instances"
     all_resources = []
     files = []
