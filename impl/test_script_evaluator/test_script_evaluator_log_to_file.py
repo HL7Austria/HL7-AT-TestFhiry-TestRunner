@@ -47,6 +47,9 @@ def load_json(path):
 def load_json_list(paths):
     json_list = []
 
+    if not paths:
+        return None
+
     for path in paths:
         full_path = BASE_DIR / path
         printInfoJson(path)
@@ -215,8 +218,12 @@ def get_testscripts_from_config():
 @pytest.fixture(params=get_testscripts_from_config())
 def testscript_data(request):
     testscript_path, resource_path = request.param
+    print (resource_path)
     testscript = load_json(testscript_path)
-    resources = load_json_list(resource_path)
+    if resource_path:
+        resources = load_json_list(resource_path)
+    else:
+        resources = None
     return testscript, resources
 
 
@@ -293,7 +300,10 @@ def test_fhir_operations(testscript_data):
 
     # GIVEN
     testscript, resources = testscript_data
-    resource = resources[0] # later there should be a method that decides which fixture will be taken for the test
+    if resources != None:
+        resource = resources[0] # later there should be a method that decides which fixture will be taken for the test
+    else:
+        resource = None
 
     overall_results = []
 
