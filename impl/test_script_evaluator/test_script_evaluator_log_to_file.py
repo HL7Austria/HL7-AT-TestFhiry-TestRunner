@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
+import traceback
 
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
@@ -177,6 +178,15 @@ def get_testscripts_from_config():
             config = json.load(config_file)
     except FileNotFoundError:
         config = {}
+    except json.decoder.JSONDecodeError as e:
+        message = (
+            "INVALID JSON\n"
+            f"File: {CONFIG_PATH}\n"
+            f"Error: {e.msg}\n"
+            f"Line: {e.lineno}, Column: {e.colno}\n"
+        )
+        # in dein Log schreiben
+        log_to_file(message)
 
     # Testscripts aus der Config ODER Ordner
     testscripts = config.get("testscripts", [])
@@ -193,8 +203,20 @@ def get_testscripts_from_config():
     for ts_path in testscripts:
 
         # Testscript laden
-        with open(ts_path, "r", encoding="utf-8") as ts_file:
-            testscript = json.load(ts_file)
+        try:
+            with open(ts_path, "r", encoding="utf-8") as ts_file:
+                testscript = json.load(ts_file)
+        except json.decoder.JSONDecodeError as e:
+            message = (
+                "INVALID JSON\n"
+                f"File: {ts_path}\n"
+                f"Error: {e.msg}\n"
+                f"Line: {e.lineno}, Column: {e.colno}\n"
+
+            )
+            # in dein Log schreiben
+            log_to_file(message)
+
 
         fixtures_raw = get_fixture(testscript)
         fixture_list = []
