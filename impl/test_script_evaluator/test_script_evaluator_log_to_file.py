@@ -4,21 +4,20 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
-
-from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
-from impl.model.configuration import Configuration
-from impl.Transactions.transactions import build_whole_transaction_bundle
+from profile_manager import ProfileManager
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 
-
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+profile_manager = ProfileManager()
+profile_manager.make_profile_list(str(BASE_DIR) + "/Profiles")  # Path to profile
+
 RESULTS_DIR = BASE_DIR / "Results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -40,7 +39,7 @@ def log_to_file(message):
 def load_json(path):
     full_path = BASE_DIR / path
     printInfoJson(path)
-    #print(f"Load: {path}")
+    # print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -54,6 +53,7 @@ def printInfoJson(path):
         log_to_file(f"Load Example Instance: {path}")
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
+
 
 # Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
 def parse_fhir_header(value, header_type):
@@ -143,11 +143,29 @@ def validate_response(assertion, response):
     if "contentType" in assertion:
         validate_content_type(response, assertion.get("contentType"))
 
+
+
+def validate_profile_assertion(profile_id):
+    """
+    Validates whether the profile specified in 'validateProfileId' exists
+    in the loaded profiles, but does NOT fail the test.
+    """
+    if not profile_id:
+        log_to_file("Skipping profile validation (no validateProfileId provided).")
+        return True
+
+    available_ids = [p[1] for p in profile_manager.get_profiles()]
+
+    log_to_file(f"Asserting profile Id '{profile_id}' in {available_ids}")
+    assert profile_id in available_ids, f"Profile ID '{profile_id}' not found in loaded profiles!\n"
+
+
+
 def get_fixture(testscript):
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
-    #print(fixtures)
+    # print(fixtures)
     return fixtures
 
 
@@ -250,18 +268,20 @@ def execute_test_actions(test, resource):
             # THEN - Assertion
             elif "assert" in action:
                 assertion = action["assert"]
+                if "validateProfileId" in assertion:
+                    try:
+                        validate_profile_assertion(assertion.get("validateProfileId"))
+                        log_to_file(f"✓ Assertion passed")
+                    except AssertionError:
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+
+
                 if assertion.get("direction") == "response":
                     try:
                         validate_response(assertion, response)
-                        log_to_file(f"✓ Assertion {action_index + 1} passed")
+                        log_to_file(f"✓ Assertion  passed")
                     except AssertionError as e:
-                        log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
-                        if stop_test_on_fail:
-                            # Stop this test immediately
-                            raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
-                        else:
-                            # Continue with next action but mark test as failed
-                            test_passed = False
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
@@ -270,7 +290,7 @@ def execute_test_actions(test, resource):
             # Re-raise to stop the test
             raise
         except Exception as e:
-            log_to_file(f"✗ ERROR in action {action_index + 1}: {str(e)}")
+            #log_to_file(f"✗ ERROR in action: {str(e)}")
             if stop_test_on_fail:
                 raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
             else:
@@ -278,9 +298,20 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+def handle_assertion_error(e, stop_test_on_fail):
+    """
+    Logs the AssertionError and decides whether the test is stopped or continues, depending on `stop_test_on_fail`.
+    Returns:
+        bool: True if the test should continue, False if the test failed.
+    """
+    log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
+    if stop_test_on_fail:
+        raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+    return False  # Test failed, but continuing allowed
+
+
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # GIVEN
     testscript, resource = testscript_data
 
@@ -291,46 +322,6 @@ def test_fhir_operations(testscript_data):
 
         try:
             test_passed = execute_test_actions(test, resource)
-            for action in test.get("action", []):
-                # WHEN – Wenn Operation
-                if "operation" in action:
-                    operation = action["operation"]
-                    response = execute_operation(operation, resource)
-
-                    #  Extension: If it was a CREATE operation, then check GET
-                    method = operation.get("type", {}).get("code", "").lower()
-                    resource_type = operation.get("resource")
-                    if method == "create":
-                        global saved_resource_id
-                        assert saved_resource_id, "No ID was saved after create"
-
-                        # GET for verification
-                        read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
-                        log_to_file(f"Verifying created resource via GET: {read_url}")
-                        get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
-
-                        # Output & Assertion
-                        log_to_file(f"Response: {get_response.status_code}")
-                        try:
-                            data = get_response.json()
-                            assert data.get("id") == saved_resource_id, "GET returned different ID"
-                            assert data.get("resourceType") == resource_type, "ResourceType mismatch"
-                        except ValueError:
-                            assert False, "GET response is not valid JSON"
-
-                # THEN - If Assertion
-                elif "assert" in action:
-                    assertion = action["assert"]
-                    direction = assertion.get("direction", "").lower()
-
-                    # Completely skip if direction is 'request' (out of scope)
-                    if direction == "request":
-                        log_to_file("Skipping assertion (direction: request – out of scope).")
-                        continue  #
-
-                    # Validate normal response assertions
-                    if direction == "response" or not direction:
-                        validate_response(assertion, response)
 
             if test_passed:
                 log_to_file(f"✓ TEST PASSED: {test_name}")
