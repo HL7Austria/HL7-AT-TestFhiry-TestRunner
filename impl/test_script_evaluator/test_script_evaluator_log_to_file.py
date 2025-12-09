@@ -9,9 +9,6 @@ from impl.exception.TestExecutionError import TestExecutionError
 from profile_manager import ProfileManager
 from validate import *
 from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
-from impl.model.configuration import Configuration
-from impl.Transactions.transactions import build_whole_transaction_bundle
-from impl.model.fixture import Fixture
 
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -27,8 +24,6 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE_PATH = RESULTS_DIR / log_filename
 LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
-
-FIXTURES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -92,7 +87,7 @@ def parse_fhir_header(value):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
-# Execute operation
+
 def execute_operation(operation, resource):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
@@ -282,14 +277,6 @@ def test_fhir_operations(testscript_data):
 
     overall_results = []
 
-    filenames = ["Organization-Organization-example-f001-burgers.json",
-                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientExample01.json"]
-    # dass ist die liste an fixtures die dann weitergegeben wird an transactions
-    # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
-    # --> für den Test zumindest, nachher macht das autocreate
-    save_fixtures(filenames)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
-    #  --> in der Fixture kann unter source_id  die id die es in diesen Testscript hat gespeichert werden!!
-
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
 
@@ -316,4 +303,3 @@ def test_fhir_operations(testscript_data):
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
-    FIXTURES.clear() #reset for next testscript
