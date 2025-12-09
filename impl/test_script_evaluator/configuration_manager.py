@@ -5,7 +5,7 @@ Handles loading and accessing configuration settings.
 import json
 import os
 from pathlib import Path
-
+from utils import *
 
 class ConfigManager:
     """
@@ -41,8 +41,21 @@ class ConfigManager:
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Warning: Could not load config from {self.config_path}: {e}")
+
+        except json.decoder.JSONDecodeError as e:
+            message = (
+                "INVALID JSON\n"
+                f"File: {self.config_path}\n"
+                f"Error: {e.msg}\n"
+                f"Line: {e.lineno}, Column: {e.colno}\n"
+
+            )
+
+            # in dein Log schreiben
+
+            log_to_file(message)
+        except (FileNotFoundError) as er:
+            log_to_file(f"Warning: Could not load config from {self.config_path}: {er}")
             return {}
 
     @property
@@ -100,54 +113,60 @@ class ConfigManager:
         return bool(self.fhir_server and self.fhir_server.strip())
 
     def get_testscripts_from_config(self):
-        """
-        Gets testscripts and their fixtures from configuration.
 
-        :return: List of (testscript_path, fixture_path) tuples.
-        """
-        from impl.test_script_evaluator.test_script_evaluator_log_to_file import get_fixture
+        TESTSCRIPT_FOLDER = "../Test_Scripts"
 
-        testscript_folder = self.base_dir / "Test_Scripts"
+        # Testscripts aus der Config ODER Ordner
 
-        # Get testscripts from config or scan folder
-        testscript_paths = self.testscripts
+        testscripts = self.config.get("testscripts", [])
 
-        if not testscript_paths:
-            # Fallback: scan Test_Scripts folder
-            testscript_paths = [
-                str(testscript_folder / f).replace("\\", "/")
-                for f in os.listdir(testscript_folder)
-                if f.endswith(".json")
+        if not testscripts:
+            testscripts = [
+                os.path.join(TESTSCRIPT_FOLDER, name).replace("\\", "/")
+                for name in os.listdir(TESTSCRIPT_FOLDER)
+                if name.endswith(".json")
             ]
 
-        request_pairs = []
+        result = []
 
-        for ts_path in testscript_paths:
+        for ts_path in testscripts:
+
+            # Testscript laden
+            with open(ts_path, "r", encoding="utf-8") as ts_file:
+                testscript = json.load(ts_file)
+
             try:
-                with open(ts_path, "r", encoding="utf-8") as f:
-                    testscript = json.load(f)
+                with open(ts_path, "r", encoding="utf-8") as ts_file:
+                    testscript = json.load(ts_file)
 
-                fixtures = get_fixture(testscript)
 
-                if fixtures:
-                    for fixture in fixtures:
-                        fixture_ref = fixture.get("resource", {}).get("reference")
+            except json.decoder.JSONDecodeError as e:
 
-                        if fixture_ref:
-                            # Extract filename and convert .html to .json
-                            fixture_name = os.path.basename(fixture_ref)
-                            fixture_name = os.path.splitext(fixture_name)[0] + ".json"
+                message = (
+                    "INVALID JSON\n"
+                    f"File: {ts_path}\n"
+                    f"Error: {e.msg}\n"
+                    f"Line: {e.lineno}, Column: {e.colno}\n"
+                )
 
-                            # Build fixture path
-                            fixture_path = str(self.base_dir / "Example_Instances" / fixture_name).replace("\\", "/")
-                            relative_ts_path = ts_path.replace("../", "")
+                # in dein Log schreiben
 
-                            request_pairs.append((relative_ts_path, fixture_path))
-            except (FileNotFoundError, json.JSONDecodeError) as e:
-                print(f"Warning: Could not load testscript {ts_path}: {e}")
-                continue
+                log_to_file(message)
 
-        return request_pairs
+            fixtures_raw = get_fixture(testscript)
+            fixture_list = []
+
+            for fixture in fixtures_raw:
+                fixture_ref = fixture.get("resource", {}).get("reference")
+                if fixture_ref:
+                    filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
+                    fixture_path = f"Example_Instances/{filename}".replace("\\", "/")
+                    fixture_list.append(fixture_path)
+
+            ts_path_clean = ts_path.replace("../", "")
+            result.append((ts_path_clean, fixture_list))
+
+        return result
 
 
 # Singleton instance for easy import
