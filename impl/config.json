@@ -1,5 +1,5 @@
 {
   "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
   "path": "",
-  "testscripts": ["../Test_Scripts/TestScript-testscript-validateProfile.json"]
+  "testscripts": ["../Test_Scripts/TestScript-testscript-stopTestOnFail.json"]
 }

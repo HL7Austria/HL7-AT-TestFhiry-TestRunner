@@ -7,6 +7,7 @@ from datetime import datetime
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from profile_manager import ProfileManager
+from validate import *
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -30,6 +31,10 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 
 def log_to_file(message):
+    """
+    Logs a message to both console and log file.
+    :param message: The message to log.
+    """
     print(message)
     with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
         f.write(message + "\n")
@@ -37,14 +42,23 @@ def log_to_file(message):
 
 # Help function for loading JSON files
 def load_json(path):
+    """
+    Loads a JSON File from the given path.
+    :param path: The path to the JSON file.
+    :return: Parsed JSON content as dictionary.
+    """
     full_path = BASE_DIR / path
     printInfoJson(path)
-    # print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def printInfoJson(path):
+    """
+    Logs information about loaded JSON files based on their path.
+
+    :param path: Path of the loaded file.
+    """
     if "Test_Scripts" in str(path):
         filename = os.path.basename(path)
         name_without_extension = os.path.splitext(filename)[0]
@@ -55,8 +69,13 @@ def printInfoJson(path):
         log_to_file(f"Load Profile: {path}")
 
 
-# Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
-def parse_fhir_header(value, header_type):
+def parse_fhir_header(value):
+    """
+    Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.
+
+    :param value: The header value to parse.
+    :return: Full MIME type string.
+    """
     if not value:
         return "application/fhir+json"
     value = value.lower()
@@ -67,14 +86,21 @@ def parse_fhir_header(value, header_type):
     return value  # fallback: use whatever it says
 
 
-# Execute operation
 def execute_operation(operation, resource):
+    """
+    Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
+
+    :param operation: Dictionary containing operation details.
+    :param resource: The FHIR resource to operate on.
+    :return: HTTP response object.
+    :raises: NotImplementedError for unsupported methods.
+    """
     method = operation.get("type", {}).get("code", "").lower()
     resource_type = operation.get("resource")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
     headers = {
-        "Content-Type": parse_fhir_header(operation.get("contentType"), "Content-Type"),
-        "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
+        "Content-Type": parse_fhir_header(operation.get("contentType")),
+        "Accept": parse_fhir_header(operation.get("accept")),
     }
 
     if method == "create":
@@ -105,82 +131,36 @@ def execute_operation(operation, resource):
     return response
 
 
-def validate_content_type(response, expected_type=None):
-    """
-    Validates whether the server response matches the expected content type.
-    If no expected_type is specified, no validation is performed.
-    :param response: The HTTP response object returned by the server.
-    :param expected_type:  The expected Content-Type (e.g., "json", "xml", or a full MIME type).
-                           If None or empty, no validation is performed.
-    :return: None
-    """
-
-    # If no expected type is specified, skip
-    if not expected_type:
-        log_to_file("Skipping Content-Type validation (no expected type provided).")
-        return
-
-    actual_content_type = response.headers.get("Content-Type", "").split(";")[0].strip()
-    expected_type = parse_fhir_header(expected_type, "Content-Type")
-
-    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
-
-    assert actual_content_type == expected_type, (
-        f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
-    )
-
-
-# Check assertion
-def validate_response(assertion, response):
-    # Only check status code if responseCode is present
-    if "responseCode" in assertion:
-        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-        status_code = str(response.status_code)
-        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
-
-    # Only check content type if contentType is present
-    if "contentType" in assertion:
-        validate_content_type(response, assertion.get("contentType"))
-
-
-
-def validate_profile_assertion(profile_id):
-    """
-    Validates whether the profile specified in 'validateProfileId' exists
-    in the loaded profiles, but does NOT fail the test.
-    """
-    if not profile_id:
-        log_to_file("Skipping profile validation (no validateProfileId provided).")
-        return True
-
-    available_ids = [p[1] for p in profile_manager.get_profiles()]
-
-    log_to_file(f"Asserting profile Id '{profile_id}' in {available_ids}")
-    assert profile_id in available_ids, f"Profile ID '{profile_id}' not found in loaded profiles!\n"
-
-
-
 def get_fixture(testscript):
+    """
+    Extracts fixture definitions from a testscript.
+
+    :param testscript: Testscript dictionary.
+    :return: List of fixture dictionaries.
+    """
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
-    # print(fixtures)
     return fixtures
 
 
 def get_testscripts_from_config():
+    """
+    Loads testscript configurations from config.json or scans Test_Scripts folder.
+
+    :return: List of (testscript_path, fixture_path) tuples.
+    """
     CONFIG_PATH = "../config.json"
     TESTSCRIPT_FOLDER = "../Test_Scripts"
 
-    # Config laden
+    # Load config
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
     except FileNotFoundError:
         config = {}
 
-    # Testscripts aus der Config, wenn vorhanden
+    # Test scripts from the config, if present
     testscripts = config.get("testscripts", [])
 
     if not testscripts:
@@ -204,13 +184,13 @@ def get_testscripts_from_config():
                 fixture_ref = fixture.get("resource", {}).get("reference")
 
                 if fixture_ref:
-                    # Dateiname extrahieren (ohne Pfad)
+                    # Extract filename (without path)
                     fixture_name = os.path.basename(fixture_ref)
 
-                    # Endung .html → .json ändern
+                    # Change the file extension from .html to .json
                     fixture_name = os.path.splitext(fixture_name)[0] + ".json"
 
-                    # Prefix 'Example_Instances/' hinzufügen
+                    # Add prefix 'Example_Instances/'
                     fixture_path = os.path.join("Example_Instances", fixture_name)
                     fixture_path = fixture_path.replace("\\", "/")
                     ts_path = ts_path.replace("../", "")
@@ -222,6 +202,12 @@ def get_testscripts_from_config():
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscripts_from_config())
 def testscript_data(request):
+    """
+    Pytest fixture that provides testscript and resource data for parameterized tests.
+
+    :param request: Pytest fixture request object.
+    :return: Tuple of (testscript, resource) data.
+    """
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
     resource = load_json(resource_path)
@@ -229,7 +215,13 @@ def testscript_data(request):
 
 
 def execute_test_actions(test, resource):
-    """Execute all actions for a single test with stopTestOnFail handling"""
+    """
+    Executes all actions for a single test.
+
+    :param test: Test definition dictionary.
+    :param resource: FHIR resource to test with.
+    :return: True if test passed, False otherwise.
+    """
     stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
@@ -272,11 +264,19 @@ def execute_test_actions(test, resource):
                     try:
                         validate_profile_assertion(assertion.get("validateProfileId"))
                         log_to_file(f"✓ Assertion passed")
-                    except AssertionError:
+                    except AssertionError as e:
                         test_passed = handle_assertion_error(e, stop_test_on_fail)
 
+                contentType = False
+                if "contentType" in assertion:
+                    try:
+                        contentType = True
+                        validate_content_type(response, assertion.get("contentType"))
+                        log_to_file(f"✓ Assertion passed")
+                    except AssertionError as e:
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
 
-                if assertion.get("direction") == "response":
+                if assertion.get("direction") == "response" and contentType == False:
                     try:
                         validate_response(assertion, response)
                         log_to_file(f"✓ Assertion  passed")
@@ -286,11 +286,11 @@ def execute_test_actions(test, resource):
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
 
+
         except TestExecutionError:
             # Re-raise to stop the test
             raise
         except Exception as e:
-            #log_to_file(f"✗ ERROR in action: {str(e)}")
             if stop_test_on_fail:
                 raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
             else:
@@ -298,11 +298,15 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+
 def handle_assertion_error(e, stop_test_on_fail):
     """
-    Logs the AssertionError and decides whether the test is stopped or continues, depending on `stop_test_on_fail`.
-    Returns:
-        bool: True if the test should continue, False if the test failed.
+    Logs the AssertionError and decides whether to stop or continue the test.
+
+    :param e: The AssertionError exception.
+    :param stop_test_on_fail: Boolean flag indicating if test should stop on failure.
+    :return: True if test should continue, False if test failed.
+    :raises: TestExecutionError if stop_test_on_fail is True.
     """
     log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
     if stop_test_on_fail:
@@ -310,8 +314,13 @@ def handle_assertion_error(e, stop_test_on_fail):
     return False  # Test failed, but continuing allowed
 
 
-# The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
+    """
+    Main test function for FHIR operations testing.
+    Executes all tests in a testscript with GIVEN-WHEN-THEN structure.
+
+    :param testscript_data: Tuple containing testscript and resource data.
+    """
     # GIVEN
     testscript, resource = testscript_data
 
