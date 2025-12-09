@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
+import traceback
 
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
@@ -46,6 +47,22 @@ def load_json(path):
     #print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+def load_json_list(paths):
+    json_list = []
+
+    if not paths:
+        return None
+
+    for path in paths:
+        full_path = BASE_DIR / path
+        printInfoJson(path)
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            json_list.append(json.load(f))
+
+    return json_list
+
 
 
 def printInfoJson(path):
@@ -158,57 +175,79 @@ def get_testscripts_from_config():
 
     # Config laden
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        with open(CONFIG_PATH, "r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
     except FileNotFoundError:
         config = {}
+    except json.decoder.JSONDecodeError as e:
+        message = (
+            "INVALID JSON\n"
+            f"File: {CONFIG_PATH}\n"
+            f"Error: {e.msg}\n"
+            f"Line: {e.lineno}, Column: {e.colno}\n"
+        )
+        # in dein Log schreiben
+        log_to_file(message)
 
-    # Testscripts aus der Config, wenn vorhanden
+    # Testscripts aus der Config ODER Ordner
     testscripts = config.get("testscripts", [])
 
     if not testscripts:
         testscripts = [
-            os.path.join(TESTSCRIPT_FOLDER, f).replace("\\", "/")
-            for f in os.listdir(TESTSCRIPT_FOLDER)
-            if f.endswith(".json")
+            os.path.join(TESTSCRIPT_FOLDER, name).replace("\\", "/")
+            for name in os.listdir(TESTSCRIPT_FOLDER)
+            if name.endswith(".json")
         ]
-        print(testscripts)
 
-    request = []
+    result = []
 
     for ts_path in testscripts:
-        with open(ts_path, "r", encoding="utf-8") as f:
-            testscript = json.load(f)
 
-        fixtures = get_fixture(testscript)
+        # Testscript laden
+        try:
+            with open(ts_path, "r", encoding="utf-8") as ts_file:
+                testscript = json.load(ts_file)
+        except json.decoder.JSONDecodeError as e:
+            message = (
+                "INVALID JSON\n"
+                f"File: {ts_path}\n"
+                f"Error: {e.msg}\n"
+                f"Line: {e.lineno}, Column: {e.colno}\n"
 
-        if fixtures:
-            for fixture in fixtures:
-                fixture_ref = fixture.get("resource", {}).get("reference")
+            )
+            # in dein Log schreiben
+            log_to_file(message)
 
-                if fixture_ref:
-                    # Dateiname extrahieren (ohne Pfad)
-                    fixture_name = os.path.basename(fixture_ref)
 
-                    # Endung .html → .json ändern
-                    fixture_name = os.path.splitext(fixture_name)[0] + ".json"
+        fixtures_raw = get_fixture(testscript)
+        fixture_list = []
 
-                    # Prefix 'Example_Instances/' hinzufügen
-                    fixture_path = os.path.join("Example_Instances", fixture_name)
-                    fixture_path = fixture_path.replace("\\", "/")
-                    ts_path = ts_path.replace("../", "")
-                    request.append((ts_path, fixture_path))
+        for fixture in fixtures_raw:
+            fixture_ref = fixture.get("resource", {}).get("reference")
 
-    return request
+            if fixture_ref:
+                filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
+                fixture_path = f"Example_Instances/{filename}".replace("\\", "/")
+                fixture_list.append(fixture_path)
+
+        ts_path_clean = ts_path.replace("../", "")
+
+        result.append((ts_path_clean, fixture_list))
+
+    return result
 
 
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscripts_from_config())
 def testscript_data(request):
     testscript_path, resource_path = request.param
+    print (resource_path)
     testscript = load_json(testscript_path)
-    resource = load_json(resource_path)
-    return testscript, resource
+    if resource_path:
+        resources = load_json_list(resource_path)
+    else:
+        resources = None
+    return testscript, resources
 
 
 def execute_test_actions(test, resource):
@@ -299,7 +338,11 @@ def save_fixtures(filenames):
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
     # GIVEN
-    testscript, resource = testscript_data
+    testscript, resources = testscript_data
+    if resources != None:
+        resource = resources[0] # later there should be a method that decides which fixture will be taken for the test
+    else:
+        resource = None
 
     overall_results = []
 
