@@ -8,8 +8,8 @@ from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from profile_manager import ProfileManager
 from validate import *
+from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
 
-FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
@@ -28,6 +28,8 @@ LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
+
+FHIR_SERVER_BASE = get_fhir_server()
 
 
 def log_to_file(message):
@@ -144,63 +146,8 @@ def get_fixture(testscript):
     return fixtures
 
 
-def get_testscripts_from_config():
-    """
-    Loads testscript configurations from config.json or scans Test_Scripts folder.
-
-    :return: List of (testscript_path, fixture_path) tuples.
-    """
-    CONFIG_PATH = "../config.json"
-    TESTSCRIPT_FOLDER = "../Test_Scripts"
-
-    # Load config
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except FileNotFoundError:
-        config = {}
-
-    # Test scripts from the config, if present
-    testscripts = config.get("testscripts", [])
-
-    if not testscripts:
-        testscripts = [
-            os.path.join(TESTSCRIPT_FOLDER, f).replace("\\", "/")
-            for f in os.listdir(TESTSCRIPT_FOLDER)
-            if f.endswith(".json")
-        ]
-        print(testscripts)
-
-    request = []
-
-    for ts_path in testscripts:
-        with open(ts_path, "r", encoding="utf-8") as f:
-            testscript = json.load(f)
-
-        fixtures = get_fixture(testscript)
-
-        if fixtures:
-            for fixture in fixtures:
-                fixture_ref = fixture.get("resource", {}).get("reference")
-
-                if fixture_ref:
-                    # Extract filename (without path)
-                    fixture_name = os.path.basename(fixture_ref)
-
-                    # Change the file extension from .html to .json
-                    fixture_name = os.path.splitext(fixture_name)[0] + ".json"
-
-                    # Add prefix 'Example_Instances/'
-                    fixture_path = os.path.join("Example_Instances", fixture_name)
-                    fixture_path = fixture_path.replace("\\", "/")
-                    ts_path = ts_path.replace("../", "")
-                    request.append((ts_path, fixture_path))
-
-    return request
-
-
 # Fixture for dynamic test data
-@pytest.fixture(params=get_testscripts_from_config())
+@pytest.fixture(params=get_testscript_pairs())
 def testscript_data(request):
     """
     Pytest fixture that provides testscript and resource data for parameterized tests.
@@ -321,6 +268,10 @@ def test_fhir_operations(testscript_data):
 
     :param testscript_data: Tuple containing testscript and resource data.
     """
+
+    if not has_fhir_server():
+        log_to_file("✗ TEST SKIPPED: No FHIR server configured")
+        pytest.skip("No FHIR server configured in config.json")
     # GIVEN
     testscript, resource = testscript_data
 
