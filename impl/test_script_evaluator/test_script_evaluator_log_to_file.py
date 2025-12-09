@@ -124,11 +124,31 @@ def execute_operation(operation, resource):
             else:
                 raise ValueError("No ID found in response or Location header")
     elif method == "update":
-        resource_id = resource.get("id")
+        #hier fixture server_id verwenden --> dann noch mit source_id
+        #vorübergehend filepath
+        resource_file = resource.get("id") + ".json"
+        print(resource_file)
+        print(FIXTURES)
+        fixture = next((fix for fix in FIXTURES if fix.example_path == resource_file), None)
+        if fixture is None:
+            log_to_file("Something went wrong")
+            return None
+        resource_id = fixture.server_id
+        print(resource_id)
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        resource["id"] = resource_id
         response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
+        print(response.text)
+
     elif method == "read":
-        resource_id = resource.get("id")
+        # hier fixture server_id verwenden --> dann noch mit source_id
+        # vorübergehend filepath
+        resource_file = resource.get("id") + ".json"
+        fixture = next((fix for fix in FIXTURES if fix.example_path == resource_file), None)
+        if fixture is None:
+            log_to_file("Something went wrong")
+            return None
+        resource_id = fixture.server_id
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
     else:
@@ -137,14 +157,45 @@ def execute_operation(operation, resource):
     log_to_file(f"Response: {response.status_code}")
     return response
 
-
-def get_fixture(testscript):
+def validate_content_type(response, expected_type=None):
+    """
+    Validates whether the server response matches the expected content type.
+    If no expected_type is specified, no validation is performed.
+    :param response: The HTTP response object returned by the server.
+    :param expected_type:  The expected Content-Type (e.g., "json", "xml", or a full MIME type).
+                           If None or empty, no validation is performed.
+    :return: None
     """
     Extracts fixture definitions from a testscript.
 
-    :param testscript: Testscript dictionary.
-    :return: List of fixture dictionaries.
-    """
+    # If no expected type is specified, skip
+    if not expected_type:
+        log_to_file("Skipping Content-Type validation (no expected type provided).")
+        return
+
+    actual_content_type = response.headers.get("Content-Type", "").split(";")[0].strip()
+    expected_type = parse_fhir_header(expected_type, "Content-Type")
+
+    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
+
+    assert actual_content_type == expected_type, (
+        f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
+    )
+
+# Check assertion
+def validate_response(assertion, response):
+    # Only check status code if responseCode is present
+    if "responseCode" in assertion:
+        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+        status_code = str(response.status_code)
+        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
+
+    # Only check content type if contentType is present
+    if "contentType" in assertion:
+        validate_content_type(response, assertion.get("contentType"))
+
+def get_fixture(testscript):
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
@@ -283,7 +334,7 @@ def test_fhir_operations(testscript_data):
     overall_results = []
 
     filenames = ["Organization-Organization-example-f001-burgers.json",
-                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientExample01.json"]
+                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientUpdateTestExample.json"]
     # dass ist die liste an fixtures die dann weitergegeben wird an transactions
     # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
     # --> für den Test zumindest, nachher macht das autocreate
