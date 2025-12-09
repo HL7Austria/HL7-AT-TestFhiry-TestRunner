@@ -1,5 +1,6 @@
 {
   "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
   "path": "",
-  "testscripts": ["../Test_Scripts/TestScript-testscript-patient-update-at-core.json"]
+  "testscripts": ["../Test_Scripts/TestScript-testscript-stopTestOnFail.json"],
+  "fhirServer" : "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 }

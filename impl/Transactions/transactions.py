@@ -2,6 +2,11 @@ import json
 import uuid
 
 def prefix_references_with_urn_uuid(obj):
+    """
+     Recursively prefixes all reference fields in a FHIR resource with 'urn:uuid:'.
+
+    :param obj: The dictionary or list to process.
+    """
     if isinstance(obj, dict):
         for key, value in obj.items():
             if key == "reference" and isinstance(value, str):
@@ -13,7 +18,14 @@ def prefix_references_with_urn_uuid(obj):
         for item in obj:
             prefix_references_with_urn_uuid(item)
 
+
 def create_bundle_entry(resource):
+    """
+    Creates a Bundle entry for a FHIR resource.
+
+    :param resource: The FHIR resource dictionary.
+    :return: Bundle entry dictionary.
+    """
     resource_type = resource.get("resourceType")
     resource_id = resource.get("id", str(uuid.uuid4()))
     full_url = f"urn:uuid:{resource_type}/{resource_id}"
@@ -27,7 +39,14 @@ def create_bundle_entry(resource):
         }
     }
 
+
 def build_transaction_bundle(resources):
+    """
+    Builds a FHIR transaction bundle from a list of resources.
+
+    :param resources: List of FHIR resource dictionaries.
+    :return: Complete transaction bundle dictionary.
+    """
     for res in resources:
         prefix_references_with_urn_uuid(res)
     entries = [create_bundle_entry(res) for res in resources]
