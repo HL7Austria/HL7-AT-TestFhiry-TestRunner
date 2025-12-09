@@ -4,22 +4,24 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
-
-from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
+from profile_manager import ProfileManager
+from validate import *
+from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 
-FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 
-
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+profile_manager = ProfileManager()
+profile_manager.make_profile_list(str(BASE_DIR) + "/Profiles")  # Path to profile
+
 RESULTS_DIR = BASE_DIR / "Results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -32,8 +34,14 @@ FIXTURES = []
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
+FHIR_SERVER_BASE = get_fhir_server()
+
 
 def log_to_file(message):
+    """
+    Logs a message to both console and log file.
+    :param message: The message to log.
+    """
     print(message)
     with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
         f.write(message + "\n")
@@ -41,14 +49,23 @@ def log_to_file(message):
 
 # Help function for loading JSON files
 def load_json(path):
+    """
+    Loads a JSON File from the given path.
+    :param path: The path to the JSON file.
+    :return: Parsed JSON content as dictionary.
+    """
     full_path = BASE_DIR / path
     printInfoJson(path)
-    #print(f"Load: {path}")
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def printInfoJson(path):
+    """
+    Logs information about loaded JSON files based on their path.
+
+    :param path: Path of the loaded file.
+    """
     if "Test_Scripts" in str(path):
         filename = os.path.basename(path)
         name_without_extension = os.path.splitext(filename)[0]
@@ -58,8 +75,14 @@ def printInfoJson(path):
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
 
-# Mapping of short forms such as ‘json’ to FHIR-compliant MIME types
-def parse_fhir_header(value, header_type):
+
+def parse_fhir_header(value):
+    """
+    Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.
+
+    :param value: The header value to parse.
+    :return: Full MIME type string.
+    """
     if not value:
         return "application/fhir+json"
     value = value.lower()
@@ -71,12 +94,20 @@ def parse_fhir_header(value, header_type):
 
 # Execute operation
 def execute_operation(operation, resource):
+    """
+    Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
+
+    :param operation: Dictionary containing operation details.
+    :param resource: The FHIR resource to operate on.
+    :return: HTTP response object.
+    :raises: NotImplementedError for unsupported methods.
+    """
     method = operation.get("type", {}).get("code", "").lower()
     resource_type = operation.get("resource")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
     headers = {
-        "Content-Type": parse_fhir_header(operation.get("contentType"), "Content-Type"),
-        "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
+        "Content-Type": parse_fhir_header(operation.get("contentType")),
+        "Accept": parse_fhir_header(operation.get("accept")),
     }
 
     if method == "create":
@@ -135,6 +166,7 @@ def validate_content_type(response, expected_type=None):
                            If None or empty, no validation is performed.
     :return: None
     """
+    Extracts fixture definitions from a testscript.
 
     # If no expected type is specified, skip
     if not expected_type:
@@ -170,59 +202,15 @@ def get_fixture(testscript):
     return fixtures
 
 
-def get_testscripts_from_config():
-    CONFIG_PATH = "../config.json"
-    TESTSCRIPT_FOLDER = "../Test_Scripts"
-
-    # Config laden
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except FileNotFoundError:
-        config = {}
-
-    # Testscripts aus der Config, wenn vorhanden
-    testscripts = config.get("testscripts", [])
-
-    if not testscripts:
-        testscripts = [
-            os.path.join(TESTSCRIPT_FOLDER, f).replace("\\", "/")
-            for f in os.listdir(TESTSCRIPT_FOLDER)
-            if f.endswith(".json")
-        ]
-        print(testscripts)
-
-    request = []
-
-    for ts_path in testscripts:
-        with open(ts_path, "r", encoding="utf-8") as f:
-            testscript = json.load(f)
-
-        fixtures = get_fixture(testscript)
-
-        if fixtures:
-            for fixture in fixtures:
-                fixture_ref = fixture.get("resource", {}).get("reference")
-
-                if fixture_ref:
-                    # Dateiname extrahieren (ohne Pfad)
-                    fixture_name = os.path.basename(fixture_ref)
-
-                    # Endung .html → .json ändern
-                    fixture_name = os.path.splitext(fixture_name)[0] + ".json"
-
-                    # Prefix 'Example_Instances/' hinzufügen
-                    fixture_path = os.path.join("Example_Instances", fixture_name)
-                    fixture_path = fixture_path.replace("\\", "/")
-                    ts_path = ts_path.replace("../", "")
-                    request.append((ts_path, fixture_path))
-
-    return request
-
-
 # Fixture for dynamic test data
-@pytest.fixture(params=get_testscripts_from_config())
+@pytest.fixture(params=get_testscript_pairs())
 def testscript_data(request):
+    """
+    Pytest fixture that provides testscript and resource data for parameterized tests.
+
+    :param request: Pytest fixture request object.
+    :return: Tuple of (testscript, resource) data.
+    """
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
     resource = load_json(resource_path)
@@ -230,7 +218,13 @@ def testscript_data(request):
 
 
 def execute_test_actions(test, resource):
-    """Execute all actions for a single test with stopTestOnFail handling"""
+    """
+    Executes all actions for a single test.
+
+    :param test: Test definition dictionary.
+    :param resource: FHIR resource to test with.
+    :return: True if test passed, False otherwise.
+    """
     stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
@@ -269,27 +263,37 @@ def execute_test_actions(test, resource):
             # THEN - Assertion
             elif "assert" in action:
                 assertion = action["assert"]
-                if assertion.get("direction") == "response":
+                if "validateProfileId" in assertion:
+                    try:
+                        validate_profile_assertion(assertion.get("validateProfileId"))
+                        log_to_file(f"✓ Assertion passed")
+                    except AssertionError as e:
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+
+                contentType = False
+                if "contentType" in assertion:
+                    try:
+                        contentType = True
+                        validate_content_type(response, assertion.get("contentType"))
+                        log_to_file(f"✓ Assertion passed")
+                    except AssertionError as e:
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+
+                if assertion.get("direction") == "response" and contentType == False:
                     try:
                         validate_response(assertion, response)
-                        log_to_file(f"✓ Assertion {action_index + 1} passed")
+                        log_to_file(f"✓ Assertion  passed")
                     except AssertionError as e:
-                        log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
-                        if stop_test_on_fail:
-                            # Stop this test immediately
-                            raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
-                        else:
-                            # Continue with next action but mark test as failed
-                            test_passed = False
+                        test_passed = handle_assertion_error(e, stop_test_on_fail)
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
+
 
         except TestExecutionError:
             # Re-raise to stop the test
             raise
         except Exception as e:
-            log_to_file(f"✗ ERROR in action {action_index + 1}: {str(e)}")
             if stop_test_on_fail:
                 raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
             else:
@@ -297,25 +301,33 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
-def save_fixtures(filenames):
-    bundle = build_whole_transaction_bundle(filenames)
 
-    response = requests.post(
-        FHIR_SERVER_BASE,
-        headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
-        json=json.loads(bundle)
-    )
+def handle_assertion_error(e, stop_test_on_fail):
+    """
+    Logs the AssertionError and decides whether to stop or continue the test.
 
-    results = response.json().get("entry")
+    :param e: The AssertionError exception.
+    :param stop_test_on_fail: Boolean flag indicating if test should stop on failure.
+    :return: True if test should continue, False if test failed.
+    :raises: TestExecutionError if stop_test_on_fail is True.
+    """
+    log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
+    if stop_test_on_fail:
+        raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
+    return False  # Test failed, but continuing allowed
 
-    for fix_path, res in zip(filenames, results):
-        resp = res.get("response")
-        res_loc = resp.get("location")
-        res_id = res_loc.split("/")[1]
-        FIXTURES.append(Fixture(fix_path, res_id))
 
-# The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
+    """
+    Main test function for FHIR operations testing.
+    Executes all tests in a testscript with GIVEN-WHEN-THEN structure.
+
+    :param testscript_data: Tuple containing testscript and resource data.
+    """
+
+    if not has_fhir_server():
+        log_to_file("✗ TEST SKIPPED: No FHIR server configured")
+        pytest.skip("No FHIR server configured in config.json")
     # GIVEN
     testscript, resource = testscript_data
 
