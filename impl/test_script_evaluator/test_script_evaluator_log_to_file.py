@@ -4,6 +4,9 @@ import pytest
 from pathlib import Path
 import os
 from datetime import datetime
+import traceback
+
+from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from profile_manager import ProfileManager
@@ -58,6 +61,23 @@ def load_json(path):
     printInfoJson(path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_json_list(paths):
+    json_list = []
+
+    if not paths:
+        return None
+
+    for path in paths:
+        full_path = BASE_DIR / path
+        printInfoJson(path)
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            json_list.append(json.load(f))
+
+    return json_list
+
 
 
 def printInfoJson(path):
@@ -213,8 +233,11 @@ def testscript_data(request):
     """
     testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
-    resource = load_json(resource_path)
-    return testscript, resource
+    if resource_path:
+        resources = load_json_list(resource_path)
+    else:
+        resources = None
+    return testscript, resources
 
 
 def execute_test_actions(test, resource):
@@ -301,6 +324,55 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+def save_fixtures(jsonFiles, fix_list):
+    """
+    saves fixtures to the server and saves infos for them
+    :param jsonFiles: the json inside the Files
+    """
+    bundle_json = [] #die zu erstellenden Fixtures als json
+    for jsonf, fixture in zip(jsonFiles, fix_list):
+        fix_id = jsonf.get("id")
+        fix_source_id = fixture.get("id")
+        autocreate = fixture.get("autocreate", True)
+        if(autocreate):
+            bundle_json.append(jsonf)
+        FIXTURES.append(Fixture(fix_id,fix_source_id)) #erstes Anlegen vor bundle
+
+    if bundle_json:
+        bundle = build_whole_transaction_bundle(bundle_json)
+        print(bundle)
+
+        response = requests.post(
+            FHIR_SERVER_BASE,
+            headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
+            json=json.loads(bundle)
+        )
+
+        results = response.json().get("entry")
+
+        for fix_cont, res in zip(bundle_json, results):
+            resp = res.get("response", {})
+            res_loc = resp.get("location", "")
+            res_id = res_loc.split("/")[1]  # server id
+            fix_id = fix_cont.get("id")  # id inside the Example Instance
+
+            for fix in FIXTURES:
+                if fix_id == fix.fixture_id:
+                    fix.server_id = res_id  # speichern der Server id
+
+
+
+def extract_fixture_ids(data):
+    fixture_ids = []
+
+    if "fixture" not in data:
+        return fixture_ids
+
+    for fx in data["fixture"]:
+        fixture_ids.append(fx.get("id"))
+
+    return fixture_ids
+
 
 def handle_assertion_error(e, stop_test_on_fail):
     """
@@ -329,17 +401,17 @@ def test_fhir_operations(testscript_data):
         log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         pytest.skip("No FHIR server configured in config.json")
     # GIVEN
-    testscript, resource = testscript_data
+    testscript, resources = testscript_data
+    if resources != None:
+        resource = resources[0] # later there should be a method that decides which fixture will be taken for the test
+    else:
+        resource = None
 
     overall_results = []
 
-    filenames = ["Organization-Organization-example-f001-burgers.json",
-                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientUpdateTestExample.json"]
-    # dass ist die liste an fixtures die dann weitergegeben wird an transactions
-    # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
-    # --> für den Test zumindest, nachher macht das autocreate
-    save_fixtures(filenames)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
-    #  --> in der Fixture kann unter source_id  die id die es in diesen Testscript hat gespeichert werden!!
+    fixture_list = get_fixture(testscript)
+    if fixture_list: #falls es fixtures gibt
+        save_fixtures(resources, fixture_list)
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')

@@ -1,26 +1,5 @@
 import json
 import uuid
-import os
-
-
-def load_resources_from_file(filename):
-    """
-    Loads FHIR resources from a JSON file.
-
-    :param filename: Path to the JSON file containing FHIR resources.
-    :return: List of FHIR resource dictionaries.
-    :raises ValueError: If file doesn't contain valid FHIR resources.
-    """
-    with open(filename, encoding="utf-8") as f:
-        data = json.load(f)
-
-    if isinstance(data, dict) and "resourceType" in data:
-        return [data]
-    elif isinstance(data, list):
-        return data
-    else:
-        raise ValueError(f"{filename} Contains no valid FHIR resource(s).")
-
 
 def prefix_references_with_urn_uuid(obj):
     """
@@ -77,25 +56,18 @@ def build_transaction_bundle(resources):
         "entry": entries
     }
 
-def build_whole_transaction_bundle(filenames):
-    folder = "../Example_Instances"
+def build_whole_transaction_bundle(jsonFiles):
+    """
+    builds a bundle for transaction, for saving multiple Example Instances
+    :param jsonFiles: json of the Example Instances
+    :return: a bundle for saving FHIR-Resources
+    """
     all_resources = []
-    files = []
-    for file in filenames:
-        files.append(os.path.join(folder, file))
 
-
-    for filename in files:
-        try:
-            resources = load_resources_from_file(filename)
-            all_resources.extend(resources)
-        except Exception as e:
-            print(f"Fehler beim Laden von {filename}: {e}")
+    for file in jsonFiles:
+        all_resources.append(file)
 
     bundle = build_transaction_bundle(all_resources)
 
     bundle_json = json.dumps(bundle, indent=2, ensure_ascii=False)
     return bundle_json
-
-
-#bundle = build_whole_transaction_bundle()
