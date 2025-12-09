@@ -10,6 +10,7 @@ from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
+from impl.model.fixture import Fixture
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
@@ -24,6 +25,8 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE_PATH = RESULTS_DIR / log_filename
 LOG_FILE_PATH = os.path.abspath(LOG_FILE_PATH)
+
+FIXTURES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -65,7 +68,6 @@ def parse_fhir_header(value, header_type):
     elif value == "xml":
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
-
 
 # Execute operation
 def execute_operation(operation, resource):
@@ -147,7 +149,6 @@ def get_fixture(testscript):
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
-    #print(fixtures)
     return fixtures
 
 
@@ -278,13 +279,37 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+def save_fixtures(filenames):
+    bundle = build_whole_transaction_bundle(filenames)
+
+    response = requests.post(
+        FHIR_SERVER_BASE,
+        headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
+        json=json.loads(bundle)
+    )
+
+    results = response.json().get("entry")
+
+    for fix_path, res in zip(filenames, results):
+        resp = res.get("response")
+        res_loc = resp.get("location")
+        res_id = res_loc.split("/")[1]
+        FIXTURES.append(Fixture(fix_path, res_id))
+
 # The actual test case - structured in GIVEN-WHEN-THEN
 def test_fhir_operations(testscript_data):
-
     # GIVEN
     testscript, resource = testscript_data
 
     overall_results = []
+
+    filenames = ["Organization-Organization-example-f001-burgers.json",
+                 "Patient-HL7ATCorePatientExample06-GenderExtension.json", "Patient-HL7ATCorePatientExample01.json"]
+    # dass ist die liste an fixtures die dann weitergegeben wird an transactions
+    # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
+    # --> für den Test zumindest, nachher macht das autocreate
+    save_fixtures(filenames)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
+    #  --> in der Fixture kann unter source_id  die id die es in diesen Testscript hat gespeichert werden!!
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
@@ -352,3 +377,4 @@ def test_fhir_operations(testscript_data):
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
+    FIXTURES.clear() #reset for next testscript
