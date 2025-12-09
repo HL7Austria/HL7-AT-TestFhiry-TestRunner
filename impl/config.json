@@ -1,6 +1,10 @@
 {
   "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
   "path": "",
+<<<<<<< HEAD
   "testscripts": ["../Test_Scripts/TestScript-testscript-stopTestOnFail.json"],
   "fhirServer" : "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
+=======
+  "testscripts": ["Test_Scripts/TestScript-testscript-patient-create-at-core.json"]
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
 }

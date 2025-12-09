@@ -77,6 +77,7 @@ def build_transaction_bundle(resources):
         "entry": entries
     }
 
+<<<<<<< HEAD
 
 def build_whole_transaction_bundle():
     """
@@ -84,6 +85,9 @@ def build_whole_transaction_bundle():
 
     :return: JSON string of the transaction bundle.
     """
+=======
+def build_whole_transaction_bundle():
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
     folder = "../Example_Instances"
     all_resources = []
 
@@ -94,7 +98,11 @@ def build_whole_transaction_bundle():
                 resources = load_resources_from_file(filepath)
                 all_resources.extend(resources)
             except Exception as e:
+<<<<<<< HEAD
                 print(f"Error loading {filename}: {e}")
+=======
+                print(f"Fehler beim Laden von {filename}: {e}")
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
 
     bundle = build_transaction_bundle(all_resources)
 
@@ -102,4 +110,8 @@ def build_whole_transaction_bundle():
     return bundle_json
 
 
+<<<<<<< HEAD
 bundle = build_whole_transaction_bundle()
+=======
+bundle = build_whole_transaction_bundle()
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)

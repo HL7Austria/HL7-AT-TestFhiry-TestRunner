@@ -6,9 +6,14 @@ import os
 from datetime import datetime
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
+<<<<<<< HEAD
 from profile_manager import ProfileManager
 from validate import *
 from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
+=======
+from impl.model.configuration import Configuration
+from impl.Transactions.transactions import build_whole_transaction_bundle
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
 
 saved_resource_id = ""
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -88,6 +93,10 @@ def parse_fhir_header(value):
     return value  # fallback: use whatever it says
 
 
+<<<<<<< HEAD
+=======
+# Execute operation
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
 def execute_operation(operation, resource):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
@@ -143,6 +152,7 @@ def get_fixture(testscript):
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
+    #print(fixtures)
     return fixtures
 
 
@@ -245,6 +255,7 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
+<<<<<<< HEAD
 
 def handle_assertion_error(e, stop_test_on_fail):
     """
@@ -272,6 +283,11 @@ def test_fhir_operations(testscript_data):
     if not has_fhir_server():
         log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         pytest.skip("No FHIR server configured in config.json")
+=======
+# The actual test case - structured in GIVEN-WHEN-THEN
+def test_fhir_operations(testscript_data):
+
+>>>>>>> parent of b3f77e6 (Merge pull request #105 from MichaelBogensberger/98-MappingFixtureToServerID)
     # GIVEN
     testscript, resource = testscript_data
 
