@@ -14,6 +14,7 @@ from impl.model.fixture import Fixture
 
 FHIR_SERVER_BASE = "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir"
 saved_resource_id = ""
+saved_source_id = {}
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 
@@ -69,15 +70,44 @@ def parse_fhir_header(value, header_type):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
+
+def parse_source_ids(testscript):
+    """
+    Parses sourceId from TestScript.variable and stores them.
+    """
+    # Loop through all variables in the TestScript
+    for var in testscript.get("variable", []):
+        # Extract variable name and sourceId
+        var_name = var.get("name")
+        source_id = var.get("sourceId")
+
+        # Only store if both name and sourceId exist
+        if var_name and source_id:
+            # Store in global dictionary
+            saved_source_id[var_name] = source_id
+            # Log the mapping
+            log_to_file(f"Variable '{var_name}' -> sourceId: '{source_id}'")
+
+
+
 # Execute operation
 def execute_operation(operation, resource):
     method = operation.get("type", {}).get("code", "").lower()
     resource_type = operation.get("resource")
+    source_id = operation.get("sourceId", "")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
     headers = {
         "Content-Type": parse_fhir_header(operation.get("contentType"), "Content-Type"),
         "Accept": parse_fhir_header(operation.get("accept"), "Accept"),
     }
+
+    # Find fixture by sourceId - NEU
+    fixture = None
+    if source_id:
+        for fix in FIXTURES:
+            if fix.source_id == source_id:
+                fixture = fix
+                break
 
     if method == "create":
         log_to_file(f"Executing: {method.upper()} {url}")
@@ -93,13 +123,24 @@ def execute_operation(operation, resource):
             else:
                 raise ValueError("No ID found in response or Location header")
     elif method == "update":
-        resource_id = resource.get("id")
+        resource_id = resource.get("id") or saved_resource_id
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        resource["id"] = resource_id
         response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
     elif method == "read":
-        resource_id = resource.get("id")
+        # Priority = fixture.server_id > saved_resource_id > resource.id
+        if fixture and fixture.server_id:
+            resource_id = fixture.server_id
+        elif saved_resource_id:
+            resource_id = saved_resource_id
+        else:
+            resource_id = resource.get("id")
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
+    elif method == "delete":
+        resource_id = resource.get("id") or saved_resource_id
+        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        response = requests.delete(f"{url}/{resource_id}", headers=headers)
     else:
         raise NotImplementedError(f"Method {method} not implemented")
 
@@ -279,7 +320,7 @@ def execute_test_actions(test, resource):
 
     return test_passed
 
-def save_fixtures(filenames):
+def save_fixtures(filenames, testscript):
     bundle = build_whole_transaction_bundle(filenames)
 
     response = requests.post(
@@ -289,6 +330,15 @@ def save_fixtures(filenames):
     )
 
     results = response.json().get("entry")
+
+    # Map fixtures from testscript to get sourceId
+    fixture_map = {}
+    for fix in testscript.get("fixture", []):
+        ref = fix.get("resource", {}).get("reference", "")
+        source_id = fix.get("id", "")
+        if ref:
+            filename = os.path.basename(ref).replace(".html", ".json")
+            fixture_map[filename] = source_id
 
     for fix_path, res in zip(filenames, results):
         resp = res.get("response")
@@ -308,7 +358,7 @@ def test_fhir_operations(testscript_data):
     # dass ist die liste an fixtures die dann weitergegeben wird an transactions
     # --> Leni hier musst du dann die fixture-path reintun (also die liste an fixtures die erstellt werden müssen)
     # --> für den Test zumindest, nachher macht das autocreate
-    save_fixtures(filenames)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
+    save_fixtures(filenames,testscript)  # --> für jedes testscript werden die eigenen Fixtures gespeichert
     #  --> in der Fixture kann unter source_id  die id die es in diesen Testscript hat gespeichert werden!!
 
     for test in testscript.get("test", []):
