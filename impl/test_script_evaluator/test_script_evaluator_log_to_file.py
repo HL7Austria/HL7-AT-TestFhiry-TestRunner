@@ -77,29 +77,19 @@ def execute_operation(operation, resource, test_id):
             else:
                 raise ValueError("No ID found in response or Location header")
     elif method == "update":
-        #hier fixture server_id verwenden --> dann noch mit source_id
-        #vorübergehend filepath
-        resource_file = resource.get("id") + ".json"
-        print(resource_file)
-        print(FIXTURES)
         fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
         if fixture is None:
-            log_to_file("Something went wrong")
+            log_to_file("no fixture found in update")
             return None
         resource_id = fixture.server_id
-        print(resource_id)
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         resource["id"] = resource_id
         response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
-        print(response.text)
 
     elif method == "read":
-        # hier fixture server_id verwenden --> dann noch mit source_id
-        # vorübergehend filepath
-        resource_file = resource.get("id") + ".json"
         fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
         if fixture is None:
-            log_to_file("Something went wrong")
+            log_to_file("No fixture found in read")
             return None
         resource_id = fixture.server_id
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
@@ -227,7 +217,6 @@ def save_fixtures(jsonFiles, fix_list):
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
-        print(bundle)
 
         response = requests.post(
             FHIR_SERVER_BASE,
@@ -299,8 +288,12 @@ def test_fhir_operations(testscript_data):
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
-        test_id=extract_fixture_ids(test)
-
+        test_id = ""
+        for action in test.get("action", []):
+            operation = action.get("operation")
+            if operation and "sourceId" in operation:
+                test_id = operation["sourceId"]
+                break
         try:
             test_passed = execute_test_actions(test, resource, test_id)
 
