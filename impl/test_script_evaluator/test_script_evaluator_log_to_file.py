@@ -32,8 +32,21 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 FHIR_SERVER_BASE = get_fhir_server()
 
+def extract_test_source_id(test):
+    """
+    Gibt die sourceId eines einzelnen Test-Objekts zurück.
+    Falls mehrere sourceIds existieren, wird die erste zurückgegeben.
+    """
+    for action in test.get("action", []):
+        op = action.get("operation")
+        if op and "sourceId" in op:
+            return op["sourceId"]
+
+    return None
+
+
 # Execute operation
-def execute_operation(operation, resource):
+def execute_operation(operation, resource, test_id):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
 
@@ -69,7 +82,7 @@ def execute_operation(operation, resource):
         resource_file = resource.get("id") + ".json"
         print(resource_file)
         print(FIXTURES)
-        fixture = next((fix for fix in FIXTURES if fix.example_path == resource_file), None)
+        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
         if fixture is None:
             log_to_file("Something went wrong")
             return None
@@ -84,7 +97,7 @@ def execute_operation(operation, resource):
         # hier fixture server_id verwenden --> dann noch mit source_id
         # vorübergehend filepath
         resource_file = resource.get("id") + ".json"
-        fixture = next((fix for fix in FIXTURES if fix.example_path == resource_file), None)
+        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
         if fixture is None:
             log_to_file("Something went wrong")
             return None
@@ -114,7 +127,7 @@ def testscript_data(request):
         resources = None
     return testscript, resources
 
-def execute_test_actions(test, resource):
+def execute_test_actions(test, resource, test_id):
     """
     Executes all actions for a single test.
 
@@ -134,7 +147,7 @@ def execute_test_actions(test, resource):
             # WHEN – Operation
             if "operation" in action:
                 operation = action["operation"]
-                response = execute_operation(operation, resource)
+                response = execute_operation(operation, resource, test_id)
 
                 # Extension: If it was a CREATE operation, then check GET
                 method = operation.get("type", {}).get("code", "").lower()
@@ -283,11 +296,13 @@ def test_fhir_operations(testscript_data):
     if fixture_list: #falls es fixtures gibt
         save_fixtures(resources, fixture_list)
 
+
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
+        test_id=extract_fixture_ids(test)
 
         try:
-            test_passed = execute_test_actions(test, resource)
+            test_passed = execute_test_actions(test, resource, test_id)
 
             if test_passed:
                 log_to_file(f"✓ TEST PASSED: {test_name}")
