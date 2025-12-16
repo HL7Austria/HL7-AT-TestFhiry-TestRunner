@@ -122,7 +122,7 @@ def execute_test_actions(test, resource):
     :param resource: FHIR resource to test with.
     :return: True if test passed, False otherwise.
     """
-    stop_test_on_fail = test.get("stopTestOnFail", False)
+    #stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
@@ -160,28 +160,41 @@ def execute_test_actions(test, resource):
             # THEN - Assertion
             elif "assert" in action:
                 assertion = action["assert"]
+                stopTestOnFail = assertion.get("stopTestOnFail", False)
                 if "validateProfileId" in assertion:
                     try:
                         validate_profile_assertion(assertion.get("validateProfileId"))
-                        log_to_file(f"✓ Assertion passed")
+                        log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+                        if stopTestOnFail:
+                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
+                            raise TestExecutionError(str(e))
+                        else:
+                            test_passed = handle_assertion_error(e, False)
 
                 contentType = False
                 if "contentType" in assertion:
                     try:
                         contentType = True
                         validate_content_type(response, assertion.get("contentType"))
-                        log_to_file(f"✓ Assertion passed")
+                        log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+                        if stopTestOnFail:
+                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
+                            raise TestExecutionError(str(e))
+                        else:
+                            test_passed = handle_assertion_error(e, False)
 
-                if assertion.get("direction") == "response" and contentType == False:
+                if assertion.get("direction") == "response" and not contentType:
                     try:
                         validate_response(assertion, response)
-                        log_to_file(f"✓ Assertion  passed")
+                        log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stop_test_on_fail)
+                        if stopTestOnFail:
+                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
+                            raise TestExecutionError(str(e))
+                        else:
+                            test_passed = handle_assertion_error(e, False)
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
@@ -191,10 +204,8 @@ def execute_test_actions(test, resource):
             # Re-raise to stop the test
             raise
         except Exception as e:
-            if stop_test_on_fail:
-                raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
-            else:
-                test_passed = False
+                raise TestExecutionError(f"Test stopped: {str(e)}")
+
 
     return test_passed
 
@@ -255,7 +266,7 @@ def handle_assertion_error(e, stop_test_on_fail):
     :raises: TestExecutionError if stop_test_on_fail is True.
     """
     log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
-    if stop_test_on_fail:
+    if stop_test_on_fail == True:
         raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
 
