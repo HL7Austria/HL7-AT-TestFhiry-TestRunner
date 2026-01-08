@@ -63,19 +63,34 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
 
 ```
 .
-├─ impl/                          
-│  ├─ Example_Instances/        # Wird automatisch erstellt mit den Example Instances
-│  ├─ exception/             	# Eigene erstelle Exceptions 
-│  ├─ ig_loader/              	# load_ig_from_internet.py muss händlisch gestartet werden um die Ordner automatisch zu erstellen und die Files vom Internet zu laden
-│  ├─ model/              		# Models für die Config.json und die Fixtures 
-│  ├─ Profiles/              	# Wird automatisch erstellt mit den Profilen
-│  ├─ Results/                	# Ordner wird automatisch erstellt. Hier werden die Logs gespeichert
-│  ├─ test-script_evaluator/    # Alle Dateine für die Evaluation des TestScripts
-│  ├─ Test_Scripts/      		# Wird automatisch erstellt mit den TestScripts
-│  ├─ transactions/             # Wichtig für die FHIR® Transaction Bundels
-│  ├─ config.json             	# Configurationen für das Ausführen
-│  └─ requirements.txt          # Requirements um einfaches pip install auszuführen
+├─ impl/
+│  ├─ Example_Instances/        # Wird automatisch erstellt und enthält Example Instances
+│  ├─ exception/               # Benutzerdefinierte Exceptions
+│  ├─ ig_loader/               # Lädt IGs, Example Instances und Profile aus dem Internet
+│  ├─ model/                   # Modelle für config.json und Fixtures
+│  ├─ Profiles/                # Wird automatisch erstellt und enthält Profile
+│  ├─ Results/                 # Wird automatisch erstellt und enthält Log-Dateien
+│  ├─ test-script_evaluator/   # Dateien zur Evaluierung der Test-Scripts
+│  ├─ Test_Scripts/            # Wird automatisch erstellt und enthält Test-Scripts
+│  ├─ transactions/            # Dateien für FHIR® Transaction Bundles
+│  ├─ config.json              # Konfiguration für die Ausführung
+│  └─ requirements.txt         # Python-Abhängigkeiten
+
 ```
+### Verzeichnis-Zweck
+**Example_Instance/:** Wird automatisch erstellt. Enthält alle heruntergeladenen Example Instances.
+**Profiles/:** Wird automatisch erstellt. Enthält alle geladenen Profile. 
+**Test_Scripts/:** Wird automatisch erstellt. Enthält alle Test-Skripte.
+**Results/:** Wird automatisch erstellt. Enthält die Log-Dateien der Ausführungen.
+**exception/:** Enthält alle benutzerdefinierten Exceptions.
+**ig_loader/:** Enthält das Skript load_ig_from_internet.py, das manuell ausgeführt werden muss, um die benötigten Ordner zu erstellen und Dateien aus dem Internet zu laden.
+**model/:** Enthält alle Datenmodelle, z. B. für die Konfiguration und Fixtures.
+**test-script_evaluator/:** Enthält alle Dateien, die für die Evaluierung der Test-Scripts benötigt werden.
+**transactions/:** Enthält Dateien, die für die Erstellung von FHIR® Transaction Bundles benötigt werden.
+
+
+
+
 ### 4.2 Ablaufdiagramm
 
 ```mermaid
