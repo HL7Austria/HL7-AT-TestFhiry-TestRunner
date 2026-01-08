@@ -157,6 +157,41 @@ sequenceDiagram
 | `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung |
 
 ---
+## Codebase Overview
+
+### exception/
+
+**Hauptdateien:**
+- `TestExecutionError.py` → Eigene Exception für Testausführungsfehler. 
+
+### ig_loader/
+
+**Hauptdateien:**
+- `load_ig_from_internet.py` → Lädt Example Instances, Profile und Test-Skripte aus dem Internet und speichert sie in den vorgesehenen Ordnern. 
+
+
+### model/
+
+**Hauptdateien:**
+- `configuration.py` → Modell für das config.json-File. 
+- `fixture.py` → Modell für die Fixtures. 
+
+### test_script_evaluator/
+
+**Hauptdateien:**
+- `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
+- `logger.py` → Zuständig für das Logging in die Log-Dateien. 
+- `profile_manager.py` → Speichert und verwaltet Profile. 
+- `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
+- `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
+- `validate.py` → Validierungen der Test-Scripts. 
+
+### transactions/
+
+**Hauptdateien:**
+- `transactions.py` → Erstellt FHIR® Transaction Bundles zum Speichern von Fixtures. 
+
+
 
 ## Installation & Setup
 
