@@ -79,13 +79,29 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
 ```
 ### Verzeichnis-Zweck
 **Example_Instance/:** Wird automatisch erstellt. Enthält alle heruntergeladenen Example Instances.
+
+
 **Profiles/:** Wird automatisch erstellt. Enthält alle geladenen Profile. 
+
+
 **Test_Scripts/:** Wird automatisch erstellt. Enthält alle Test-Skripte.
+
+
 **Results/:** Wird automatisch erstellt. Enthält die Log-Dateien der Ausführungen.
+
+
 **exception/:** Enthält alle benutzerdefinierten Exceptions.
+
+
 **ig_loader/:** Enthält das Skript load_ig_from_internet.py, das manuell ausgeführt werden muss, um die benötigten Ordner zu erstellen und Dateien aus dem Internet zu laden.
+
+
 **model/:** Enthält alle Datenmodelle, z. B. für die Konfiguration und Fixtures.
+
+
 **test-script_evaluator/:** Enthält alle Dateien, die für die Evaluierung der Test-Scripts benötigt werden.
+
+
 **transactions/:** Enthält Dateien, die für die Erstellung von FHIR® Transaction Bundles benötigt werden.
 
 
