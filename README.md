@@ -107,7 +107,7 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
 
 
 
-### 4.2 Ablaufdiagramm
+### Ablaufdiagramm
 
 ```mermaid
 flowchart TD
@@ -120,7 +120,7 @@ flowchart TD
 
 ---
 
-## 5. Funktionsweise
+## Funktionsweise
 
 1. Konfiguration aus `config.json` wird geladen.
 2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
@@ -144,13 +144,9 @@ sequenceDiagram
     Server-->>Evaluator: Sendet Statuscodes
     Evaluator->>Log: Speichert Ergebnisse
 ```
-
 ---
 
-## 6. Module im Detail
-
-
-## 7. Bibliotheken
+## Bibliotheken
 
 | Bibliothek              | Zweck                              |
 | ----------------------- | ---------------------------------- |
@@ -162,7 +158,7 @@ sequenceDiagram
 
 ---
 
-## 8. Installation & Setup
+## Installation & Setup
 
 ### Voraussetzungen
 
@@ -181,7 +177,7 @@ python test_script_evaluator_log_to_file.py
 
 ---
 
-## 9. Projektteam
+## Projektteam
 
 * Julia Bodingbauer  
 * Delaram Darehshoori  
@@ -190,41 +186,21 @@ python test_script_evaluator_log_to_file.py
 * Michael Bogensberger  
 * Laura Ziebermayr
 
-
 ---
-
-## 10. Kontakt
-
-| Rolle | Name | E-Mail |
-|-------|------|--------|
-| **Projektbetreuung** | Anna Lin, M.Sc. | 📧 [Anna.Lin@fh-hagenberg.at](mailto:Anna.Lin@fh-hagenberg.at) |
-| **Projektteam (Hauptkontakt)** | Laura Ziebermayr | 📧 [s2310458022@students.fh-hagenberg.at](mailto:s2310458022@students.fh-hagenberg.at) |
-
-
----
-
-
-## 9. Geplante Erweiterungen
-
-| Bereich                  | Beschreibung                                                    | Status            |
-| ------------------------ | --------------------------------------------------------------- | ----------------- |
-| `load_ig_from_folder.py` | Offline-Nutzung von lokalen IGs                                 | 🟡 in Entwicklung |
-
----
-
-## 10. TestScript-Mapping
+## TestScript-Mapping
 
 Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im PythonTool bereits umgesetzt sind oder noch geplant sind.
 
 | Abschnitt       | Feld              | Beschreibung                        | Priorität | Implementiert |
 | --------------- | ----------------- | ----------------------------------- | --------- | ------------- |
 | Fixture         | autodelete        | Fixture wird beim Teardown gelöscht | hoch      | –             |
-| Fixture         | autocreate        | Fixture wird beim Setup erstellt    | hoch      | –             |
-| Setup–Action    | operation         | Führt definierte Operation aus      | –         | ✅             |
-| Setup–Assert    | destination       | Zielobjekt der Assertion            | hoch      | ✅             |
-| Setup–Assert    | stopTestOnFail    | Testabbruch bei Fehlschlag          | hoch      | –             |
-| Setup–Assert    | validateProfileId | Profil-ID zur Validierung           | hoch      | –             |
-| Setup–Assert    | responseCode      | Erwarteter HTTP-Code                | –         | ✅             |
-| Setup–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | ✅             |
+| Fixture         | autocreate        | Fixture wird beim Setup erstellt    | hoch      | ✅             |
+| Setup–Action    | operation         | Aktion beim Setup      | –         | –             |
+| Test–Action    | operation         | Führt definierte Operation aus      | –         | ✅             |
+| Test–Assert    | destination       | Zielobjekt der Assertion            | hoch      | ✅             |
+| Test–Assert    | stopTestOnFail    | Testabbruch bei Fehlschlag          | hoch      | ✅             |
+| Test–Assert    | validateProfileId | Profil-ID zur Validierung           | hoch      | –             |
+| Test–Assert    | responseCode      | Erwarteter HTTP-Code                | –         | ✅             |
+| Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
 | Teardown–Action | operation         | Aktion beim Teardown                | mittel    | –             |
 
