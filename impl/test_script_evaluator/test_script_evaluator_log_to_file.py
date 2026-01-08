@@ -7,13 +7,13 @@ from datetime import datetime
 import traceback
 
 from numpy.ma.testutils import assert_equal
-from impl.Transactions.transactions import *
+from impl.transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
 from profile_manager import ProfileManager
 from validate import *
 from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.configuration import Configuration
-from impl.Transactions.transactions import build_whole_transaction_bundle
+from impl.transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 from utils import *
 

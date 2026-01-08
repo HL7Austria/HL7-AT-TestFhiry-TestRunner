@@ -1,0 +1,5 @@
+requests~=2.32.3
+beautifulsoup4~=4.14.2
+fpdf~=1.7.2
+pytest~=8.4.0
+numpy~=2.3.0
