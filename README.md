@@ -1,33 +1,28 @@
-# TestFhiry – Projektdokumentation
-
-## 0. Projektinterne Informationen
-Branch-Namenskonvention: TicketNummer-KurzerText in CamelCase
-
-Sprachkonventionen:
-+ Alle Themen, die mit Programmierung zu tun haben, werden auf Englisch behandelt.
-+ Alle Themen, die Git betreffen, werden auf Deutsch behandelt.
-
-## Links zu Leitfäden
-Links zu Leitfäden, auf die wir bereits Zugriff haben und die wir unterstützen. Auf einen Leitfaden haben wir derzeit noch keinen Zugriff:
-+ https://fhir.hl7.at/
-+ https://fhir.hl7.at/index_other.html
-
-## Testscripts in Leitfaden:
-+ https://fhir.hl7.at/r4-core-80-include-testscripts/tests.html
-
-  
----
-## 1. Einleitung
-
-Das **PythonTool** ist Teil des Projekts **TestFhiry**, das im Rahmen eines Studienprojekt an der **Fachhochschule Oberösterreich** entwickelt wurde.
-Ziel des Gesamtprojekts ist es, die **Testung und Zertifizierung von FHIR®-basierten Softwarelösungen** im Gesundheitswesen zu unterstützen.
-
+# TestFhiry Tester
 Das Tool lädt automatisch zuvor definierte **TestScripts** herunter, führt sie gegen einen **FHIR®-Server** aus und dokumentiert die Ergebnisse.
 Dadurch können Entwickler:innen frühzeitig Fehler erkennen und die **Konformität mit dem FHIR®-Standard** sicherstellen.
+---
+## Inhaltsverzeichnis
+
+- [Einleitung](#einleitung)
+- [Kernfunktionen](#kernfunktionen)
+- [Verzeichnisstruktur](#verzeichnisstruktur)
+- [Projektstatus](#projektstatus)
+- [Funktionalitäten](#funktionalitäten)
+- [Architekturüberblick](#architekturüberblick)
+- [Codebase Overview](#codebase-overview)
+- [Setup & Installation](#setup--installation)
+- [Konfiguration](#konfiguration)
+- [Ausführen](#ausführen)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Limitierungen](#limitierungen)
+- [Roadmap](#roadmap)
+- [Externe Quellen](#externe-quellen)
 
 ---
-
-## 2. Projektziele
+## Einleitung
+### Zielsetzung
 
 Das PythonTool soll eine **einheitliche, automatisierte Testumgebung** für FHIR®-Ressourcen bieten.
 Konkret ermöglicht es:
@@ -37,25 +32,16 @@ Konkret ermöglicht es:
 * Frühzeitiges Erkennen von Fehlerquellen
 * Wiederholbare und nachvollziehbare Testabläufe
 
-Zielgruppe sind **Softwareentwickler:innen** und **Qualitätsmanager:innen**, die FHIR®-basierte Systeme entwickeln oder prüfen.
+### Aktuelle Funktionalität
 
----
-## 3. Projektorganisation:
+- Fixtures werden automatisch erstellt
+- Test-Action führt die definierte Operation aus
+- Test-Assert validiert das Zielobjekt der Assertion
+- Optionaler Testabbruch bei fehlgeschlagener Assertion
+- Validierung anhand einer definierten Profil-ID
+- Prüfung des erwarteten HTTP-Response-Codes
 
-
-#### 3.1 FHIR®-Leitfäden
-
-Die im Projekt verwendeten Implementation Guides (IGs) basieren auf den offiziellen Leitfäden von **HL7 Österreich**.
-
-| Leitfaden | URL |
-| :--- | :--- |
-| **HL7 Austria FHIR® Guide** | [https://fhir.hl7.at/](https://fhir.hl7.at/) |
-| **Weitere Übersichten** | [https://fhir.hl7.at/index_other.html](https://fhir.hl7.at/index_other.html) |
-| **TestScripts im Leitfaden** | [https://fhir.hl7.at/r4-core-80-include-testscripts/tests.html](https://fhir.hl7.at/r4-core-80-include-testscripts/tests.html) |
-
----
-
-#### 3.2 Speicherung der TestScripts
+#### Speicherung der TestScripts
 
 Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und automatisiert aktualisiert.
 
@@ -69,22 +55,25 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
     impl/testscripts/parse_testScripts_save_as_json.py
     ```
 
-## 4. Systemüberblick und Architektur
+## Systemüberblick und Architektur
 
-### 4.1 Aufbau
+### Aufbau
 
-Das Tool ist **modular aufgebaut** und besteht aus mehreren Python-Dateien, die klar getrennte Aufgaben übernehmen:
-
-| Datei                                  | Aufgabe                                                                                            |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `configuration.py`                     | Lädt zentrale Einstellungen (z. B. FHIR®-Server, Log-Format) aus einer Konfigurationsdatei.         |
-| `load_ig_from_internet.py`             | Lädt Implementation Guides (IGs), Example Instances und TestScripts aus dem Internet.              |
-| `transactions.py`                      | Erstellt FHIR®-konforme Transaction Bundles und achtet auf die korrekte Reihenfolge der Ressourcen. |
-| `test_script_evaluator.py`             | Führt TestScripts aus (Basisversion, ohne Logging).                                                |
-| `test_script_evaluator_log_to_file.py` | Erweiterte Version mit Logging und Dateiausgabe.                                                   |
-| `logger.py`                            | Erstellt Logdateien in `.txt`, `.html` oder `.pdf`.                                                |
-| `load_ig_from_folder.py`               | Option für Offline-Tests – liest IGs aus lokalen Ordnern.                                          |
-
+```
+.
+├─ impl/                          
+│  ├─ Example_Instances/        # Wird automatisch erstellt mit den Example Instances
+│  ├─ exception/             	# Eigene erstelle Exceptions 
+│  ├─ ig_loader/              	# load_ig_from_internet.py muss händlisch gestartet werden um die Ordner automatisch zu erstellen und die Files vom Internet zu laden
+│  ├─ model/              		# Models für die Config.json und die Fixtures 
+│  ├─ Profiles/              	# Wird automatisch erstellt mit den Profilen
+│  ├─ Results/                	# Ordner wird automatisch erstellt. Hier werden die Logs gespeichert
+│  ├─ test-script_evaluator/    # Alle Dateine für die Evaluation des TestScripts
+│  ├─ Test_Scripts/      		# Wird automatisch erstellt mit den TestScripts
+│  ├─ transactions/             # Wichtig für die FHIR® Transaction Bundels
+│  ├─ config.json             	# Configurationen für das Ausführen
+│  └─ requirements.txt          # Requirements um einfaches pip install auszuführen
+```
 ### 4.2 Ablaufdiagramm
 
 ```mermaid
@@ -127,84 +116,6 @@ sequenceDiagram
 
 ## 6. Module im Detail
 
-### 6.1 configuration.py
-
-Lädt zentrale Konfigurationsdaten (z. B. Server-URL, Log-Format) aus `config.json`.
-
-**Beispiel:**
-
-```json
-{
-  "server": "http://cql-sandbox.projekte.fh-hagenberg.at:8080/fhir",
-  "url": "https://hl7.org/fhir/at-core-r5",
-  "log_format": "txt"
-}
-```
-
----
-
-### 6.2 load_ig_from_internet.py
-
-Lädt **Implementation Guides** (IGs) und **TestScripts** automatisch von einer Website herunter.
-Verwendet `BeautifulSoup4` zum Durchsuchen der HTML-Struktur (`artifacts.html`) und speichert Dateien lokal.
-
----
-
-### 6.3 transactions.py
-
-Erstellt ein **FHIR®-Transaction-Bundle**, das mehrere Ressourcen in der richtigen Reihenfolge enthält.
-Dies ist wichtig, da referenzierte Ressourcen bereits existieren müssen.
-
-**Beispiel:**
-
-```json
-{
-  "resourceType": "Bundle",
-  "type": "transaction",
-  "entry": [ ... ]
-}
-```
-
----
-
-### 6.4 test_script_evaluator_log_to_file.py
-
-Kernmodul des Tools. Führt die TestScripts aus und protokolliert Ergebnisse mit `pytest`.
-
-**Aufgaben:**
-
-* Liest TestScripts ein
-* Führt FHIR®-Operationen (POST, GET, PUT) aus
-* Validiert Serverantworten
-* Erstellt detaillierte Logdateien
-
-**Beispielausgabe:**
-
-```
-FHIR® Test Log - 2025-10-20 21:15
-Test: Patient Create
-Executing: CREATE http://.../Patient
-Response: 201
-Verifying created resource via GET
-Response: 200
-PASSED
-```
-
----
-
-### 6.5 logger.py
-
-Speichert Testergebnisse als `.txt`, `.html` oder `.pdf`.
-Verwendet `fpdf` für den PDF-Export.
-
----
-
-### 6.6 load_ig_from_folder.py
-
-Alternative zu Online-Downloads – liest Implementation Guides aus lokalen Ordnern.
-Ideal für Offline-Tests oder reproduzierbare Szenarien.
-
----
 
 ## 7. Bibliotheken
 
