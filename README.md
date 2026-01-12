@@ -221,7 +221,7 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 
 | Abschnitt       | Feld              | Beschreibung                        | Priorität | Implementiert |
 | --------------- | ----------------- | ----------------------------------- | --------- | ------------- |
-| Fixture         | autodelete        | Fixture wird beim Teardown gelöscht | hoch      | –             |
+| Fixture         | autodelete        | Fixture wird beim Teardown gelöscht | hoch      | ✅             |
 | Fixture         | autocreate        | Fixture wird beim Setup erstellt    | hoch      | ✅             |
 | Setup–Action    | operation         | Aktion beim Setup      | –         | –             |
 | Test–Action    | operation         | Führt definierte Operation aus      | –         | ✅             |
