@@ -7,20 +7,14 @@ Dadurch können Entwickler:innen frühzeitig Fehler erkennen und die **Konformit
 ## Inhaltsverzeichnis
 
 - [Einleitung](#einleitung)
-- [Kernfunktionen](#kernfunktionen)
-- [Verzeichnisstruktur](#verzeichnisstruktur)
-- [Projektstatus](#projektstatus)
+- [Systemüberblick und Architektur](#systemüberblick-und-architektur)
+- [Funktionsweise](#funktionsweise)
+- [Codebase Overview](#codebase-overview)
 - [Funktionalitäten](#funktionalitäten)
 - [Architekturüberblick](#architekturüberblick)
 - [Codebase Overview](#codebase-overview)
-- [Setup & Installation](#setup--installation)
-- [Konfiguration](#konfiguration)
-- [Ausführen](#ausführen)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Limitierungen](#limitierungen)
-- [Roadmap](#roadmap)
-- [Externe Quellen](#externe-quellen)
+- [Projektteam](#projektteam)
+- [TestScript-Mapping](#testscript-mapping)
 
 ---
 ## Einleitung
