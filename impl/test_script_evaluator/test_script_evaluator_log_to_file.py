@@ -220,11 +220,13 @@ def save_fixtures(jsonFiles, fix_list):
     bundle_json = [] #die zu erstellenden Fixtures als json
     for jsonf, fixture in zip(jsonFiles, fix_list):
         fix_id = jsonf.get("id")
+        fix_type = jsonf.get("resourceType")
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
+        autodelete = fixture.get("autodelete", False)
         if(autocreate):
             bundle_json.append(jsonf)
-        FIXTURES.append(Fixture(fix_id,fix_source_id)) #erstes Anlegen vor bundle
+        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type)) #erstes Anlegen vor bundle
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
@@ -328,4 +330,7 @@ def test_fhir_operations(testscript_data):
         log_to_file(f"  {test_name}: {status}")
 
     log_to_file("Test execution completed")
+    for fix in FIXTURES:
+        if fix.autodelete and fix.server_id != "":
+            requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
     FIXTURES.clear() #reset for next testscript
