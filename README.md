@@ -9,10 +9,9 @@ Dadurch können Entwickler:innen frühzeitig Fehler erkennen und die **Konformit
 - [Einleitung](#einleitung)
 - [Systemüberblick und Architektur](#systemüberblick-und-architektur)
 - [Funktionsweise](#funktionsweise)
+- [Bibliotheken](#bibliotheken)
 - [Codebase Overview](#codebase-overview)
-- [Funktionalitäten](#funktionalitäten)
-- [Architekturüberblick](#architekturüberblick)
-- [Codebase Overview](#codebase-overview)
+- [Installation & Setup](#installation--setup)
 - [Projektteam](#projektteam)
 - [TestScript-Mapping](#testscript-mapping)
 
