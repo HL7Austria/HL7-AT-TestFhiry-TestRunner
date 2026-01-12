@@ -34,8 +34,7 @@ FHIR_SERVER_BASE = get_fhir_server()
 
 def extract_test_source_id(test):
     """
-    Gibt die sourceId eines einzelnen Test-Objekts zurück.
-    Falls mehrere sourceIds existieren, wird die erste zurückgegeben.
+    Returns the soruceID
     """
     for action in test.get("action", []):
         op = action.get("operation")
@@ -247,7 +246,7 @@ def save_fixtures(jsonFiles, fix_list):
 
             for fix in FIXTURES:
                 if fix_id == fix.fixture_id:
-                    fix.server_id = res_id  # speichern der Server id
+                    fix.server_id = res_id  # saves der Server id
 
 def extract_fixture_ids(data):
     fixture_ids = []
