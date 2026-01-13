@@ -16,7 +16,7 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
 - [Installation & Setup](#installation--setup)
 - [Projektteam](#projektteam)
 - [TestScript-Mapping](#testscript-mapping)
-- [Potentielle Werweiterungen](#potentielle-erweiterungen)
+- [Potentielle Erweiterungen](#potentielle-erweiterungen)
 
 ---
 ## Einleitung
@@ -236,7 +236,7 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Teardown–Action | operation         | Aktion beim Teardown                | mittel    | –             |
 
 ---
-##potentielle Erweiterungen
+## Potentielle Erweiterungen
 
 Hier werdend die möglichen bekannten Erweiterungen für dieses Projekt aufgelistet
 
