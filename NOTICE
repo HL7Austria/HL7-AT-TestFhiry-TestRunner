@@ -1,0 +1,19 @@
+NOTICE
+
+This project includes third-party open source software components.
+Each component is licensed under its respective license.
+
+Third-party libraries used:
+
+- requests — Apache License 2.0
+- beautifulsoup4 — MIT License
+- pytest — MIT License
+- fpdf — permissive license
+- numpy — BSD 3-Clause License
+
+This software is provided "as is", without any warranty of any kind.
+The author assumes no responsibility or liability for any damage,
+loss of data, legal issues, or other consequences arising from the
+use of this software.
+
+Use at your own risk.
