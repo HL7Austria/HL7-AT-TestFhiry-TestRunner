@@ -8,7 +8,7 @@ In dieser Datei werden die Unterschiede dieses Projekts zu dem TestFhiry_TinkerT
 |Test/action|✅|❌|
 |Test/assert/label|✅|❌|
 |Test/assert/description|✅|❌|
-|Setup/assert/direction|✅|nur response|
+|Setup/assert/direction|❌|nur response|
 |Test/assert/compareToSourceId|✅|❌|
 |Test/assert/compareToSourceExpression|❌|❌|
 |Test/assert/compareToSourcePath|❌|❌|
