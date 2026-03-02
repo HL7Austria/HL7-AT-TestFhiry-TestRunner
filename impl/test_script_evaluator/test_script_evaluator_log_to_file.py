@@ -297,6 +297,10 @@ def test_fhir_operations(testscript_data):
     if fixture_list: #falls es fixtures gibt
         save_fixtures(resources, fixture_list)
 
+    json_string = json.dumps(resource)
+    for fix in FIXTURES:
+        json_string = json_string.replace(fix.fixture_id, fix.server_id)
+    resource = json.loads(json_string)
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
