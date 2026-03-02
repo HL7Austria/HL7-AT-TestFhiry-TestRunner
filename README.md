@@ -8,15 +8,30 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
 ---
 ## Inhaltsverzeichnis
 
-- [Einleitung](#einleitung)
-- [Systemüberblick und Architektur](#systemüberblick-und-architektur)
-- [Funktionsweise](#funktionsweise)
-- [Bibliotheken](#bibliotheken)
-- [Codebase Overview](#codebase-overview)
-- [Installation & Setup](#installation--setup)
-- [Projektteam](#projektteam)
-- [TestScript-Mapping](#testscript-mapping)
-- [Potentielle Erweiterungen](#potentielle-erweiterungen)
+- [TestFhiry Tester](#testfhiry-tester)
+  - [Inhaltsverzeichnis](#inhaltsverzeichnis)
+  - [Einleitung](#einleitung)
+    - [Zielsetzung](#zielsetzung)
+    - [Aktuelle Funktionalität](#aktuelle-funktionalität)
+      - [Speicherung der TestScripts](#speicherung-der-testscripts)
+  - [Systemüberblick und Architektur](#systemüberblick-und-architektur)
+    - [Aufbau](#aufbau)
+    - [Verzeichnis-Zweck](#verzeichnis-zweck)
+    - [Ablaufdiagramm](#ablaufdiagramm)
+  - [Funktionsweise](#funktionsweise)
+  - [Bibliotheken](#bibliotheken)
+  - [Codebase Overview](#codebase-overview)
+    - [exception/](#exception)
+    - [ig\_loader/](#ig_loader)
+    - [model/](#model)
+    - [test\_script\_evaluator/](#test_script_evaluator)
+    - [transactions/](#transactions)
+  - [Installation \& Setup](#installation--setup)
+    - [Voraussetzungen](#voraussetzungen)
+    - [Installation](#installation)
+  - [Projektteam](#projektteam)
+  - [TestScript-Mapping](#testscript-mapping)
+  - [Potentielle Erweiterungen](#potentielle-erweiterungen)
 
 ---
 ## Einleitung
@@ -201,9 +216,12 @@ sequenceDiagram
 
 ```bash
 git clone https://github.com/.../TestFhiry.git
-cd TestFhiry
+cd TestFhiry/impl
 pip install -r requirements.txt
-python test_script_evaluator_log_to_file.py
+cd ig_loader
+python load_ig_from_internet.py
+cd ../..
+python -m pytest impl/test_script_evaluator/test_script_evaluator_log_to_file.py
 ```
 
 ---
