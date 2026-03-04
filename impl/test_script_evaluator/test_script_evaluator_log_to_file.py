@@ -297,10 +297,12 @@ def test_fhir_operations(testscript_data):
     if fixture_list: #falls es fixtures gibt
         save_fixtures(resources, fixture_list)
 
-    json_string = json.dumps(resource)
-    for fix in FIXTURES:
-        json_string = json_string.replace(fix.fixture_id, fix.server_id)
-    resource = json.loads(json_string)
+
+    for i in range(len(resources)):
+        json_string = json.dumps(resources[i])
+        for fix in FIXTURES:
+            json_string = json_string.replace("urn:uuid:"+fix.type+"/"+fix.fixture_id, fix.type+"/"+fix.server_id)
+        resources[i] = json.loads(json_string)
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
@@ -310,6 +312,12 @@ def test_fhir_operations(testscript_data):
             if operation and "sourceId" in operation:
                 test_id = operation["sourceId"]
                 break
+
+        for fix in FIXTURES:
+            if fix.source_id == test_id:
+                for res in resources:
+                    if res.get("id") == fix.fixture_id:
+                        resource = res
         try:
             test_passed = execute_test_actions(test, resource, test_id)
 
@@ -337,3 +345,4 @@ def test_fhir_operations(testscript_data):
         if fix.autodelete and fix.server_id != "":
             requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
     FIXTURES.clear() #reset for next testscript
+
