@@ -124,7 +124,6 @@ def execute_test_actions(test, resource, test_id):
     :param resource: FHIR resource to test with.
     :return: True if test passed, False otherwise.
     """
-    #stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
@@ -230,23 +229,27 @@ def save_fixtures(jsonFiles, fix_list):
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
 
-        response = requests.post(
+        try:
+            response = requests.post(
             FHIR_SERVER_BASE,
             headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
             json=json.loads(bundle)
-        )
+            )
 
-        results = response.json().get("entry")
+            results = response.json().get("entry")
 
-        for fix_cont, res in zip(bundle_json, results):
-            resp = res.get("response", {})
-            res_loc = resp.get("location", "")
-            res_id = res_loc.split("/")[1]  # server id
-            fix_id = fix_cont.get("id")  # id inside the Example Instance
+            for fix_cont, res in zip(bundle_json, results):
+                resp = res.get("response", {})
+                res_loc = resp.get("location", "")
+                res_id = res_loc.split("/")[1]  # server id
+                fix_id = fix_cont.get("id")  # id inside the Example Instance
 
-            for fix in FIXTURES:
-                if fix_id == fix.fixture_id:
-                    fix.server_id = res_id  # saves der Server id
+                for fix in FIXTURES:
+                    if fix_id == fix.fixture_id:
+                        fix.server_id = res_id  # saves der Server id
+        except Exception as e:
+            raise Exception(e)
+        
 
 def extract_fixture_ids(data):
     fixture_ids = []
@@ -293,30 +296,39 @@ def test_fhir_operations(testscript_data):
 
     overall_results = []
 
-    fixture_list = get_fixture(testscript)
-    if fixture_list: #falls es fixtures gibt
-        save_fixtures(resources, fixture_list)
+    try:
+        fixture_list = get_fixture(testscript)
+        if fixture_list: #falls es fixtures gibt
+            save_fixtures(resources, fixture_list)
+    except Exception as e:
+        log_to_file("Failure to save Fixtures!")
 
-
+    
+    
+    #changes all known references in all json-resources --> won't need to do it again after
     for i in range(len(resources)):
         json_string = json.dumps(resources[i])
         for fix in FIXTURES:
             json_string = json_string.replace("urn:uuid:"+fix.type+"/"+fix.fixture_id, fix.type+"/"+fix.server_id)
         resources[i] = json.loads(json_string)
+        if not json_string.find("reference': 'urn:uuid:") == -1: #I only come here if the server doesn't test references when saving resources
+            log_to_file("✗ TEST SKIPPED: Unknown References remaining")
+            pytest.skip("Unknown References remaining in a fixture")
+    
 
     for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
         test_id = ""
         for action in test.get("action", []):
             operation = action.get("operation")
-            if operation and "sourceId" in operation:
+            if operation and "sourceId" in operation: #find out which fixture is needed in test
                 test_id = operation["sourceId"]
                 break
 
         for fix in FIXTURES:
             if fix.source_id == test_id:
                 for res in resources:
-                    if res.get("id") == fix.fixture_id:
+                    if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
                         resource = res
         try:
             test_passed = execute_test_actions(test, resource, test_id)
@@ -345,4 +357,5 @@ def test_fhir_operations(testscript_data):
         if fix.autodelete and fix.server_id != "":
             requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
     FIXTURES.clear() #reset for next testscript
+
 
