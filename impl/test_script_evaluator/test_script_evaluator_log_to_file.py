@@ -306,24 +306,22 @@ def test_fhir_operations(testscript_data):
         if fixture_list: #falls es fixtures gibt
             save_fixtures(resources, fixture_list)
 
+        
+        for i in range(len(resources)):
+            json_string = json.dumps(resources[i])
+            for fix in FIXTURES:
+                my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
+                json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
+            resources[i] = json.loads(json_string)
+            if re.search("\"reference\" *: *\"[a-zA-z]*\/[a-zA-Z-]+", json_string) != None:
+                raise Exception("Unknown Reference remaining.")
+
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
 
     else:
-
-    
-        #changes all known references in all json-resources --> won't need to do it again after
-        for i in range(len(resources)):
-            json_string = json.dumps(resources[i])
-            for fix in FIXTURES:
-                json_string = json_string.replace("\"reference\" : \"[a-zA-z]*/[a-zA-Z-0-9]*\"", )
-            resources[i] = json.loads(json_string)
-            if re.search("\"reference\" : \"[a-zA-z]*/", json_string) != None: #I only come here if the server doesn't test references when saving resources
-                log_to_file("✗ TEST SKIPPED: Unknown References remaining")
-                pytest.skip("Unknown References remaining in a fixture")
         
-
         for test in testscript.get("test", []):
             test_name = test.get('name', 'Unnamed Test')
             test_id = ""
@@ -363,11 +361,7 @@ def test_fhir_operations(testscript_data):
 
         log_to_file("Test execution completed")
     finally:
-        try:
-            for fix in FIXTURES:
-                if fix.autodelete and fix.server_id != "":
-                    response = requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
-                    assert response.status_code in [200,201], "Failed automatic deleting remaining Fixtures"
-        except Exception as e:
-            log_to_file(str(e))
+        for fix in FIXTURES:
+            if fix.autodelete and fix.server_id != "":
+                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
         FIXTURES.clear() #reset for next testscript
