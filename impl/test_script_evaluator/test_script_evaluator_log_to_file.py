@@ -248,7 +248,11 @@ def save_fixtures(jsonFiles, fix_list):
                     if fix_id == fix.fixture_id:
                         fix.server_id = res_id  # saves der Server id
         except Exception as e:
-            raise Exception(e)
+            msg = ""
+            json_data = json.loads(response.text)
+            for item in json_data.get("issue"):
+                msg += item.get("diagnostics")
+            raise Exception(msg)
         
 
 def extract_fixture_ids(data):
@@ -300,62 +304,69 @@ def test_fhir_operations(testscript_data):
         fixture_list = get_fixture(testscript)
         if fixture_list: #falls es fixtures gibt
             save_fixtures(resources, fixture_list)
+
     except Exception as e:
-        log_to_file("Failure to save Fixtures!")
+        log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
+        log_to_file(str(e))
+
+    else:
 
     
-    
-    #changes all known references in all json-resources --> won't need to do it again after
-    for i in range(len(resources)):
-        json_string = json.dumps(resources[i])
-        for fix in FIXTURES:
-            json_string = json_string.replace("urn:uuid:"+fix.type+"/"+fix.fixture_id, fix.type+"/"+fix.server_id)
-        resources[i] = json.loads(json_string)
-        if not json_string.find("reference': 'urn:uuid:") == -1: #I only come here if the server doesn't test references when saving resources
-            log_to_file("✗ TEST SKIPPED: Unknown References remaining")
-            pytest.skip("Unknown References remaining in a fixture")
-    
+        #changes all known references in all json-resources --> won't need to do it again after
+        for i in range(len(resources)):
+            json_string = json.dumps(resources[i])
+            for fix in FIXTURES:
+                json_string = json_string.replace("urn:uuid:"+fix.type+"/"+fix.fixture_id, fix.type+"/"+fix.server_id)
+            resources[i] = json.loads(json_string)
+            if not json_string.find("reference': 'urn:uuid:") == -1: #I only come here if the server doesn't test references when saving resources
+                log_to_file("✗ TEST SKIPPED: Unknown References remaining")
+                pytest.skip("Unknown References remaining in a fixture")
+        
 
-    for test in testscript.get("test", []):
-        test_name = test.get('name', 'Unnamed Test')
-        test_id = ""
-        for action in test.get("action", []):
-            operation = action.get("operation")
-            if operation and "sourceId" in operation: #find out which fixture is needed in test
-                test_id = operation["sourceId"]
-                break
+        for test in testscript.get("test", []):
+            test_name = test.get('name', 'Unnamed Test')
+            test_id = ""
+            for action in test.get("action", []):
+                operation = action.get("operation")
+                if operation and "sourceId" in operation: #find out which fixture is needed in test
+                    test_id = operation["sourceId"]
+                    break
 
-        for fix in FIXTURES:
-            if fix.source_id == test_id:
-                for res in resources:
-                    if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
-                        resource = res
-        try:
-            test_passed = execute_test_actions(test, resource, test_id)
+            for fix in FIXTURES:
+                if fix.source_id == test_id:
+                    for res in resources:
+                        if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
+                            resource = res
+            try:
+                test_passed = execute_test_actions(test, resource, test_id)
 
-            if test_passed:
-                log_to_file(f"✓ TEST PASSED: {test_name}")
-                overall_results.append((test_name, True))
-            else:
-                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                if test_passed:
+                    log_to_file(f"✓ TEST PASSED: {test_name}")
+                    overall_results.append((test_name, True))
+                else:
+                    log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                    overall_results.append((test_name, False))
+
+            except TestExecutionError as e:
+                log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
                 overall_results.append((test_name, False))
+                # Continue with next test even if this one was stopped
 
-        except TestExecutionError as e:
-            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
-            overall_results.append((test_name, False))
-            # Continue with next test even if this one was stopped
-
-    # Final summary
-    log_to_file("======================")
-    log_to_file("Test Summary:")
-    for test_name, passed in overall_results:
-        status = "PASSED" if passed else "FAILED"
-        log_to_file(f"  {test_name}: {status}")
-
-    log_to_file("Test execution completed")
-    for fix in FIXTURES:
-        if fix.autodelete and fix.server_id != "":
-            requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
-    FIXTURES.clear() #reset for next testscript
+        # Final summary
+        log_to_file("======================")
+        log_to_file("Test Summary:")
+        for test_name, passed in overall_results:
+            status = "PASSED" if passed else "FAILED"
+            log_to_file(f"  {test_name}: {status}")
 
 
+        log_to_file("Test execution completed")
+    finally:
+        try:
+            for fix in FIXTURES:
+                if fix.autodelete and fix.server_id != "":
+                    response = requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+                    assert response.status_code in [200,201], "Failed automatic deleting remaining Fixtures"
+        except Exception as e:
+            log_to_file(str(e))
+        FIXTURES.clear() #reset for next testscript
