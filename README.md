@@ -163,7 +163,6 @@ sequenceDiagram
 | ----------------------- | ---------------------------------- |
 | `requests`              | Kommunikation mit FHIR®-Server      |
 | `pytest`                | Testautomatisierung                |
-| `fpdf`                  | PDF-Export für Logfiles            |
 | `beautifulsoup4`        | Parsing von Webseiteninhalten      |
 | `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung |
 
