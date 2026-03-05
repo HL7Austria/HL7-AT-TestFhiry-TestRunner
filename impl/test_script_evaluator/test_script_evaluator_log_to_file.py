@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 import traceback
+import re
 
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
@@ -316,9 +317,9 @@ def test_fhir_operations(testscript_data):
         for i in range(len(resources)):
             json_string = json.dumps(resources[i])
             for fix in FIXTURES:
-                json_string = json_string.replace("urn:uuid:"+fix.type+"/"+fix.fixture_id, fix.type+"/"+fix.server_id)
+                json_string = json_string.replace("\"reference\" : \"[a-zA-z]*/[a-zA-Z-0-9]*\"", )
             resources[i] = json.loads(json_string)
-            if not json_string.find("reference': 'urn:uuid:") == -1: #I only come here if the server doesn't test references when saving resources
+            if re.search("\"reference\" : \"[a-zA-z]*/", json_string) != None: #I only come here if the server doesn't test references when saving resources
                 log_to_file("✗ TEST SKIPPED: Unknown References remaining")
                 pytest.skip("Unknown References remaining in a fixture")
         
