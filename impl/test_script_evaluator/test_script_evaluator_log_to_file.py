@@ -294,11 +294,8 @@ def test_fhir_operations(testscript_data):
         pytest.skip("No FHIR server configured in config.json")
     # GIVEN
     testscript, resources = testscript_data
-    if resources != None:
-        resource = resources[0] # later there should be a method that decides which fixture will be taken for the test
-    else:
-        resource = None
 
+    resource = None
     overall_results = []
 
     try:
@@ -306,15 +303,15 @@ def test_fhir_operations(testscript_data):
         if fixture_list: #falls es fixtures gibt
             save_fixtures(resources, fixture_list)
 
-        
-        for i in range(len(resources)):
-            json_string = json.dumps(resources[i])
-            for fix in FIXTURES:
-                my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
-                json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
-            resources[i] = json.loads(json_string)
-            if re.search("\"reference\" *: *\"[a-zA-z]*\/[a-zA-Z-]+", json_string) != None:
-                raise Exception("Unknown Reference remaining.")
+        if resources != None:
+            for i in range(len(resources)):
+                json_string = json.dumps(resources[i])
+                for fix in FIXTURES:
+                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
+                    json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
+                resources[i] = json.loads(json_string)
+                if re.search("\"reference\" *: *\"[a-zA-z]*\/[a-zA-Z-]+", json_string) != None:
+                    raise Exception("Unknown Reference remaining.")
 
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
