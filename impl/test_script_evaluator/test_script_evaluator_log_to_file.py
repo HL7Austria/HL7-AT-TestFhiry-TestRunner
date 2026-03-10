@@ -348,17 +348,17 @@ def test_fhir_operations(testscript_data):
         try:
             test_passed = execute_test_actions(test, resource, test_id)
 
-                if test_passed:
-                    log_to_file(f"✓ TEST PASSED: {test_name}")
-                    overall_results.append((test_name, True))
-                else:
-                    log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
-                    overall_results.append((test_name, False))
-
-            except TestExecutionError as e:
-                log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+            if test_passed:
+                log_to_file(f"✓ TEST PASSED: {test_name}")
+                overall_results.append((test_name, True))
+            else:
+                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
                 overall_results.append((test_name, False))
-                # Continue with next test even if this one was stopped
+
+        except TestExecutionError as e:
+            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+            overall_results.append((test_name, False))
+            # Continue with next test even if this one was stopped
 
         # Final summary
         log_to_file("======================")
