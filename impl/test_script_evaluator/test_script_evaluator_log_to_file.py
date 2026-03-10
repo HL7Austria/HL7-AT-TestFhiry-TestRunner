@@ -168,11 +168,7 @@ def execute_test_actions(test, resource, test_id):
                         validate_profile_assertion(assertion.get("validateProfileId"))
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        if stopTestOnFail:
-                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
-                            raise TestExecutionError(str(e))
-                        else:
-                            test_passed = handle_assertion_error(e, False)
+                        test_passed = handle_assertion_error(e, stopTestOnFail)
 
                 contentType = False
                 if "contentType" in assertion:
@@ -181,22 +177,14 @@ def execute_test_actions(test, resource, test_id):
                         validate_content_type(response, assertion.get("contentType"))
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        if stopTestOnFail:
-                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
-                            raise TestExecutionError(str(e))
-                        else:
-                            test_passed = handle_assertion_error(e, False)
+                        test_passed = handle_assertion_error(e, stopTestOnFail)
 
                 if assertion.get("direction") == "response" and not contentType:
                     try:
                         validate_response(assertion, response)
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
-                        if stopTestOnFail:
-                            log_to_file("⚠ stopTestOnFail assertion failed → Test terminated")
-                            raise TestExecutionError(str(e))
-                        else:
-                            test_passed = handle_assertion_error(e, False)
+                        test_passed = handle_assertion_error(e, stopTestOnFail)
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
