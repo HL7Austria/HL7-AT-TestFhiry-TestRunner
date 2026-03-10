@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 import traceback
+import re
 
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
@@ -135,7 +136,6 @@ def execute_test_actions(test, resource, test_id):
     :param resource: FHIR resource to test with.
     :return: True if test passed, False otherwise.
     """
-    #stop_test_on_fail = test.get("stopTestOnFail", False)
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
@@ -241,23 +241,31 @@ def save_fixtures(jsonFiles, fix_list):
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
 
-        response = requests.post(
+        try:
+            response = requests.post(
             FHIR_SERVER_BASE,
             headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
             json=json.loads(bundle)
-        )
+            )
 
-        results = response.json().get("entry")
+            results = response.json().get("entry")
 
-        for fix_cont, res in zip(bundle_json, results):
-            resp = res.get("response", {})
-            res_loc = resp.get("location", "")
-            res_id = res_loc.split("/")[1]  # server id
-            fix_id = fix_cont.get("id")  # id inside the Example Instance
+            for fix_cont, res in zip(bundle_json, results):
+                resp = res.get("response", {})
+                res_loc = resp.get("location", "")
+                res_id = res_loc.split("/")[1]  # server id
+                fix_id = fix_cont.get("id")  # id inside the Example Instance
 
-            for fix in FIXTURES:
-                if fix_id == fix.fixture_id:
-                    fix.server_id = res_id  # saves der Server id
+                for fix in FIXTURES:
+                    if fix_id == fix.fixture_id:
+                        fix.server_id = res_id  # saves der Server id
+        except Exception as e:
+            msg = ""
+            json_data = json.loads(response.text)
+            for item in json_data.get("issue"):
+                msg += item.get("diagnostics")
+            raise Exception(msg)
+        
 
 def extract_fixture_ids(data):
     fixture_ids = []
@@ -304,12 +312,29 @@ def test_fhir_operations(testscript_data):
 
     overall_results = []
 
-    fixture_list = get_fixture(testscript)
-    if fixture_list: #falls es fixtures gibt
-        save_fixtures(resources, fixture_list)
+    try:
+        fixture_list = get_fixture(testscript)
+        if fixture_list: #falls es fixtures gibt
+            save_fixtures(resources, fixture_list)
 
+        
+        for i in range(len(resources)):
+            json_string = json.dumps(resources[i])
+            for fix in FIXTURES:
+                my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
+                json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
+            resources[i] = json.loads(json_string)
+            if re.search("\"reference\" *: *\"[a-zA-z]*\/[a-zA-Z-]+", json_string) != None:
+                raise Exception("Unknown Reference remaining.")
 
-    for test in testscript.get("test", []):
+    except Exception as e:
+        log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
+        log_to_file(str(e))
+        
+
+    else:
+        
+       for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
         test_id = ""
         for action in test.get("action", []):
@@ -323,27 +348,29 @@ def test_fhir_operations(testscript_data):
         try:
             test_passed = execute_test_actions(test, resource, test_id)
 
-            if test_passed:
-                log_to_file(f"✓ TEST PASSED: {test_name}")
-                overall_results.append((test_name, True))
-            else:
-                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                if test_passed:
+                    log_to_file(f"✓ TEST PASSED: {test_name}")
+                    overall_results.append((test_name, True))
+                else:
+                    log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+                    overall_results.append((test_name, False))
+
+            except TestExecutionError as e:
+                log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
                 overall_results.append((test_name, False))
+                # Continue with next test even if this one was stopped
 
-        except TestExecutionError as e:
-            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
-            overall_results.append((test_name, False))
-            # Continue with next test even if this one was stopped
+        # Final summary
+        log_to_file("======================")
+        log_to_file("Test Summary:")
+        for test_name, passed in overall_results:
+            status = "PASSED" if passed else "FAILED"
+            log_to_file(f"  {test_name}: {status}")
 
-    # Final summary
-    log_to_file("======================")
-    log_to_file("Test Summary:")
-    for test_name, passed in overall_results:
-        status = "PASSED" if passed else "FAILED"
-        log_to_file(f"  {test_name}: {status}")
 
-    log_to_file("Test execution completed")
-    for fix in FIXTURES:
-        if fix.autodelete and fix.server_id != "":
-            requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
-    FIXTURES.clear() #reset for next testscript
+        log_to_file("Test execution completed")
+    finally:
+        for fix in FIXTURES:
+            if fix.autodelete and fix.server_id != "":
+                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+        FIXTURES.clear() #reset for next testscript
