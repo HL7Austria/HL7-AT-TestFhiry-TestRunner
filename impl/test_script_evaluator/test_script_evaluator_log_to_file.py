@@ -94,6 +94,17 @@ def execute_operation(operation, resource, test_id):
         resource_id = fixture.server_id
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
+    elif method == "delete":
+        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
+        if fixture is None:
+            log_to_file("No fixture found in delete")
+            return None
+        if fixture.server_id is None:
+            log_to_file("No saved fixture found in delete")
+            return None
+        resource_id = fixture.server_id
+        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        response = requests.delete(f"{url}/{resource_id}", headers=headers)
     else:
         raise NotImplementedError(f"Method {method} not implemented")
 
@@ -141,7 +152,7 @@ def execute_test_actions(test, resource, test_id):
                 # Extension: If it was a CREATE operation, then check GET
                 method = operation.get("type", {}).get("code", "").lower()
                 resource_type = operation.get("resource")
-                if method == "create":
+                if method == "create": 
                     global saved_resource_id
                     assert saved_resource_id, "No ID was saved after create"
 
@@ -319,25 +330,23 @@ def test_fhir_operations(testscript_data):
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
+        
 
     else:
         
-        for test in testscript.get("test", []):
-            test_name = test.get('name', 'Unnamed Test')
-            test_id = ""
-            for action in test.get("action", []):
-                operation = action.get("operation")
-                if operation and "sourceId" in operation: #find out which fixture is needed in test
-                    test_id = operation["sourceId"]
-                    break
-
-            for fix in FIXTURES:
-                if fix.source_id == test_id:
-                    for res in resources:
-                        if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
-                            resource = res
-            try:
-                test_passed = execute_test_actions(test, resource, test_id)
+       for test in testscript.get("test", []):
+        test_name = test.get('name', 'Unnamed Test')
+        test_id = ""
+        for action in test.get("action", []):
+            operation = action.get("operation")
+            if operation and "sourceId" in operation:
+                test_id = operation["sourceId"]
+                break
+            elif operation and "targetId" in operation:
+                test_id = operation["targetId"]
+                break
+        try:
+            test_passed = execute_test_actions(test, resource, test_id)
 
                 if test_passed:
                     log_to_file(f"✓ TEST PASSED: {test_name}")
