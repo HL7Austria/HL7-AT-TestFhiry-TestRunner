@@ -93,6 +93,17 @@ def execute_operation(operation, resource, test_id):
         resource_id = fixture.server_id
         log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
+    elif method == "delete":
+        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
+        if fixture is None:
+            log_to_file("No fixture found in delete")
+            return None
+        if fixture.server_id is None:
+            log_to_file("No saved fixture found in delete")
+            return None
+        resource_id = fixture.server_id
+        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        response = requests.delete(f"{url}/{resource_id}", headers=headers)
     else:
         raise NotImplementedError(f"Method {method} not implemented")
 
@@ -141,7 +152,7 @@ def execute_test_actions(test, resource, test_id):
                 # Extension: If it was a CREATE operation, then check GET
                 method = operation.get("type", {}).get("code", "").lower()
                 resource_type = operation.get("resource")
-                if method == "create":
+                if method == "create": 
                     global saved_resource_id
                     assert saved_resource_id, "No ID was saved after create"
 
@@ -305,6 +316,9 @@ def test_fhir_operations(testscript_data):
             operation = action.get("operation")
             if operation and "sourceId" in operation:
                 test_id = operation["sourceId"]
+                break
+            elif operation and "targetId" in operation:
+                test_id = operation["targetId"]
                 break
         try:
             test_passed = execute_test_actions(test, resource, test_id)
