@@ -160,7 +160,10 @@ def execute_test_actions(test, resource, test_id):
                     read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
                     log_to_file(f"Verifying created resource via GET: {read_url}")
                     get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
-
+                    
+                    for fix in FIXTURES:
+                        if fix.source_id == test_id:
+                            fix.server_id = saved_resource_id
                     # Output & Assertion
                     log_to_file(f"Response: {get_response.status_code}")
                     try:
@@ -309,7 +312,7 @@ def test_fhir_operations(testscript_data):
                     my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
                     json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
                 resources[i] = json.loads(json_string)
-                if re.search("\"reference\" *: *\"[a-zA-z]*\/[a-zA-Z-]+", json_string) != None:
+                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json_string) != None:
                     raise Exception("Unknown Reference remaining.")
 
     except Exception as e:
