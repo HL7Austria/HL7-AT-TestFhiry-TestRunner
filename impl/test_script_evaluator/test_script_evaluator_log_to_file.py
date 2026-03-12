@@ -202,11 +202,7 @@ def execute_test_actions(test, resource, test_id):
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
-
-
-        except TestExecutionError:
-            # Re-raise to stop the test
-            raise
+                    
         except Exception as e:
                 raise TestExecutionError(f"Test stopped: {str(e)}")
 
