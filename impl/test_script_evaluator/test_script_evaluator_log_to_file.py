@@ -15,13 +15,16 @@ from configuration_manager import get_config_manager, get_fhir_server, get_tests
 from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
+from impl.model.interaction import Interaction
 from utils import *
 
 
 saved_resource_id = ""
+last_interaction = None
 log_filename = f"test_results_{timestamp}.txt"
 
 FIXTURES = []
+REQ_RESP = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -105,7 +108,18 @@ def execute_operation(operation, resource, test_id):
         raise NotImplementedError(f"Method {method} not implemented")
 
     log_to_file(f"Response: {response.status_code}")
-    return response
+
+    #trying first to get response to run, afterwards look at request
+    int_id = operation.get("responseId")
+    direction = "response"
+    global last_interaction
+    last_interaction = Interaction(direction, response.headers, response.text)
+    last_interaction.status_code = response.status_code
+    last_interaction.res_id = int_id
+    
+
+    if(int_id != None):
+        REQ_RESP.append(last_interaction)
 
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
@@ -135,7 +149,6 @@ def execute_test_actions(test, resource, test_id):
     test_name = test.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
-    response = None
     test_passed = True
 
     for action_index, action in enumerate(test.get("action", [])):
@@ -143,36 +156,20 @@ def execute_test_actions(test, resource, test_id):
             # WHEN – Operation
             if "operation" in action:
                 operation = action["operation"]
-                response = execute_operation(operation, resource, test_id)
-
-                # Extension: If it was a CREATE operation, then check GET
-                method = operation.get("type", {}).get("code", "").lower()
-                resource_type = operation.get("resource")
-                if method == "create": 
-                    global saved_resource_id
-                    assert saved_resource_id, "No ID was saved after create"
-
-                    # GET for verification
-                    read_url = f"{FHIR_SERVER_BASE}/{resource_type}/{saved_resource_id}"
-                    log_to_file(f"Verifying created resource via GET: {read_url}")
-                    get_response = requests.get(read_url, headers={"Accept": "application/fhir+json"})
-                    
-                    for fix in FIXTURES:
-                        if fix.source_id == test_id:
-                            fix.server_id = saved_resource_id
-                    # Output & Assertion
-                    log_to_file(f"Response: {get_response.status_code}")
-                    try:
-                        data = get_response.json()
-                        assert data.get("id") == saved_resource_id, "GET returned different ID"
-                        assert data.get("resourceType") == resource_type, "ResourceType mismatch"
-                    except ValueError:
-                        assert False, "GET response is not valid JSON"
+                execute_operation(operation, resource, test_id)
 
             # THEN - Assertion
             elif "assert" in action:
+
+                global last_interaction
                 assertion = action["assert"]
                 stopTestOnFail = assertion.get("stopTestOnFail", False)
+
+                response = last_interaction
+                for int in REQ_RESP:
+                    if int.res_id == assertion.get("sourceId"):
+                        response = int
+
 
                 """ --> doesn't really work like that overthink this again
                                 if "validateProfileId" in assertion:
@@ -350,3 +347,4 @@ def test_fhir_operations(testscript_data):
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
         FIXTURES.clear() #reset for next testscript
+        REQ_RESP.clear()
