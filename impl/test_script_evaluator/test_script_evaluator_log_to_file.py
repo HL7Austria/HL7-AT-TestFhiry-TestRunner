@@ -329,6 +329,11 @@ def test_fhir_operations(testscript_data):
             elif operation and "targetId" in operation:
                 test_id = operation["targetId"]
                 break
+        for fix in FIXTURES:
+                if fix.source_id == test_id:
+                    for res in resources:
+                        if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
+                            resource = res
         try:
             test_passed = execute_test_actions(test, resource, test_id)
 
