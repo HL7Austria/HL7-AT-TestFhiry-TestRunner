@@ -49,56 +49,72 @@ def extract_test_source_id(test):
 
 
 # Execute operation
-def execute_operation(operation, resource, test_id):
+def execute_operation(operation):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
 
     :param operation: Dictionary containing operation details.
-    :param resource: The FHIR resource to operate on.
     :return: HTTP response object.
     :raises: NotImplementedError for unsupported methods.
     """
-    method = operation.get("type", {}).get("code", "").lower()
+    #get all Info from operation
+    type = operation.get("type", {}).get("code", "").lower()
+    method = operation.get("method") #--> find a way to make method work
     resource_type = operation.get("resource")
     url = f"{FHIR_SERVER_BASE}/{resource_type}"
+    sourceId = operation.get("sourceId")
+    targetId = operation.get("targetId")
+    Ourl = operation.get("url")
+
     headers = {
         "Content-Type": parse_fhir_header(operation.get("contentType")),
         "Accept": parse_fhir_header(operation.get("accept")),
     }
 
-    if method == "create":
-        log_to_file(f"Executing: {method.upper()} {url}")
-        response = requests.post(url, headers=headers, json=resource)
-        global saved_resource_id
-        try:
-            saved_resource_id = response.json().get("id")
-        except ValueError:
-            location = response.headers.get("Location", "")
-            if location:
-                saved_resource_id = location.rstrip("/").split("/")[-3]
-                log_to_file(f"ID from Location header: {saved_resource_id}")
+    if type == "create":
+        log_to_file(f"Executing: {type.upper()} {url}")
+        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+        if(fixture):
+            if(Ourl):
+                response = requests.post(Ourl, headers=headers, json=fixture.body) #if fixed url is given
             else:
-                raise ValueError("No ID found in response or Location header")
-    elif method == "update":
-        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
-        if fixture is None:
-            log_to_file("no fixture found in update")
-            return None
-        resource_id = fixture.server_id
-        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
-        resource["id"] = resource_id
-        response = requests.put(f"{url}/{resource_id}", headers=headers, json=resource)
+                response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
-    elif method == "read":
-        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
+            global saved_resource_id
+            try:
+                saved_resource_id = response.json().get("id")
+            except ValueError:
+                location = response.headers.get("Location", "")
+                if location:
+                    saved_resource_id = location.rstrip("/").split("/")[-3]
+                    log_to_file(f"ID from Location header: {saved_resource_id}")
+                else:
+                    raise ValueError("No ID found in response or Location header")
+            
+    elif type == "update":
+        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+        Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
+        if fixture:
+            #look here for variable
+            resource_id = Tfixture.server_id
+            log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
+
+            fixture.body["id"] = resource_id
+            response = requests.put(f"{url}/{resource_id}", headers=headers, json=fixture.body)
+        else:
+            log_to_file("no source found in PUT")
+
+    elif type == "read": #--> change ? does it need sourceId
+        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
         if fixture is None:
             log_to_file("No fixture found in read")
             return None
         resource_id = fixture.server_id
-        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
         response = requests.get(f"{url}/{resource_id}", headers=headers)
-    elif method == "delete":
-        fixture = next((fix for fix in FIXTURES if fix.source_id == test_id), None)
+
+    elif type == "delete":
+        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
         if fixture is None:
             log_to_file("No fixture found in delete")
             return None
@@ -106,10 +122,10 @@ def execute_operation(operation, resource, test_id):
             log_to_file("No saved fixture found in delete")
             return None
         resource_id = fixture.server_id
-        log_to_file(f"Executing: {method.upper()} {url}/{resource_id}")
+        log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
         response = requests.delete(f"{url}/{resource_id}", headers=headers)
     else:
-        raise NotImplementedError(f"Method {method} not implemented")
+        raise NotImplementedError(f"Method {type} not implemented")
 
     log_to_file(f"Response: {response.status_code}")
 
@@ -142,7 +158,7 @@ def testscript_data(request):
         resources = None
     return testscript, resources
 
-def execute_test_actions(test, resource, test_id):
+def execute_test_actions(test):
     """
     Executes all actions for a single test.
 
@@ -160,7 +176,7 @@ def execute_test_actions(test, resource, test_id):
             # WHEN – Operation
             if "operation" in action:
                 operation = action["operation"]
-                execute_operation(operation, resource, test_id)
+                execute_operation(operation)
 
             # THEN - Assertion
             elif "assert" in action:
@@ -168,11 +184,15 @@ def execute_test_actions(test, resource, test_id):
                 global last_interaction
                 assertion = action["assert"]
                 stopTestOnFail = assertion.get("stopTestOnFail", False)
+                #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
+                            #--> if it can some assertions aren't valid anymore
 
                 response = last_interaction
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("sourceId"):
                         response = int
+                
+                #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
 
                 if "validateProfileId" in assertion:
                     try:
@@ -224,7 +244,7 @@ def save_fixtures(jsonFiles, fix_list):
         autodelete = fixture.get("autodelete", False)
         if(autocreate):
             bundle_json.append(jsonf)
-        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type)) #erstes Anlegen vor bundle
+        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf)) #erstes Anlegen vor bundle
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
@@ -302,41 +322,31 @@ def test_fhir_operations(testscript_data):
         if fixture_list: #falls es fixtures gibt
             save_fixtures(resources, fixture_list)
 
-        if resources != None:
-            for i in range(len(resources)):
-                json_string = json.dumps(resources[i])
-                for fix in FIXTURES:
-                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix.type + "/" + fix.fixture_id + "\""
-                    json_string = re.sub(my_regex , "\"reference\": \"" + fix.type+"/"+fix.server_id + "\"", json_string)
-                resources[i] = json.loads(json_string)
-                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json_string) != None:
-                    raise Exception("Unknown Reference remaining.")
+        if FIXTURES:
+            for fix1 in FIXTURES:
+                for fix2 in FIXTURES:
+                    json_string = json.dumps(fix1.body)
+                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
+                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
+
+                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #erneut überprüfen damit nichts verloren geht
+                        raise Exception("Unknown Reference remaining.")
+
 
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
         
 
-    else:
+    else: 
+       #if fixtures are being used by the action --> see what id is in action + don't give it the whole fixture
         
        for test in testscript.get("test", []):
         test_name = test.get('name', 'Unnamed Test')
-        test_id = ""
-        for action in test.get("action", []):
-            operation = action.get("operation")
-            if operation and "sourceId" in operation:
-                test_id = operation["sourceId"]
-                break
-            elif operation and "targetId" in operation:
-                test_id = operation["targetId"]
-                break
-        for fix in FIXTURES:
-                if fix.source_id == test_id:
-                    for res in resources:
-                        if res.get("id") == fix.fixture_id: # find and save the needed fixture for that test
-                            resource = res
+        
+    
         try:
-            test_passed = execute_test_actions(test, resource, test_id)
+            test_passed = execute_test_actions(test)
 
             if test_passed:
                 log_to_file(f"✓ TEST PASSED: {test_name}")
