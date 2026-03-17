@@ -86,6 +86,7 @@ def execute_operation(operation):
                     log_to_file(f"ID from Location header: {saved_resource_id}")
                 else:
                     raise ValueError("No ID found in response or Location header")
+
             
     elif type == "update":
         fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
