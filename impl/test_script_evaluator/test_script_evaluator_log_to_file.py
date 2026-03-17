@@ -110,14 +110,14 @@ def execute_operation(operation):
         response = requests.get(f"{url}/{resource_id}", headers=headers)
 
     elif type == "delete":
-        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-        if fixture is None:
+        Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
+        if Tfixture is None:
             log_to_file("No fixture found in delete")
             return None
-        if fixture.server_id is None:
+        if Tfixture.server_id is None:
             log_to_file("No saved fixture found in delete")
             return None
-        resource_id = fixture.server_id
+        resource_id = Tfixture.server_id
         log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
         response = requests.delete(f"{url}/{resource_id}", headers=headers)
     else:
