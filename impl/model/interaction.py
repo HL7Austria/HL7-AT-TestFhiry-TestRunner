@@ -8,4 +8,4 @@ class Interaction:
         self.res_id = res_id
 
     def __repr__(self):
-        return f"Interaction {self.direction} = ( id = {self.res_id}, header = {self.header}, body = {self.interaction})"
+        return f"Interaction {self.direction} = ( id = {self.res_id}, header = {self.header}, body = {self.body})"
