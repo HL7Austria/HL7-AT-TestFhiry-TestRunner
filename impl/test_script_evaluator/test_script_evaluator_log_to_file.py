@@ -358,3 +358,4 @@ def test_fhir_operations(testscript_data):
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
         FIXTURES.clear() #reset for next testscript
+        REQ_RESP.clear()
