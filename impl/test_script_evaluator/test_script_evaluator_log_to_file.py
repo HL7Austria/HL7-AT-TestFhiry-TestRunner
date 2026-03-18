@@ -10,7 +10,6 @@ import re
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
 from impl.exception.TestExecutionError import TestExecutionError
-from profile_manager import ProfileManager
 from validate import *
 from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.configuration import Configuration
@@ -24,9 +23,6 @@ saved_resource_id = ""
 last_interaction = None
 log_filename = f"test_results_{timestamp}.txt"
 
-profile_manager = ProfileManager()
-profile_manager.make_profile_list(str(BASE_DIR) + "/Profiles")  # Path to profile
-
 FIXTURES = []
 REQ_RESP = []
 
@@ -36,11 +32,11 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 FHIR_SERVER_BASE = get_fhir_server()
 
-def extract_test_source_id(test):
+def extract_test_source_id(container):
     """
-    Returns the soruceID
+    Returns the sourceID
     """
-    for action in test.get("action", []):
+    for action in container.get("action", []):
         op = action.get("operation")
         if op and "sourceId" in op:
             return op["sourceId"]
@@ -201,6 +197,7 @@ def execute_test_actions(test):
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
                         test_passed = handle_assertion_error(e, stopTestOnFail)
+                        """
 
                 contentType = False
                 if "contentType" in assertion:
@@ -220,11 +217,7 @@ def execute_test_actions(test):
 
                 elif assertion.get("direction") == "request":
                     log_to_file("direction request out of scope")
-
-
-        except TestExecutionError:
-            # Re-raise to stop the test
-            raise
+                    
         except Exception as e:
                 raise TestExecutionError(f"Test stopped: {str(e)}")
 
@@ -249,7 +242,6 @@ def save_fixtures(jsonFiles, fix_list):
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
-
         try:
             response = requests.post(
             FHIR_SERVER_BASE,
@@ -274,18 +266,7 @@ def save_fixtures(jsonFiles, fix_list):
             for item in json_data.get("issue"):
                 msg += item.get("diagnostics")
             raise Exception(msg)
-        
-
-def extract_fixture_ids(data):
-    fixture_ids = []
-
-    if "fixture" not in data:
-        return fixture_ids
-
-    for fx in data["fixture"]:
-        fixture_ids.append(fx.get("id"))
-
-    return fixture_ids
+    
 
 def handle_assertion_error(e, stop_test_on_fail):
     """
