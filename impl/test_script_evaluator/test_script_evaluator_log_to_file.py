@@ -197,7 +197,7 @@ def execute_test_actions(test):
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
                         test_passed = handle_assertion_error(e, stopTestOnFail)
-                        """
+                        
 
                 contentType = False
                 if "contentType" in assertion:
