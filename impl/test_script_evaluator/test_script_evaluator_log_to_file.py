@@ -125,6 +125,7 @@ def execute_operation(operation):
         resource_id = Tfixture.server_id
         log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
         response = requests.delete(f"{url}/{resource_id}", headers=headers)
+
     else:
         raise NotImplementedError(f"Method {type} not implemented")
 
@@ -181,7 +182,6 @@ def execute_test_actions(test):
 
             # THEN - Assertion
             elif "assert" in action:
-
                 global last_interaction
                 assertion = action["assert"]
                 stopTestOnFail = assertion.get("stopTestOnFail", False)
@@ -375,4 +375,3 @@ def test_fhir_operations(testscript_data):
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
         FIXTURES.clear() #reset for next testscript
-        REQ_RESP.clear()
