@@ -119,7 +119,8 @@
             "origin": 1,
             "params": "/${patientResourceId}",
             "responseId": "create-response",
-            "sourceId": "patient-update"
+            "sourceId": "patient-update",
+            "targetId" : "patient-new"
           }
         },
         {
