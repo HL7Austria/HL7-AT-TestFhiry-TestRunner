@@ -1,4 +1,4 @@
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header, profile_manager
+from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 
 
 def validate_content_type(response, expected_type=None):
@@ -40,22 +40,7 @@ def validate_response(assertion, response):
         expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
         status_code = str(response.status_code)
         log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+        #operator = assertion.get("operator")
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 
-def validate_profile_assertion(profile_id):
-    """
-    Validates whether the profile specified in 'validateProfileId' exists.
-
-    :param profile_id: The profile ID to validate (from 'validateProfileId').
-    :return: None
-    """
-
-    if not profile_id:
-        log_to_file("Skipping profile validation (no validateProfileId provided).")
-        return True
-
-    available_ids = [p[1] for p in profile_manager.get_profiles()]
-
-    log_to_file(f"Asserting profile Id '{profile_id}' in {available_ids}")
-    assert profile_id in available_ids, f"Profile ID '{profile_id}' not found in loaded profiles!\n"
