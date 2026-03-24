@@ -22,7 +22,7 @@ log_filename = f"test_results_{timestamp}.txt"
 FIXTURES = []
 REQ_RESP = []
 
-VARIABLES = {}
+VARIABLES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
