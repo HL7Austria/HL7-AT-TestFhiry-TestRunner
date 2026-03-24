@@ -16,6 +16,7 @@ from impl.model.configuration import Configuration
 from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
+from impl.model.variable import Variable
 from utils import *
 
 
@@ -26,7 +27,7 @@ log_filename = f"test_results_{timestamp}.txt"
 FIXTURES = []
 REQ_RESP = []
 
-VARIABLES = {}
+VARIABLES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -226,16 +227,20 @@ def execute_test_actions(test):
 
     return test_passed
 
-def save_variables(variables : dict):
+def save_variables(variables : list):
     global VARIABLES
     for var in variables:
         json_var = json.loads(var)
         id = json_var.get("name")
-        VARIABLES[id] = json_var #saving it as json to later evaluate in different ways
-        #maybe save in a self made variable??
-        
-
-
+        VARIABLES.append(Variable(id,path=json_var.get("path"), 
+                                  expression=json_var.get("expression"),
+                                  sourceId=json_var.get("sourceId"),
+                                  headerField=json_var.get("headerField"),
+                                  defaultValue=json_var.get("defaultValue")))
+        """
+        to use  --> just make a helper method where it tells me what is full
+            --> depending on that evaluate the variable
+        """
 
 def save_fixtures(jsonFiles, fix_list):
     """
