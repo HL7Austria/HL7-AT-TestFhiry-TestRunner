@@ -21,6 +21,8 @@ log_filename = f"test_results_{timestamp}.txt"
 FIXTURES = []
 REQ_RESP = []
 
+VARIABLES = {}
+
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
@@ -247,6 +249,17 @@ def execute_actions(action):
         raise        
     except Exception as e:
         raise TestExecutionError(f"Test stopped: {str(e)}")
+
+
+def save_variables(variables : dict):
+    global VARIABLES
+    for var in variables:
+        json_var = json.loads(var)
+        id = json_var.get("name")
+        VARIABLES[id] = json_var #saving it as json to later evaluate in different ways
+        #maybe save in a self made variable??
+        
+
 
 
 def save_fixtures(jsonFiles, fix_list):
@@ -484,3 +497,5 @@ def test_fhir_operations(testscript_data):
         
     FIXTURES.clear() 
     REQ_RESP.clear()
+
+    VARIABLES.clear()
