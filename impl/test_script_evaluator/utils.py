@@ -27,6 +27,12 @@ def get_fixture(testscript):
         fixtures.append(fixture)
     return fixtures
 
+def get_variables(testscript):
+    vars = []
+    for var in testscript.get("variable", []):
+        vars.append(var)
+    return vars
+
 # Help function for loading JSON files
 def load_json(path):
     """

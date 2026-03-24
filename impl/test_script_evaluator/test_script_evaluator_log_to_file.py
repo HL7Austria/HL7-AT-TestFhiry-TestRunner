@@ -26,6 +26,8 @@ log_filename = f"test_results_{timestamp}.txt"
 FIXTURES = []
 REQ_RESP = []
 
+VARIABLES = {}
+
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
@@ -224,6 +226,17 @@ def execute_test_actions(test):
 
     return test_passed
 
+def save_variables(variables : dict):
+    global VARIABLES
+    for var in variables:
+        json_var = json.loads(var)
+        id = json_var.get("name")
+        VARIABLES[id] = json_var #saving it as json to later evaluate in different ways
+        #maybe save in a self made variable??
+        
+
+
+
 def save_fixtures(jsonFiles, fix_list):
     """
     saves fixtures to the server and saves infos for them
@@ -309,6 +322,10 @@ def test_fhir_operations(testscript_data):
     """
 
     try:
+        variable_list = get_variables(testscript)
+        if variable_list:
+            save_variables(variable_list)
+        
         fixture_list = get_fixture(testscript)
         if fixture_list: #falls es fixtures gibt
             save_fixtures(resources, fixture_list)
@@ -366,3 +383,5 @@ def test_fhir_operations(testscript_data):
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
         FIXTURES.clear() #reset for next testscript
         REQ_RESP.clear()
+
+        VARIABLES.clear()
