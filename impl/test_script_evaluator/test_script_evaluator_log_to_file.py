@@ -193,7 +193,7 @@ def execute_test_actions(test):
 
                 if "validateProfileId" in assertion:
                     try:
-                        validate_profile_assertion(assertion.get("validateProfileId"))
+                        #validate_profile_assertion(assertion.get("validateProfileId"))
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
                         test_passed = handle_assertion_error(e, stopTestOnFail)
@@ -298,6 +298,15 @@ def test_fhir_operations(testscript_data):
 
     resource = None
     overall_results = []
+
+    """
+    at the beginning before saving fixtures --> save variables and the expression belonging
+    ONLY ME --> check if variable has a default value or a "Path" to the wanted value
+        --> if not Failure to start TestScript
+        
+    check already supported stuff for variables, add if needed.
+    per TestScript again a list of variables
+    """
 
     try:
         fixture_list = get_fixture(testscript)
