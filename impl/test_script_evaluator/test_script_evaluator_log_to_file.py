@@ -42,6 +42,21 @@ def extract_test_source_id(container): #do i even need this anymore?
     return None
 
 
+def replacer(match):
+    """
+    helper function used to replace a variable match with the value of the variable
+    """
+    global VARIABLES
+    var_name = match.group(1)
+    print("Found variable:", var_name)  # if you want to see them
+
+    for var in VARIABLES:
+        if var.name == var_name:
+            return eval_variable(var)
+    
+    raise Exception(f"Variable {var_name} could not be found")
+
+
 # Execute operation
 def execute_operation(operation):
 
@@ -255,17 +270,60 @@ def execute_actions(action):
 def save_variables(variables : list):
     global VARIABLES
     for var in variables:
-        json_var = json.loads(var)
-        id = json_var.get("name")
-        VARIABLES.append(Variable(id,path=json_var.get("path"), 
-                                  expression=json_var.get("expression"),
-                                  sourceId=json_var.get("sourceId"),
-                                  headerField=json_var.get("headerField"),
-                                  defaultValue=json_var.get("defaultValue")))
+        id = var.get("name")
+
+        var = Variable(id,path=var.get("path"), 
+                                  expression=var.get("expression"),
+                                  sourceId=var.get("sourceId"),
+                                  headerField=var.get("headerField"),
+                                  defaultValue=var.get("defaultValue"))
+        if id is None:
+            raise Exception("Variable not correctly defined!")
+                
+        if(((var.expression is not None) & (var.headerField is not None)) | 
+           ((var.headerField is not None) & (var.path is not None)) | 
+           ((var.expression is not None) & (var.path is not None))):
+            raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+        
+
+        VARIABLES.append(var)
+
+
         """
-        to use  --> just make a helper method where it tells me what is full
-            --> depending on that evaluate the variable
+        check if at least something is filled
         """
+
+def eval_variable(var : Variable):
+    global REQ_RESP
+    global FIXTURES
+
+    result = var.defaultValue or None
+    expr = var.expression or None
+    expr = var.path or expr
+    expr = var.headerField or expr
+
+    if expr:
+        fix = None
+        sourceId = var.sourceId
+
+        for int in REQ_RESP:
+            if int.res_id == sourceId:
+                fix = int
+        
+        for fixture in FIXTURES:
+            if fixture.sourceId == sourceId:
+                fix = fixture
+        
+        if var.headerField:
+            json.loads(fix.header).get("expr")
+        elif var.expression:
+            result = do_expression(fix.body, expr)
+        elif var.path:
+            result = "1"
+            print("do path")
+
+    print("eval")
+    return result
 
 def save_fixtures(jsonFiles, fix_list):
     """

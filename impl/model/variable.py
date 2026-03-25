@@ -6,4 +6,3 @@ class Variable:
         self.headerField = headerField
         self.defaultValue = defaultValue
         self.sourceId = sourceId
-        
