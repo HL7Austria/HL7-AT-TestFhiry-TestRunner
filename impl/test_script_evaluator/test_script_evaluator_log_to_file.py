@@ -61,7 +61,6 @@ def execute_operation(operation):
     json_str = json.dumps(operation)
     result = pattern.sub(replacer, json_str)
     operation = json.loads(result)
-    print(operation)
 
 
     #get all Info from operation
@@ -77,6 +76,7 @@ def execute_operation(operation):
         "Content-Type": parse_fhir_header(operation.get("contentType")),
         "Accept": parse_fhir_header(operation.get("accept")),
     }
+   
    
 
     if type == "create":
