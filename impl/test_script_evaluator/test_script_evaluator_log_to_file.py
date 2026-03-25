@@ -56,7 +56,6 @@ def replacer(match):
     
     raise Exception(f"Variable {var_name} could not be found")
 
-
 # Execute operation
 def execute_operation(operation):
 
@@ -369,7 +368,7 @@ def save_fixtures(jsonFiles, fix_list):
             raise Exception(msg)
     
 
-def handle_assertion_error(e, stop_test_on_fail):
+def handle_assertion_error(e, stop_test_on_fail): # could be put into utils
     """
     Logs the AssertionError and decides whether to stop or continue the test.
 
