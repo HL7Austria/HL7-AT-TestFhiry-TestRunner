@@ -2,6 +2,7 @@ import json
 from jsonpath_ng import parse, jsonpath
 from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+from fhirpathpy import evaluate
 from lxml import etree
 
 
