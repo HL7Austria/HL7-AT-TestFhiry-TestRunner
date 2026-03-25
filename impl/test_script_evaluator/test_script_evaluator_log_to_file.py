@@ -61,6 +61,7 @@ def execute_operation(operation):
     json_str = json.dumps(operation)
     result = pattern.sub(replacer, json_str)
     operation = json.loads(result)
+    print(operation)
 
 
     #get all Info from operation
@@ -240,26 +241,22 @@ def save_variables(variables : list):
     for var in variables:
         id = var.get("name")
 
-        var = Variable(id,path=var.get("path"), 
+        variable = Variable(id,path=var.get("path"), 
                                   expression=var.get("expression"),
                                   sourceId=var.get("sourceId"),
                                   headerField=var.get("headerField"),
                                   defaultValue=var.get("defaultValue"))
         if id is None:
             raise Exception("Variable not correctly defined!")
+    
                 
-        if(((var.expression is not None) & (var.headerField is not None)) | 
-           ((var.headerField is not None) & (var.path is not None)) | 
-           ((var.expression is not None) & (var.path is not None))):
+        if(((variable.expression is not None) & (variable.headerField is not None)) | 
+           ((variable.headerField is not None) & (variable.path is not None)) | 
+           ((variable.expression is not None) & (variable.path is not None))):
             raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
         
 
-        VARIABLES.append(var)
-
-
-        """
-        check if at least something is filled
-        """
+        VARIABLES.append(variable)
 
 def eval_variable(var : Variable):
     global REQ_RESP
@@ -269,6 +266,10 @@ def eval_variable(var : Variable):
     expr = var.expression or None
     expr = var.path or expr
     expr = var.headerField or expr
+
+
+    if (not expr) & (not result):
+        raise Exception("variable is not filled!")
 
     if expr:
         fix = None
@@ -283,12 +284,14 @@ def eval_variable(var : Variable):
                 fix = fixture
         
         if var.headerField:
+            if not isinstance(fix, Interaction):
+                raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
             json.loads(fix.header).get("expr")
         elif var.expression:
             result = do_expression(fix.body, expr)
         elif var.path:
             result = "1"
-            print("do path")
+            do_path(fix.body, expr)
 
     print("eval")
     return result
