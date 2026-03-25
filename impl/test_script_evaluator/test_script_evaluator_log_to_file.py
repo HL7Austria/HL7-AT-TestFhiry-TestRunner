@@ -32,17 +32,6 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 FHIR_SERVER_BASE = get_fhir_server()
 
-def extract_test_source_id(container):
-    """
-    Returns the sourceID
-    """
-    for action in container.get("action", []):
-        op = action.get("operation")
-        if op and "sourceId" in op:
-            return op["sourceId"]
-
-    return None
-
 
 def replacer(match):
     """
@@ -57,7 +46,6 @@ def replacer(match):
             return eval_variable(var)
     
     raise Exception(f"Variable {var_name} could not be found")
-
 
 # Execute operation
 def execute_operation(operation):
@@ -349,7 +337,7 @@ def save_fixtures(jsonFiles, fix_list):
             raise Exception(msg)
     
 
-def handle_assertion_error(e, stop_test_on_fail):
+def handle_assertion_error(e, stop_test_on_fail): # could be put into utils
     """
     Logs the AssertionError and decides whether to stop or continue the test.
 
