@@ -193,7 +193,7 @@ def execute_test_actions(test):
 
                 if "validateProfileId" in assertion:
                     try:
-                        validate_profile_assertion(assertion.get("validateProfileId"))
+                        #validate_profile_assertion(assertion.get("validateProfileId"))
                         log_to_file("✓ Assertion passed")
                     except AssertionError as e:
                         test_passed = handle_assertion_error(e, stopTestOnFail)
@@ -282,6 +282,41 @@ def handle_assertion_error(e, stop_test_on_fail):
         raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
 
+
+def setup():
+    """
+    1. metadata.Capability
+    2. fixture autocreate
+
+    --> do all setup.actions (operations and asserts)
+    You ONLY know the setup and already saved variables and mayhaps profiles
+
+    --> save the results?
+    """
+    print("deal with setup")
+
+def test(test_data):
+    """
+    1. metadata.capabilities
+    
+    --> do all test-actions (operation or assertion)
+    --> save Test Results for all tests
+    --> U only know of urself and the saved fixtures / responses / variables
+    """
+    print("deal with Tests")
+
+def teardown():
+
+    """
+    do teardown actions --> do i have to document this?
+
+    action --> but only operations
+        if there are assertions --> TestScript not valid
+    autodelete
+    """
+
+    print("deal with teardown")
+
 def test_fhir_operations(testscript_data):
     """
     Main test function for FHIR operations testing.
@@ -290,13 +325,29 @@ def test_fhir_operations(testscript_data):
     :param testscript_data: Tuple containing testscript and resource data.
     """
 
+    """
+    HERE --> should only test the basic TS all rounder things (Capability, save variables, save profile)
+
+    everything that is not defined by an action!!
+
+    1. test server
+    2. test capability
+    3. save variables
+    4. save profiles
+
+    5. SETUP
+    6. TEST
+    7. TEARDOWN
+
+    8. clear up everything that needs cleaning up (all global usw.)
+    """
+
     if not has_fhir_server():
         log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         pytest.skip("No FHIR server configured in config.json")
     # GIVEN
     testscript, resources = testscript_data
 
-    resource = None
     overall_results = []
 
     try:

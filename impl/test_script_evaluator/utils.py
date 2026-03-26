@@ -3,6 +3,10 @@ import os
 from datetime import datetime
 import json
 
+"""
+everything that is small and modular that is not assertions and is not needed anywhere else
+"""
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = BASE_DIR / "Results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,19 +31,67 @@ def get_fixture(testscript):
         fixtures.append(fixture)
     return fixtures
 
+def get_profile(testscript):
+    profiles = []
+    for profile in testscript.get("profile",[]):
+        profiles.append(profile)
+    
+    return profiles
+
+def get_all_profiles():
+        PROFILE_FOLDER = "impl/Profiles"
+
+        profiles = [
+            os.path.join(PROFILE_FOLDER, name).replace("\\", "/")
+            for name in os.listdir(PROFILE_FOLDER)
+            if name.endswith(".json")
+                    ]
+        return profiles
+
+def get_profile_json(profile_list : list[str]):
+    result = []
+    profFiles = []
+    temp = []
+
+    """
+    hier einfach alle files durchgehen --> schaun ob das Profil drinnen is (ob ich referenz oder id nimm noch nicht sicher)
+    --> diese Files dann in enine json-list zusammenstecken, dann kann ich später einfach element für element in ein bundle reinschmeißen
+    
+    with open(full_path, "r", encoding="utf-8") as f:
+            json_list.append(json.load(f))
+            """
+    profFiles = get_all_profiles()
+    for file in profFiles:
+        with open(file, "r", encoding="utf-8") as f:
+            temp.append(json.load(f))
+    
+    for json_f in temp:
+        for p in profile_list:
+            if json_f["url"] == p:
+                result = json.dumps(json_f)
+    
+    temp.clear()
+    profFiles.clear()
+    temp.clear()
+    return result
+
 # Help function for loading JSON files
-def load_json(path):
+def load_json(path : str):
     """
     Loads a JSON File from the given path.
     :param path: The path to the JSON file.
     :return: Parsed JSON content as dictionary.
     """
+
+    if path.startswith("impl"):
+        path = path.replace("impl/", "")
+    print(path)
     full_path = BASE_DIR / path
     printInfoJson(path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def load_json_list(paths):
+def load_json_list(paths : list[str]):
     json_list = []
 
     if not paths:
@@ -54,7 +106,7 @@ def load_json_list(paths):
 
     return json_list
 
-def printInfoJson(path):
+def printInfoJson(path : str):
     """
     Logs information about loaded JSON files based on their path.
 
@@ -69,7 +121,7 @@ def printInfoJson(path):
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
 
-def parse_fhir_header(value):
+def parse_fhir_header(value : str):
     """
     Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.
 
