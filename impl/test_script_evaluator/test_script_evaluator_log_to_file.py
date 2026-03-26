@@ -196,6 +196,13 @@ def execute_test_actions(test):
                 #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
                             #--> if it can some assertions aren't valid anymore
 
+                #--> not checking if the variable is at the right place!
+                pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+                json_str = json.dumps(assertion)
+                result = pattern.sub(replacer, json_str)
+                assertion = json.loads(result)
+                
+
                 response = last_interaction
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("sourceId"):
