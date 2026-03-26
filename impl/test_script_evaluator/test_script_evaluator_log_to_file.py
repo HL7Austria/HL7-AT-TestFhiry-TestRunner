@@ -393,15 +393,6 @@ def test_fhir_operations(testscript_data):
     resource = None
     overall_results = []
 
-    """
-    at the beginning before saving fixtures --> save variables and the expression belonging
-    ONLY ME --> check if variable has a default value or a "Path" to the wanted value
-        --> if not Failure to start TestScript
-        
-    check already supported stuff for variables, add if needed.
-    per TestScript again a list of variables
-    """
-
     try:
         variable_list = get_variables(testscript)
         if variable_list:
