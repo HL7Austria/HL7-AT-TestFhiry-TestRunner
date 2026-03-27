@@ -143,3 +143,6 @@ def parse_fhir_header(value : str):
     elif value == "xml":
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
+
+
+

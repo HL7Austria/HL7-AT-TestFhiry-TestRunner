@@ -316,7 +316,7 @@ def eval_variable(var : Variable):
                 fix = int
         
         for fixture in FIXTURES:
-            if fixture.sourceId == sourceId:
+            if fixture.source_id == sourceId:
                 fix = fixture
         
         if var.headerField:
@@ -326,9 +326,24 @@ def eval_variable(var : Variable):
         elif var.expression:
             result = do_expression(fix.body, expr)
         elif var.path:
-            result = "1"
-            do_path(fix.body, expr)
+            """
+             result = doPath(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                else:
 
+                    raise Exception("Cannot compute more than one Variable result")
+            elif isinstance(result, bool):
+                raise ValueError("Cannot fill Variable with boolean!")
+            else:
+                raise ValueError("Cannot fill Variable with unvalid Types")
+
+        
+                fix this somehow?
+            
+            """
+           
     print("eval")
     return result
 
