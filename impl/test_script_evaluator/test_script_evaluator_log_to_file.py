@@ -139,6 +139,46 @@ def execute_operation(operation):
     if(int_id != None):
         REQ_RESP.append(last_interaction)
 
+def execute_assertion(assertion):
+    global last_interaction
+    #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
+        #--> if it can some assertions aren't valid anymore
+
+    """
+    Assertion error should be handled by the Test or setup
+    Assertions --> you should probably save the results here
+
+    no return value anymore --> if no error comes back everything is great
+    """
+
+    response = last_interaction
+    for int in REQ_RESP:
+        if int.res_id == assertion.get("sourceId"):
+            response = int
+                
+            #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
+    try:
+
+        if "validateProfileId" in assertion:
+            #validate_profile_assertion(assertion.get("validateProfileId"))
+            log_to_file("✓ Assertion passed")
+            
+            contentType = False
+            if "contentType" in assertion:   
+                contentType = True
+                validate_content_type(response, assertion.get("contentType"))
+                log_to_file("✓ Assertion passed")
+                
+            if assertion.get("direction") == "response" and not contentType:
+                validate_response(assertion, response)
+                log_to_file("✓ Assertion passed")
+                
+            elif assertion.get("direction") == "request":
+                log_to_file("direction request out of scope")
+    except AssertionError as e:
+        raise
+    
+                                            
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
 def testscript_data(request):
@@ -156,70 +196,34 @@ def testscript_data(request):
         resources = None
     return testscript, resources
 
-def execute_test_actions(test):
+def execute_actions(action):
     """
     Executes all actions for a single test.
 
     :param test: Test definition dictionary.
     :param resource: FHIR resource to test with.
     :return: True if test passed, False otherwise.
+
+    stopTestOnFail:
+    If this element is specified and it is true, then assertion failures should not stop the current test execution from proceeding.
+    is test excecusion the TestScript?
     """
-    test_name = test.get('name', 'Unnamed Test')
-    log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
+    
+    try:
+        # WHEN – Operation
+        if "operation" in action:
+            operation = action["operation"]
+            execute_operation(operation)
 
-    test_passed = True
-
-    for action_index, action in enumerate(test.get("action", [])):
-        try:
-            # WHEN – Operation
-            if "operation" in action:
-                operation = action["operation"]
-                execute_operation(operation)
-
-            # THEN - Assertion
-            elif "assert" in action:
-                global last_interaction
-                assertion = action["assert"]
-                stopTestOnFail = assertion.get("stopTestOnFail", False)
-                #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
-                            #--> if it can some assertions aren't valid anymore
-
-                response = last_interaction
-                for int in REQ_RESP:
-                    if int.res_id == assertion.get("sourceId"):
-                        response = int
-                
-                #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
-
-                if "validateProfileId" in assertion:
-                    try:
-                        #validate_profile_assertion(assertion.get("validateProfileId"))
-                        log_to_file("✓ Assertion passed")
-                    except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stopTestOnFail)
-                        
-
-                contentType = False
-                if "contentType" in assertion:
-                    try:
-                        contentType = True
-                        validate_content_type(response, assertion.get("contentType"))
-                        log_to_file("✓ Assertion passed")
-                    except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stopTestOnFail)
-
-                if assertion.get("direction") == "response" and not contentType:
-                    try:
-                        validate_response(assertion, response)
-                        log_to_file("✓ Assertion passed")
-                    except AssertionError as e:
-                        test_passed = handle_assertion_error(e, stopTestOnFail)
-
-                elif assertion.get("direction") == "request":
-                    log_to_file("direction request out of scope")
-                    
-        except Exception as e:
-                raise TestExecutionError(f"Test stopped: {str(e)}")
+         # THEN - Assertion
+        elif "assert" in action:
+            assertion = action["assert"]
+            test_passed = execute_assertion(assertion)
+        
+    except AssertionError as ae:
+        raise           
+    except Exception as e:
+        raise TestExecutionError(f"Test stopped: {str(e)}")
 
 
     return test_passed
@@ -283,7 +287,7 @@ def handle_assertion_error(e, stop_test_on_fail):
     return False  # Test failed, but continuing allowed
 
 
-def setup():
+def SETUP(setup_data, fixture_list : list, resources):
     """
     1. metadata.Capability
     2. fixture autocreate
@@ -293,9 +297,33 @@ def setup():
 
     --> save the results?
     """
-    print("deal with setup")
 
-def test(test_data):
+    try:
+        
+        if fixture_list: #falls es fixtures gibt
+            save_fixtures(resources, fixture_list)
+
+        if FIXTURES:
+            for fix1 in FIXTURES:
+                for fix2 in FIXTURES:
+                    json_string = json.dumps(fix1.body)
+                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
+                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
+
+                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #erneut überprüfen damit nichts verloren geht
+                        raise Exception("Unknown Reference remaining.")
+    except Exception as e:
+        log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
+        log_to_file(str(e))
+
+
+    for action in setup_data.get("action", []):
+        execute_test_actions(action)
+
+    
+    #do setup action
+
+def TEST(test_data):
     """
     1. metadata.capabilities
     
@@ -303,9 +331,32 @@ def test(test_data):
     --> save Test Results for all tests
     --> U only know of urself and the saved fixtures / responses / variables
     """
-    print("deal with Tests")
 
-def teardown():
+    try:
+        test_name = test_data.get('name', 'Unnamed Test')
+        log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
+
+        for action in test_data.get("action" , []):
+            execute_actions(action)
+
+        if test_passed:
+            log_to_file(f"✓ TEST PASSED: {test_name}")
+            return (test_name, True)
+        else:
+            log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+            return (test_name, False)
+        
+    except OperationError as oe:
+        print("make your own error")
+    except AssertionError as ae:
+        print("test failed")
+    except TestExecutionError as e:
+        log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+        return (test_name, False)
+        # Continue with next test even if this one was stopped
+
+    
+def TEARDOWN(teardown_data):
 
     """
     do teardown actions --> do i have to document this?
@@ -315,7 +366,10 @@ def teardown():
     autodelete
     """
 
-    print("deal with teardown")
+    global FIXTURES
+    for fix in FIXTURES:
+        if fix.autodelete and fix.server_id != "":
+            requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
 
 def test_fhir_operations(testscript_data):
     """
@@ -348,52 +402,19 @@ def test_fhir_operations(testscript_data):
     # GIVEN
     testscript, resources = testscript_data
 
-    overall_results = []
+    fixture_list = get_fixture(testscript)
 
-    try:
-        fixture_list = get_fixture(testscript)
-        if fixture_list: #falls es fixtures gibt
-            save_fixtures(resources, fixture_list)
-
-        if FIXTURES:
-            for fix1 in FIXTURES:
-                for fix2 in FIXTURES:
-                    json_string = json.dumps(fix1.body)
-                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
-                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
-
-                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #erneut überprüfen damit nichts verloren geht
-                        raise Exception("Unknown Reference remaining.")
-
-
-    except Exception as e:
-        log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
-        log_to_file(str(e))
+    for setup in testscript.get("setup" , []):
+        SETUP(setup, fixture_list, resources)
         
+    for test in testscript.get("test", []):
+        TEST(test)  
 
-    else: 
-       #if fixtures are being used by the action --> see what id is in action + don't give it the whole fixture
-        
-       for test in testscript.get("test", []):
-        test_name = test.get('name', 'Unnamed Test')
-        
-    
-        try:
-            test_passed = execute_test_actions(test)
+    for teardown in testscript.get("teardown", []):
+        TEARDOWN(teardown)
 
-            if test_passed:
-                log_to_file(f"✓ TEST PASSED: {test_name}")
-                overall_results.append((test_name, True))
-            else:
-                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
-                overall_results.append((test_name, False))
-
-        except TestExecutionError as e:
-            log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
-            overall_results.append((test_name, False))
-            # Continue with next test even if this one was stopped
-
-        # Final summary
+    # Final summary --> find out how to save 
+    """
         log_to_file("======================")
         log_to_file("Test Summary:")
         for test_name, passed in overall_results:
@@ -402,9 +423,7 @@ def test_fhir_operations(testscript_data):
 
 
         log_to_file("Test execution completed")
-    finally:
-        for fix in FIXTURES:
-            if fix.autodelete and fix.server_id != "":
-                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
-        FIXTURES.clear() #reset for next testscript
-        REQ_RESP.clear()
+    """     
+        
+    FIXTURES.clear() 
+    REQ_RESP.clear()
