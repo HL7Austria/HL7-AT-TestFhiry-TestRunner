@@ -1,7 +1,8 @@
-
-from jsonpath_ng import parse as jsonpath_parse
+import json
+from jsonpath_ng import parse, jsonpath
 from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+from lxml import etree
 
 
 """ 
@@ -61,4 +62,52 @@ def do_expression(body, expression : str):
     return evaluate(body, expression)
 
 def doPath(body, path:str):
-    print("not yet supported")
+
+    """
+    Check  if body is xml or json
+    Check if path is xpath or jsonpath
+    
+    --> different ways to evaluate
+    --> do I want to convert to json or xml?
+    """
+    type = "xml"
+    result = None
+
+    print("temporary bridging until path issue is resolved")
+
+    #check if xml or jsonpath
+    if path == "xml":
+        result = xmlPath(str(body), path)
+    elif path == "json":
+        result = jsonPath(body, path)
+
+
+    #print("not yet supported")
+    return result
+
+
+def xmlPath(body : str, path:str): #get xml as str?
+
+    
+    root = etree.fromstring(body)
+    ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
+
+    # Alle Family-Namen
+    result = root.xpath(f"/{path}", namespaces=ns)
+    for res in result:
+        if not isinstance(res, str):
+            raise ValueError(f"Path {path} could not be evaluated")
+    print(result)
+    return result
+
+def jsonPath(body : str, path:str):
+    if isinstance(body,str):
+        body = json.loads(body)
+
+    jsonpath_expr = parse(path)
+    return ([match.value for match in jsonpath_expr.find(body)])
+    
+
+
+
+

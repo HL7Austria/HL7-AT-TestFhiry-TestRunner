@@ -85,6 +85,13 @@ def execute_operation(operation):
     #global PROFILES
     #global VARIABLES
     try:
+
+            # do I want to check if variables are in the right place?
+        pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+        json_str = json.dumps(operation)
+        result = pattern.sub(replacer, json_str)
+        operation = json.loads(result)
+
         #get all Info from operation
         type = operation.get("type", {}).get("code", "").lower()
         method = operation.get("method") #--> find a way to make method work
@@ -291,6 +298,11 @@ def save_variables(variables : list):
            ((variable.expression is not None) & (variable.path is not None))):
             raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
         
+        if ((variable.expression is None) & (variable.headerField is None) 
+            & (variable.path is None) & (variable.defaultValue is None)):
+            raise Exception(f"Variable {id} is not filled!")
+
+        
 
         VARIABLES.append(variable)
 
@@ -322,29 +334,23 @@ def eval_variable(var : Variable):
         if var.headerField:
             if not isinstance(fix, Interaction):
                 raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
-            json.loads(fix.header).get("expr")
+            result = fix.header.get(expr)
+            if not result:
+                raise Exception(f"HeaderField {var.headerField} could not be evaluated.")
+            
         elif var.expression:
             result = do_expression(fix.body, expr)
         elif var.path:
-            """
-             result = doPath(fix.body, expr)
+            
+            result = doPath(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
+                elif len(result) == 0:
+                    raise Exception("Path returned an empty result!")
                 else:
-
-                    raise Exception("Cannot compute more than one Variable result")
-            elif isinstance(result, bool):
-                raise ValueError("Cannot fill Variable with boolean!")
-            else:
-                raise ValueError("Cannot fill Variable with unvalid Types")
-
-        
-                fix this somehow?
+                    print("error --> more than one result")
             
-            """
-           
-    print("eval")
     return result
 
 def save_fixtures(jsonFiles, fix_list):
