@@ -9,7 +9,7 @@ import re
 
 from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
-from impl.exception.TestExecutionError import TestExecutionError
+from impl.exception.Error import *
 from validate import *
 from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.configuration import Configuration
@@ -46,6 +46,7 @@ def extract_test_source_id(container):
 
 # Execute operation
 def execute_operation(operation):
+
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
 
@@ -53,77 +54,97 @@ def execute_operation(operation):
     :return: HTTP response object.
     :raises: NotImplementedError for unsupported methods.
     """
-    #get all Info from operation
-    type = operation.get("type", {}).get("code", "").lower()
-    method = operation.get("method") #--> find a way to make method work
-    resource_type = operation.get("resource")
-    url = f"{FHIR_SERVER_BASE}/{resource_type}"
-    sourceId = operation.get("sourceId")
-    targetId = operation.get("targetId")
-    Ourl = operation.get("url")
 
-    headers = {
-        "Content-Type": parse_fhir_header(operation.get("contentType")),
-        "Accept": parse_fhir_header(operation.get("accept")),
-    }
+    """
+    for supporting all methods:
+        somehow map type to operation method
+        --> maybe dict?? maybe not
+        ---> check what is better helper function or dict (is public from utils)
+    
+    1. check for method if no method check for type
+        -> if type => map method to use
+        -> if no type => is mayhaps a client test i don't really know
+           
+    for different types of operation different params/headerfield whatever?
+    """
 
-    if type == "create":
-        log_to_file(f"Executing: {type.upper()} {url}")
-        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-        if(fixture):
-            if(Ourl):
-                response = requests.post(Ourl, headers=headers, json=fixture.body) #if fixed url is given
-            else:
-                response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
+    global FIXTURES
+    #global PROFILES
+    #global VARIABLES
+    try:
+        #get all Info from operation
+        type = operation.get("type", {}).get("code", "").lower()
+        method = operation.get("method") #--> find a way to make method work
+        resource_type = operation.get("resource")
+        url = f"{FHIR_SERVER_BASE}/{resource_type}"
+        sourceId = operation.get("sourceId")
+        targetId = operation.get("targetId")
+        Ourl = operation.get("url")
 
-            global saved_resource_id
-            try:
-                saved_resource_id = response.json().get("id")
-            except ValueError:
-                location = response.headers.get("Location", "")
-                if location:
-                    saved_resource_id = location.rstrip("/").split("/")[-3]
-                    log_to_file(f"ID from Location header: {saved_resource_id}")
+        headers = {
+            "Content-Type": parse_fhir_header(operation.get("contentType")),
+            "Accept": parse_fhir_header(operation.get("accept")),
+        }
+
+        if type == "create":
+            log_to_file(f"Executing: {type.upper()} {url}")
+            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+            if(fixture):
+                if(Ourl):
+                    response = requests.post(Ourl, headers=headers, json=fixture.body) #if fixed url is given
                 else:
-                    raise ValueError("No ID found in response or Location header")
+                    response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
-            
-    elif type == "update":
-        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-        Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
-        if fixture:
-            #look here for variable
+                global saved_resource_id
+                try:
+                    saved_resource_id = response.json().get("id")
+                except ValueError:
+                    location = response.headers.get("Location", "")
+                    if location:
+                        saved_resource_id = location.rstrip("/").split("/")[-3]
+                        log_to_file(f"ID from Location header: {saved_resource_id}")
+                    else:
+                        raise ValueError("No ID found in response or Location header")
+
+                
+        elif type == "update":
+            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+            Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
+            if fixture:
+                #look here for variable
+                resource_id = Tfixture.server_id
+                log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
+
+                fixture.body["id"] = resource_id
+                response = requests.put(f"{url}/{resource_id}", headers=headers, json=fixture.body)
+            else:
+                log_to_file("no source found in PUT")
+
+        elif type == "read": #--> change ? does it need sourceId
+            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+            if fixture is None:
+                log_to_file("No fixture found in read")
+                return None
+            resource_id = fixture.server_id
+            log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
+            response = requests.get(f"{url}/{resource_id}", headers=headers)
+
+        elif type == "delete":
+            Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
+            if Tfixture is None:
+                log_to_file("No fixture found in delete")
+                return None
+            if Tfixture.server_id is None:
+                log_to_file("No saved fixture found in delete")
+                return None
             resource_id = Tfixture.server_id
             log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
+            response = requests.delete(f"{url}/{resource_id}", headers=headers)
 
-            fixture.body["id"] = resource_id
-            response = requests.put(f"{url}/{resource_id}", headers=headers, json=fixture.body)
         else:
-            log_to_file("no source found in PUT")
-
-    elif type == "read": #--> change ? does it need sourceId
-        fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-        if fixture is None:
-            log_to_file("No fixture found in read")
-            return None
-        resource_id = fixture.server_id
-        log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
-        response = requests.get(f"{url}/{resource_id}", headers=headers)
-
-    elif type == "delete":
-        Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
-        if Tfixture is None:
-            log_to_file("No fixture found in delete")
-            return None
-        if Tfixture.server_id is None:
-            log_to_file("No saved fixture found in delete")
-            return None
-        resource_id = Tfixture.server_id
-        log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
-        response = requests.delete(f"{url}/{resource_id}", headers=headers)
-
-    else:
-        raise NotImplementedError(f"Method {type} not implemented")
+            raise NotImplementedError(f"Method {type} not implemented")
+    except Exception as e:
+        raise TestScriptError(e)
 
     log_to_file(f"Response: {response.status_code}")
 
@@ -208,6 +229,8 @@ def execute_actions(action):
     If this element is specified and it is true, then assertion failures should not stop the current test execution from proceeding.
     is test excecusion the TestScript?
     """
+
+    stopTestOnFail = True
     
     try:
         # WHEN – Operation
@@ -218,15 +241,16 @@ def execute_actions(action):
          # THEN - Assertion
         elif "assert" in action:
             assertion = action["assert"]
-            test_passed = execute_assertion(assertion)
+            stopTestOnFail = assertion.get("stopTestOnFail")
+            execute_assertion(assertion)
         
     except AssertionError as ae:
-        raise           
+        if not stopTestOnFail:
+            handle_assertion_error(ae, stopTestOnFail)
+        raise        
     except Exception as e:
         raise TestExecutionError(f"Test stopped: {str(e)}")
 
-
-    return test_passed
 
 def save_fixtures(jsonFiles, fix_list):
     """
@@ -282,7 +306,7 @@ def handle_assertion_error(e, stop_test_on_fail):
     :raises: TestExecutionError if stop_test_on_fail is True.
     """
     log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
-    if stop_test_on_fail == True:
+    if stop_test_on_fail == False:
         raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
 
@@ -297,10 +321,13 @@ def SETUP(setup_data, fixture_list : list, resources):
 
     --> save the results?
     """
+    global FIXTURES
+    #global PROFILES
+    #global VARIABLES
 
     try:
         
-        if fixture_list: #falls es fixtures gibt
+        if fixture_list: #if there are fixtures to save
             save_fixtures(resources, fixture_list)
 
         if FIXTURES:
@@ -310,66 +337,86 @@ def SETUP(setup_data, fixture_list : list, resources):
                     my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
                     fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
 
-                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #erneut überprüfen damit nichts verloren geht
+                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
                         raise Exception("Unknown Reference remaining.")
+                
+
+        
+        for action in setup_data.get("action", []):
+            execute_actions(action)
+
+    except OperationError as oe:
+        raise TestScriptError("Setup operation failed: ", oe)
+    except TestExecutionError as teE:
+        raise TestScriptError("Setup failed: " , teE)
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
 
 
-    for action in setup_data.get("action", []):
-        execute_test_actions(action)
-
-    
-    #do setup action
-
 def TEST(test_data):
     """
     1. metadata.capabilities
+        if there are problems --> skip this test (some kind of skip Exception? or straight return)
     
     --> do all test-actions (operation or assertion)
     --> save Test Results for all tests
     --> U only know of urself and the saved fixtures / responses / variables
     """
+    test_name = test_data.get('name', 'Unnamed Test')
+    log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
+
 
     try:
-        test_name = test_data.get('name', 'Unnamed Test')
-        log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
-
+      
         for action in test_data.get("action" , []):
-            execute_actions(action)
+            try:
+                execute_actions(action)
 
-        if test_passed:
-            log_to_file(f"✓ TEST PASSED: {test_name}")
-            return (test_name, True)
-        else:
-            log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
-            return (test_name, False)
-        
-    except OperationError as oe:
-        print("make your own error")
-    except AssertionError as ae:
-        print("test failed")
+            #per action in test
+            except OperationError as oe:
+                raise TestScriptError("Test operation failed: ", oe)
+
+            except AssertionError as ae:
+                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
+
+            except TestExecutionError as e:
+                raise
+                # Continue with next test even if this one was stopped
+
+
+
+        log_to_file(f"✓ TEST PASSED: {test_name}")
     except TestExecutionError as e:
         log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
-        return (test_name, False)
-        # Continue with next test even if this one was stopped
+        #test schould get stopped, and next test needs to start
+        
+        
+    
 
     
 def TEARDOWN(teardown_data):
 
     """
-    do teardown actions --> do i have to document this?
+    1. Teardown actions
+    2. autodelete
 
-    action --> but only operations
-        if there are assertions --> TestScript not valid
+    --> if teardown is empty only do autodelete
+
     autodelete
     """
 
-    global FIXTURES
-    for fix in FIXTURES:
-        if fix.autodelete and fix.server_id != "":
-            requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+    try:
+        for action in teardown_data.get("action", []):
+            execute_actions(action)
+
+        global FIXTURES
+        for fix in FIXTURES:
+            if fix.autodelete and fix.server_id != "":
+                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+            
+    except OperationError as oe:
+        raise TestScriptError("Teardown operation failed: " , oe)
 
 def test_fhir_operations(testscript_data):
     """
@@ -384,16 +431,17 @@ def test_fhir_operations(testscript_data):
 
     everything that is not defined by an action!!
 
-    1. test server
-    2. test capability
-    3. save variables
-    4. save profiles
+    1. validate TS itself
+    2. test server
+    3. test capability
+    4. save variables
+    5. save profiles
 
-    5. SETUP
-    6. TEST
-    7. TEARDOWN
+    6. SETUP
+    7. TEST
+    8. TEARDOWN
 
-    8. clear up everything that needs cleaning up (all global usw.)
+    9. clear up everything that needs cleaning up (all global usw.)
     """
 
     if not has_fhir_server():
@@ -404,26 +452,36 @@ def test_fhir_operations(testscript_data):
 
     fixture_list = get_fixture(testscript)
 
-    for setup in testscript.get("setup" , []):
-        SETUP(setup, fixture_list, resources)
-        
-    for test in testscript.get("test", []):
-        TEST(test)  
+    try:
 
-    for teardown in testscript.get("teardown", []):
-        TEARDOWN(teardown)
+        for setup in testscript.get("setup" , []):
+            SETUP(setup, fixture_list, resources)
+
+        if not testscript.get("setup"): #if no setup at all --> autocreate needs to happen
+            SETUP({},fixture_list, resources)
+            
+        for test in testscript.get("test", []):
+            TEST(test)  
+
+        for teardown in testscript.get("teardown", []):
+            TEARDOWN(teardown)
+        if not testscript.get("teardown"): #if no teardown at all --> autodelete needs to happen
+            TEARDOWN({})
+
+    except TestScriptError as tse:
+        log_to_file("Severe error: " , tse)
+    except:
+        log_to_file("TestScript stopped!")
 
     # Final summary --> find out how to save 
     """
-        log_to_file("======================")
+       log_to_file("======================")
         log_to_file("Test Summary:")
         for test_name, passed in overall_results:
             status = "PASSED" if passed else "FAILED"
             log_to_file(f"  {test_name}: {status}")
+    """
 
-
-        log_to_file("Test execution completed")
-    """     
         
     FIXTURES.clear() 
     REQ_RESP.clear()
