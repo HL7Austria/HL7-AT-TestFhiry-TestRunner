@@ -171,6 +171,7 @@ def execute_assertion(assertion):
 
     no return value anymore --> if no error comes back everything is great
     """
+    global REQ_RESP
 
     response = last_interaction
     for int in REQ_RESP:
@@ -310,6 +311,13 @@ def handle_assertion_error(e, stop_test_on_fail):
         raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
 
+def autodelete():
+        global FIXTURES
+        for fix in FIXTURES:
+            if fix.autodelete and fix.server_id != "":
+                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+
+
 
 def SETUP(setup_data, fixture_list : list, resources):
     """
@@ -346,9 +354,9 @@ def SETUP(setup_data, fixture_list : list, resources):
             execute_actions(action)
 
     except OperationError as oe:
-        raise TestScriptError("Setup operation failed: ", oe)
+        raise TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except TestExecutionError as teE:
-        raise TestScriptError("Setup failed: " , teE)
+        raise TestScriptError("Setup failed: " , teE) #stop the whole testscript
     except Exception as e:
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
@@ -363,6 +371,8 @@ def TEST(test_data):
     --> save Test Results for all tests
     --> U only know of urself and the saved fixtures / responses / variables
     """
+    #Test Capabilities --> if Error --> skip test --> maybe in main
+
     test_name = test_data.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
 
@@ -409,11 +419,9 @@ def TEARDOWN(teardown_data):
     try:
         for action in teardown_data.get("action", []):
             execute_actions(action)
-
-        global FIXTURES
-        for fix in FIXTURES:
-            if fix.autodelete and fix.server_id != "":
-                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+        
+        autodelete()
+        
             
     except OperationError as oe:
         raise TestScriptError("Teardown operation failed: " , oe)
@@ -427,8 +435,7 @@ def test_fhir_operations(testscript_data):
     """
 
     """
-    HERE --> should only test the basic TS all rounder things (Capability, save variables, save profile)
-
+    HERE --> should only test the basic TS all rounder things (Capability, save variables, save profiles)
     everything that is not defined by an action!!
 
     1. validate TS itself
@@ -447,13 +454,16 @@ def test_fhir_operations(testscript_data):
     if not has_fhir_server():
         log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         pytest.skip("No FHIR server configured in config.json")
-    # GIVEN
+    
     testscript, resources = testscript_data
 
+    
+    #test capability
+    #--> find out how important origin and destnation are
     fixture_list = get_fixture(testscript)
 
     try:
-
+        
         for setup in testscript.get("setup" , []):
             SETUP(setup, fixture_list, resources)
 
@@ -470,17 +480,11 @@ def test_fhir_operations(testscript_data):
 
     except TestScriptError as tse:
         log_to_file("Severe error: " , tse)
+        autodelete() #autodelete after everything went wrong
     except:
         log_to_file("TestScript stopped!")
 
-    # Final summary --> find out how to save 
-    """
-       log_to_file("======================")
-        log_to_file("Test Summary:")
-        for test_name, passed in overall_results:
-            status = "PASSED" if passed else "FAILED"
-            log_to_file(f"  {test_name}: {status}")
-    """
+    # Final summary --> find out how to save results from each test and log them
 
         
     FIXTURES.clear() 

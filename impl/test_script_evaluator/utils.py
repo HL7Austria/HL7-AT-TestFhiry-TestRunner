@@ -48,7 +48,8 @@ def get_all_profiles():
                     ]
         return profiles
 
-def get_profile_json(profile_list : list[str]):
+def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
+
     result = []
     profFiles = []
     temp = []
