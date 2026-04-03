@@ -1,6 +1,6 @@
 {
   "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
   "path": "",
-  "testscripts": ["<path_to>/Test_Scripts/TestScript-testscript-patient-update-at-core.json"],
+  "testscripts": ["C:/Users/070100072026/work/HL7-AT-TestFhiry-TestRunner/impl/Test_Scripts/TestScript-testscript-patient-update-at-core.json"],
   "fhirServer" : "http://localhost:8080/fhir"
 }

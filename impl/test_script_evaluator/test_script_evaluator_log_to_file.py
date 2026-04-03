@@ -1,18 +1,13 @@
 import json
 import requests
 import pytest
-from pathlib import Path
-import os
 from datetime import datetime
-import traceback
 import re
 
-from numpy.ma.testutils import assert_equal
 from impl.Transactions.transactions import *
 from impl.exception.Error import *
 from validate import *
-from configuration_manager import get_config_manager, get_fhir_server, get_testscript_pairs, has_fhir_server
-from impl.model.configuration import Configuration
+from configuration_manager import get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
