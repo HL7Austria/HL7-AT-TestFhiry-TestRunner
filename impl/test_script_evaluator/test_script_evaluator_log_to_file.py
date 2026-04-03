@@ -61,6 +61,7 @@ def execute_operation(operation):
     json_str = json.dumps(operation)
     result = pattern.sub(replacer, json_str)
     operation = json.loads(result)
+    print(operation)
 
 
     #get all Info from operation
