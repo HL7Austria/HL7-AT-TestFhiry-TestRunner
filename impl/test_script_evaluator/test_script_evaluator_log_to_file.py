@@ -326,8 +326,6 @@ def SETUP(setup_data, fixture_list : list, resources):
     --> save the results?
     """
     global FIXTURES
-    #global PROFILES
-    #global VARIABLES
 
     try:
         
@@ -343,8 +341,6 @@ def SETUP(setup_data, fixture_list : list, resources):
 
                 if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
                         raise Exception("Unknown Reference remaining.")
-                
-
         
         for action in setup_data.get("action", []):
             execute_actions(action)
@@ -458,23 +454,22 @@ def test_fhir_operations(testscript_data):
     fixture_list = get_fixture(testscript)
 
     try:
-        
-        for setup in testscript.get("setup" , []):
-            SETUP(setup, fixture_list, resources)
 
-        if not testscript.get("setup"): #if no setup at all --> autocreate needs to happen
+        if testscript.get("setup"): #there can only be one Setup
+            SETUP(testscript.get("setup"),fixture_list, resources)
+        else:
             SETUP({},fixture_list, resources)
             
         for test in testscript.get("test", []):
             TEST(test)  
 
-        for teardown in testscript.get("teardown", []):
-            TEARDOWN(teardown)
-        if not testscript.get("teardown"): #if no teardown at all --> autodelete needs to happen
+        if testscript.get("teardown"): #there can only be one Setup
+            TEARDOWN(testscript.get("teardown"))
+        else:
             TEARDOWN({})
 
     except TestScriptError as tse:
-        log_to_file("Severe error: " , tse)
+        log_to_file("Severe error: " + str(tse))
         autodelete() #autodelete after everything went wrong
     except:
         log_to_file("TestScript stopped!")
