@@ -1,5 +1,14 @@
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 
+""" 
+make small validations
+DO NOT DO WHOLE ASSERTIONS
+
+--> split validate_response up
+
+--> add one for every assert??
+"""
+
 
 def validate_content_type(response, expected_type=None):
     """
