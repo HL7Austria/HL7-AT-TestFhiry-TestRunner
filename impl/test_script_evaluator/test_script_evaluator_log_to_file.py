@@ -353,6 +353,80 @@ def eval_variable(var : Variable):
             
     return result
 
+def save_variables(variables : list):
+    global VARIABLES
+    for var in variables:
+        id = var.get("name")
+
+        variable = Variable(id,path=var.get("path"), 
+                                  expression=var.get("expression"),
+                                  sourceId=var.get("sourceId"),
+                                  headerField=var.get("headerField"),
+                                  defaultValue=var.get("defaultValue"))
+        if id is None:
+            raise Exception("Variable not correctly defined!")
+    
+                
+        if(((variable.expression is not None) & (variable.headerField is not None)) | 
+           ((variable.headerField is not None) & (variable.path is not None)) | 
+           ((variable.expression is not None) & (variable.path is not None))):
+            raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+        
+        if ((variable.expression is None) & (variable.headerField is None) 
+            & (variable.path is None) & (variable.defaultValue is None)):
+            raise Exception(f"Variable {id} is not filled!")
+
+        
+
+        VARIABLES.append(variable)
+
+def eval_variable(var : Variable):
+    global REQ_RESP
+    global FIXTURES
+
+    result = var.defaultValue or None
+    expr = var.expression or None
+    expr = var.path or expr
+    expr = var.headerField or expr
+
+
+    if (not expr) & (not result):
+        raise Exception("variable is not filled!")
+
+    if expr:
+        fix = None
+        sourceId = var.sourceId
+
+        for int in REQ_RESP:
+            if int.res_id == sourceId:
+                fix = int
+        
+        for fixture in FIXTURES:
+            if fixture.source_id == sourceId:
+                fix = fixture
+        
+        if var.headerField:
+            if not isinstance(fix, Interaction):
+                raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
+            result = fix.header.get(expr)
+            if not result:
+                raise Exception(f"HeaderField {var.headerField} could not be evaluated.")
+            
+        elif var.expression:
+            result = do_expression(fix.body, expr)
+        elif var.path:
+            
+            result = doPath(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                elif len(result) == 0:
+                    raise Exception("Path returned an empty result!")
+                else:
+                    print("error --> more than one result")
+            
+    return result
+
 def save_fixtures(jsonFiles, fix_list):
     """
     saves fixtures to the server and saves infos for them
