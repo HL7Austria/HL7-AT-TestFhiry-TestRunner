@@ -27,7 +27,7 @@ with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
 
 FHIR_SERVER_BASE = get_fhir_server()
 
-def extract_test_source_id(container):
+def extract_test_source_id(container): #do i even need this anymore?
     """
     Returns the sourceID
     """
@@ -48,6 +48,7 @@ def execute_operation(operation):
     :param operation: Dictionary containing operation details.
     :return: HTTP response object.
     :raises: NotImplementedError for unsupported methods.
+    :raises: TestScriptError for critical Errors while executing.
     """
 
     """
@@ -215,7 +216,7 @@ def testscript_data(request):
 
 def execute_actions(action):
     """
-    Executes all actions for a single test.
+    executes any action 
 
     :param test: Test definition dictionary.
     :param resource: FHIR resource to test with.
@@ -352,7 +353,8 @@ def SETUP(setup_data, fixture_list : list, resources):
         raise TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except TestExecutionError as teE:
         raise TestScriptError("Setup failed: " , teE) #stop the whole testscript
-    except Exception as e:
+    
+    except Exception as e: #usually only failure in autocreate
         log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
         log_to_file(str(e))
 
@@ -407,8 +409,6 @@ def TEARDOWN(teardown_data):
     2. autodelete
 
     --> if teardown is empty only do autodelete
-
-    autodelete
     """
 
     try:
