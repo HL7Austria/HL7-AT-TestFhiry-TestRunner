@@ -11,6 +11,7 @@ from configuration_manager import get_fhir_server, get_testscript_pairs, has_fhi
 from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
+from impl.model.variable import Variable
 from utils import *
 
 
@@ -20,6 +21,8 @@ log_filename = f"test_results_{timestamp}.txt"
 
 FIXTURES = []
 REQ_RESP = []
+
+VARIABLES = []
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -38,6 +41,20 @@ def extract_test_source_id(container): #do i even need this anymore?
 
     return None
 
+
+def replacer(match):
+    """
+    helper function used to replace a variable match with the value of the variable
+    """
+    global VARIABLES
+    var_name = match.group(1)
+    print("Found variable:", var_name)  # if you want to see them
+
+    for var in VARIABLES:
+        if var.name == var_name:
+            return eval_variable(var)
+    
+    raise Exception(f"Variable {var_name} could not be found")
 
 # Execute operation
 def execute_operation(operation):
@@ -65,9 +82,14 @@ def execute_operation(operation):
     """
 
     global FIXTURES
-    #global PROFILES
-    #global VARIABLES
     try:
+
+            # do I want to check if variables are in the right place?
+        pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+        json_str = json.dumps(operation)
+        result = pattern.sub(replacer, json_str)
+        operation = json.loads(result)
+
         #get all Info from operation
         type = operation.get("type", {}).get("code", "").lower()
         method = operation.get("method") #--> find a way to make method work
@@ -169,6 +191,12 @@ def execute_assertion(assertion):
     """
     global REQ_RESP
 
+    #--> not checking if the variable is at the right place!
+    pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+    json_str = json.dumps(assertion)
+    result = pattern.sub(replacer, json_str)
+    assertion = json.loads(result)
+
     response = last_interaction
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
@@ -248,7 +276,79 @@ def execute_actions(action):
     except Exception as e:
         raise TestExecutionError(f"Test stopped: {str(e)}")
 
+def save_variables(variables : list):
+    global VARIABLES
+    for var in variables:
+        id = var.get("name")
 
+        variable = Variable(id,path=var.get("path"), 
+                                  expression=var.get("expression"),
+                                  sourceId=var.get("sourceId"),
+                                  headerField=var.get("headerField"),
+                                  defaultValue=var.get("defaultValue"))
+        if id is None:
+            raise Exception("Variable not correctly defined!")
+
+
+        if(((variable.expression is not None) & (variable.headerField is not None)) | 
+           ((variable.headerField is not None) & (variable.path is not None)) | 
+           ((variable.expression is not None) & (variable.path is not None))):
+            raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+
+        if ((variable.expression is None) & (variable.headerField is None) 
+            & (variable.path is None) & (variable.defaultValue is None)):
+            raise Exception(f"Variable {id} is not filled!")
+
+
+
+        VARIABLES.append(variable)
+
+def eval_variable(var : Variable):
+    global REQ_RESP
+    global FIXTURES
+
+    result = var.defaultValue or None
+    expr = var.expression or None
+    expr = var.path or expr
+    expr = var.headerField or expr
+
+
+    if (not expr) & (not result):
+        raise Exception("variable is not filled!")
+
+    if expr:
+        fix = None
+        sourceId = var.sourceId
+
+        for int in REQ_RESP:
+            if int.res_id == sourceId:
+                fix = int
+
+        for fixture in FIXTURES:
+            if fixture.source_id == sourceId:
+                fix = fixture
+
+        if var.headerField:
+            if not isinstance(fix, Interaction):
+                raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
+            result = fix.header.get(expr)
+            if not result:
+                raise Exception(f"HeaderField {var.headerField} could not be evaluated.")
+
+        elif var.expression:
+            result = do_expression(fix.body, expr)
+        elif var.path:
+
+            result = doPath(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                elif len(result) == 0:
+                    raise Exception("Path returned an empty result!")
+                else:
+                    print("error --> more than one result")
+
+    return result
 def save_fixtures(jsonFiles, fix_list):
     """
     saves fixtures to the server and saves infos for them
@@ -292,8 +392,7 @@ def save_fixtures(jsonFiles, fix_list):
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-
-def handle_assertion_error(e, stop_test_on_fail):
+def handle_assertion_error(e, stop_test_on_fail): # could be put into utils
     """
     Logs the AssertionError and decides whether to stop or continue the test.
 
@@ -312,8 +411,6 @@ def autodelete():
         for fix in FIXTURES:
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
-
-
 
 def SETUP(setup_data, fixture_list : list, resources):
     """
@@ -395,10 +492,6 @@ def TEST(test_data):
     except TestExecutionError as e:
         log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         #test schould get stopped, and next test needs to start
-        
-        
-    
-
     
 def TEARDOWN(teardown_data):
 
@@ -455,7 +548,14 @@ def test_fhir_operations(testscript_data):
     #--> find out how important origin and destnation are
     fixture_list = get_fixture(testscript)
 
+    variable_list = get_variables(testscript)
+
     try:
+        if variable_list:
+            save_variables(variable_list)
+        
+        for setup in testscript.get("setup" , []):
+            SETUP(setup, fixture_list, resources)
 
         if testscript.get("setup"): #there can only be one Setup
             SETUP(testscript.get("setup"),fixture_list, resources)
@@ -473,11 +573,13 @@ def test_fhir_operations(testscript_data):
     except TestScriptError as tse:
         log_to_file("Severe error: " + str(tse))
         autodelete() #autodelete after everything went wrong
-    except:
-        log_to_file("TestScript stopped!")
+    except Exception as e:
+        log_to_file("TestScript stopped! " + str(e))
 
     # Final summary --> find out how to save results from each test and log them
 
         
     FIXTURES.clear() 
     REQ_RESP.clear()
+
+    VARIABLES.clear()
