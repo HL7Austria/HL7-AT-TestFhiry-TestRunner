@@ -423,8 +423,6 @@ def SETUP(setup_data, fixture_list : list, resources):
     --> save the results?
     """
     global FIXTURES
-    #global PROFILES
-    #global VARIABLES
 
     try:
         
@@ -440,20 +438,20 @@ def SETUP(setup_data, fixture_list : list, resources):
 
                 if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
                         raise Exception("Unknown Reference remaining.")
-                
+        log_to_file(f"\n ----------- Starting Setup: -----------")
 
-        
         for action in setup_data.get("action", []):
             execute_actions(action)
-
+        
+        if isinstance(setup_data,dict): #if there was a setup other than autocreate
+            log_to_file(f"✓ SETUP SUCCESSFUL")
     except OperationError as oe:
         raise TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except TestExecutionError as teE:
         raise TestScriptError("Setup failed: " , teE) #stop the whole testscript
     
     except Exception as e: #usually only failure in autocreate
-        log_to_file(f"✗ TEST SKIPPED: Failure to start TestScript: ")
-        log_to_file(str(e))
+        raise TestScriptError("✗ TEST SKIPPED: Failure to start TestScript: " +str(e))
 
 
 def TEST(test_data):
@@ -559,15 +557,17 @@ def test_fhir_operations(testscript_data):
         for setup in testscript.get("setup" , []):
             SETUP(setup, fixture_list, resources)
 
-        if not testscript.get("setup"): #if no setup at all --> autocreate needs to happen
+        if testscript.get("setup"): #there can only be one Setup
+            SETUP(testscript.get("setup"),fixture_list, resources)
+        else:
             SETUP({},fixture_list, resources)
             
         for test in testscript.get("test", []):
             TEST(test)  
 
-        for teardown in testscript.get("teardown", []):
-            TEARDOWN(teardown)
-        if not testscript.get("teardown"): #if no teardown at all --> autodelete needs to happen
+        if testscript.get("teardown"): #there can only be one Setup
+            TEARDOWN(testscript.get("teardown"))
+        else:
             TEARDOWN({})
 
     except TestScriptError as tse:
