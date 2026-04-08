@@ -76,6 +76,12 @@ def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
     temp.clear()
     return result
 
+def get_variables(testscript):
+    vars = []
+    for var in testscript.get("variable", []):
+        vars.append(var)
+    return vars
+
 # Help function for loading JSON files
 def load_json(path : str):
     """
@@ -137,3 +143,6 @@ def parse_fhir_header(value : str):
     elif value == "xml":
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
+
+
+
