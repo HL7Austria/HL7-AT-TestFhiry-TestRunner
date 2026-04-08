@@ -551,10 +551,10 @@ def test_fhir_operations(testscript_data):
     fixture_list = get_fixture(testscript)
 
     variable_list = get_variables(testscript)
-    if variable_list:
-        save_variables(variable_list)
 
     try:
+        if variable_list:
+            save_variables(variable_list)
         
         for setup in testscript.get("setup" , []):
             SETUP(setup, fixture_list, resources)
@@ -571,10 +571,10 @@ def test_fhir_operations(testscript_data):
             TEARDOWN({})
 
     except TestScriptError as tse:
-        log_to_file("Severe error: " , tse)
+        log_to_file("Severe error: " + str(tse))
         autodelete() #autodelete after everything went wrong
-    except:
-        log_to_file("TestScript stopped!")
+    except Exception as e:
+        log_to_file("TestScript stopped! " + str(e))
 
     # Final summary --> find out how to save results from each test and log them
 

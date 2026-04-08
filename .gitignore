@@ -39,3 +39,7 @@ Thumbs.db
 
 # Falls Docker genutzt wird (optional)
 docker-compose.override.yml
+
+
+#eigene Dateien
+Results/
