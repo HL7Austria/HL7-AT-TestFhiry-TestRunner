@@ -19,6 +19,53 @@ DO NOT DO WHOLE ASSERTIONS
 """
 
 
+def validate_operator(operator, valueResp, valueTS):
+    #	equals | notEquals | in | notIn | greaterThan | lessThan | empty | notEmpty | contains | notContains | eval | manualEval
+
+    # bei den einzelnen validations nachschaun ob es kein operator gibt der nicht valide ist!!
+    #https://hl7.org/fhir/testing.html#assertion-table
+
+    match operator:
+        case "equals":
+            assert valueResp == valueTS 
+
+        case "notEquals":
+            assert valueResp != valueTS
+        case "in":
+            assert valueResp in valueTS
+
+        case "notIn":
+            assert valueResp not in valueTS 
+
+        case "greaterThan":
+            assert valueResp > valueTS
+
+        case "lessThan":
+            assert valueResp < valueTS
+
+        case "empty":
+            assert valueResp is None
+
+        case "notEmpty":
+            assert valueResp 
+
+        case "contains":
+            assert isinstance(valueResp, str)
+            assert isinstance(valueTS, str)
+            assert valueTS in valueResp
+
+        case "notContains":
+            assert isinstance(valueResp, str)
+            assert isinstance(valueTS, str)
+            assert valueTS not in valueResp
+        case "eval":
+            assert isinstance(valueResp, bool), "evaluation result is not a boolean"
+            assert valueResp
+        
+        
+
+    print("smth")
+
 def validate_content_type(response, expected_type=None):
     """
     Validates whether the server response matches the expected content type.

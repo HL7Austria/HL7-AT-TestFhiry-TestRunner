@@ -196,6 +196,8 @@ def execute_assertion(assertion):
     result = pattern.sub(replacer, json_str)
     assertion = json.loads(result)
 
+    operator = assertion.get("operator")
+
     response = last_interaction
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
@@ -205,21 +207,28 @@ def execute_assertion(assertion):
     try:
 
         if "validateProfileId" in assertion:
+            if operator:
+                raise TestScriptError("validateProfileId and operator cannot be used together")
             #validate_profile_assertion(assertion.get("validateProfileId"))
             log_to_file("✓ Assertion passed")
             
-            contentType = False
-            if "contentType" in assertion:   
-                contentType = True
-                validate_content_type(response, assertion.get("contentType"))
-                log_to_file("✓ Assertion passed")
+        contentType = False
+        if "contentType" in assertion:   
+            if not operator:
+                operator = "contains"
+            elif operator not in ["contains", "notContains", "equals", "notEquals"]:
+                raise TestScriptError("contentType can only be used with contains, notContains, equals or notEquals operator")
+            
+            contentType = True
+            validate_content_type(response, assertion.get("contentType"), operator)
+            log_to_file("✓ Assertion passed")
                 
-            if assertion.get("direction") == "response" and not contentType:
-                validate_response(assertion, response)
-                log_to_file("✓ Assertion passed")
+        if assertion.get("direction") == "response" and not contentType:
+            validate_response(assertion, response, operator)
+            log_to_file("✓ Assertion passed")
                 
-            elif assertion.get("direction") == "request":
-                log_to_file("direction request out of scope")
+        elif assertion.get("direction") == "request":
+            log_to_file("direction request out of scope")
     except AssertionError as e:
         raise
     
