@@ -4,11 +4,10 @@ import pytest
 from datetime import datetime
 import re
 
-from impl.Transactions.transactions import *
+from impl.transactions.transactions import *
 from impl.exception.Error import *
 from validate import *
 from configuration_manager import get_fhir_server, get_testscript_pairs, has_fhir_server
-from impl.Transactions.transactions import build_whole_transaction_bundle
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
 from impl.model.variable import Variable
