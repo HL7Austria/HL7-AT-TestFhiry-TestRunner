@@ -90,23 +90,13 @@ def validate_content_type(response, expected_type=None):
     assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
 
 
-def validate_response(assertion, response):
-    """
-    Validates HTTP response against assertion rules.
+def validate_responseCode(response, expected_codes, operator):
+    status_code = str(response.status_code)
+    log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+    validate_operator(operator, status_code, expected_codes)
 
-    Checks if response status code matches expected codes from assertion.
 
-    :param assertion: Dictionary containing validation rules with 'responseCode' key.
-    :param response: The HTTP response object returned by the server.
-    :return: None
-    """
 
-    if "responseCode" in assertion:
-        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-        status_code = str(response.status_code)
-        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-        #operator = assertion.get("operator")
-        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
@@ -138,8 +128,6 @@ def doPath(body, path:str):
 
 
 def xmlPath(body : str, path:str): #get xml as str?
-
-    
     root = etree.fromstring(body)
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
 

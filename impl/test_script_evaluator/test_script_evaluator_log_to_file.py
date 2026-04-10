@@ -179,8 +179,6 @@ def execute_operation(operation):
 
 def execute_assertion(assertion):
     global last_interaction
-    #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
-        #--> if it can some assertions aren't valid anymore
 
     """
     Assertion error should be handled by the Test or setup
@@ -212,20 +210,34 @@ def execute_assertion(assertion):
             #validate_profile_assertion(assertion.get("validateProfileId"))
             log_to_file("✓ Assertion passed")
             
-        contentType = False
         if "contentType" in assertion:   
             if not operator:
                 operator = "contains"
             elif operator not in ["contains", "notContains", "equals", "notEquals"]:
                 raise TestScriptError("contentType can only be used with contains, notContains, equals or notEquals operator")
             
-            contentType = True
             validate_content_type(response, assertion.get("contentType"), operator)
             log_to_file("✓ Assertion passed")
-                
-        if assertion.get("direction") == "response" and not contentType:
-            validate_response(assertion, response, operator)
+        
+        if "responseCode" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan"]:
+                raise TestScriptError("responseCode can only be used with equals, notEquals, in, notIn, greaterThan or lessThan operator")
+            
+            expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+            validate_responseCode(response, expected_codes, operator)
             log_to_file("✓ Assertion passed")
+
+        if "resource" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals"]:
+                raise TestScriptError("resource can only be asserted with equals or notEquals operator")
+            
+            
+                
+    
                 
         elif assertion.get("direction") == "request":
             log_to_file("direction request out of scope")
