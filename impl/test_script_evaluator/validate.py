@@ -7,6 +7,7 @@ from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from fhirpathpy import evaluate
 from lxml import etree
+from impl.model.interaction import Interaction
 
 
 """ 
@@ -22,15 +23,37 @@ DO NOT DO WHOLE ASSERTIONS
 def validate_operator(operator, valueResp, valueTS):
     #	equals | notEquals | in | notIn | greaterThan | lessThan | empty | notEmpty | contains | notContains | eval | manualEval
 
-    # bei den einzelnen validations nachschaun ob es kein operator gibt der nicht valide ist!!
     #https://hl7.org/fhir/testing.html#assertion-table
 
+    
     match operator:
         case "equals":
+            if isinstance(valueTS, list):
+                if len(valueTS) == 1:
+                    valueTS = valueTS[0]
+                else:
+                    raise TypeError("value to compare is not the Same type")
+            elif isinstance(valueResp, list):
+                if len(valueResp) == 1:
+                    valueResp = valueResp[0]
+                else:
+                    raise TypeError("value to compare is not the Same type")
+    
             assert valueResp == valueTS 
 
         case "notEquals":
+            if isinstance(valueTS, list):
+                if len(valueTS) == 1:
+                    valueTS = valueTS[0]
+                else:
+                    raise TypeError("value to compare is not the Same type")
+            elif isinstance(valueResp, list):
+                if len(valueResp) == 1:
+                    valueResp = valueResp[0]
+                else:
+                    raise TypeError("value to compare is not the Same type")
             assert valueResp != valueTS
+
         case "in":
             assert valueResp in valueTS
 
@@ -61,10 +84,6 @@ def validate_operator(operator, valueResp, valueTS):
         case "eval":
             assert isinstance(valueResp, bool), "evaluation result is not a boolean"
             assert valueResp
-        
-        
-
-    print("smth")
 
 def validate_content_type(response, expected_type=None):
     """
@@ -92,9 +111,12 @@ def validate_content_type(response, expected_type=None):
 
 def validate_responseCode(response, expected_codes, operator):
     status_code = str(response.status_code)
-    log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
+def validate_response(response, expected, operator):
+    log_to_file(f"Asserting response {response} {operator} {expected}")
+    validate_operator(operator, response, expected)
 
 
 
