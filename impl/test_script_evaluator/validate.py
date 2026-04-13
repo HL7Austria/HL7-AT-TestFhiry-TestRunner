@@ -28,30 +28,13 @@ def validate_operator(operator, valueResp, valueTS):
     
     match operator:
         case "equals":
-            if isinstance(valueTS, list):
-                if len(valueTS) == 1:
-                    valueTS = valueTS[0]
-                else:
-                    raise TypeError("value to compare is not the Same type")
-            elif isinstance(valueResp, list):
-                if len(valueResp) == 1:
-                    valueResp = valueResp[0]
-                else:
-                    raise TypeError("value to compare is not the Same type")
-    
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
             assert valueResp == valueTS 
 
         case "notEquals":
-            if isinstance(valueTS, list):
-                if len(valueTS) == 1:
-                    valueTS = valueTS[0]
-                else:
-                    raise TypeError("value to compare is not the Same type")
-            elif isinstance(valueResp, list):
-                if len(valueResp) == 1:
-                    valueResp = valueResp[0]
-                else:
-                    raise TypeError("value to compare is not the Same type")
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
             assert valueResp != valueTS
 
         case "in":
@@ -61,9 +44,13 @@ def validate_operator(operator, valueResp, valueTS):
             assert valueResp not in valueTS 
 
         case "greaterThan":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
             assert valueResp > valueTS
 
         case "lessThan":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
             assert valueResp < valueTS
 
         case "empty":
@@ -85,7 +72,17 @@ def validate_operator(operator, valueResp, valueTS):
             assert isinstance(valueResp, bool), "evaluation result is not a boolean"
             assert valueResp
 
-def validate_content_type(response, expected_type=None):
+def list_val(value):
+    if isinstance(value, list):
+        if len(value) == 1:
+            return value[0]
+        else:
+            TypeError("value to compare is not the Same type")
+    else:
+        return value
+    
+
+def validate_content_type(response, expected_type, operator):
     """
     Validates whether the server response matches the expected content type.
     If no expected_type is specified, no validation is performed.
@@ -95,18 +92,11 @@ def validate_content_type(response, expected_type=None):
     :return: None
     """
 
-    # If no expected type is specified, skip
-    if not expected_type:
-        log_to_file("Skipping Content-Type validation (no expected type provided).")
-        return
-
-    actual_content_type = response.headers.get("Content-Type", "").split(";")[0].strip()
+    actual_content_type = response.header.get("Content-Type", "")
     expected_type = parse_fhir_header(expected_type)
 
-    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
-
-    are_equal = actual_content_type == expected_type  # Python does not create a diff because it does not directly see 'string == string'
-    assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
+    log_to_file(f"Asserting Content-Type: expected '{expected_type}', got '{actual_content_type}'")
+    validate_operator(operator, actual_content_type, expected_type)
 
 
 def validate_responseCode(response, expected_codes, operator):

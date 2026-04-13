@@ -55,7 +55,6 @@ def replacer(match):
     
     raise Exception(f"Variable {var_name} could not be found")
 
-# Execute operation
 def execute_operation(operation):
 
     """
@@ -202,7 +201,6 @@ def execute_assertion(assertion):
         if int.res_id == assertion.get("sourceId"):
             response = int
                 
-            #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
     try:
             
         if "contentType" in assertion:   
@@ -266,9 +264,9 @@ def execute_assertion(assertion):
         if "validateProfileId" in assertion: # kann mit path oder expression
             #if operator is present it will be ignored
             #validate_profile_assertion(assertion.get("validateProfileId"))
+            raise NotImplementedError
             log_to_file("✓ Assertion passed")
 
-#hier fangen dann die Assertions an die zusammenhängen könnten
         if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
             if not operator:
                 operator = "equals"
@@ -282,9 +280,6 @@ def execute_assertion(assertion):
                 raise NotImplementedError("compareToSourceExpression is not implemented yet")
             elif "compareToSourcePath" in assertion:
                 raise NotImplementedError("compareToSourcePath is not implemented yet")
-        
-        
-            
                 
         if "defaultManualCompletion" in assertion:
             raise TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
@@ -295,6 +290,7 @@ def execute_assertion(assertion):
         raise
     
 def check_assertion(assertion):
+    #validate the assertion for connected Types
     print("do smth")
 
 # Fixture for dynamic test data
