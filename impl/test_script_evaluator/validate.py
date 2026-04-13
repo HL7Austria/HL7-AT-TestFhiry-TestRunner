@@ -62,6 +62,33 @@ def validate_response(assertion, response):
         #operator = assertion.get("operator")
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
+def execute_validator(cmd):
+    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, universal_newlines=True, shell=True)
+
+    if popen.stdout is None:
+        raise ValueError("Something went wrong with the subprocess")
+    
+    output = []
+    for line in popen.stdout:
+        output.append(line)
+    popen.stdout.close()
+    popen.wait()
+
+    return output
+
+def validateTS(testScript):
+    full_ts_path = get_full_path(testScript)
+    validator = get_full_path("test_script_evaluator/validator_cli.jar")
+
+
+    cmd = f"java -jar {validator} {full_ts_path} -tx n/a"
+    output = execute_validator(cmd)
+    try: 
+        check_result(output)
+    except AssertionError as ae:
+        raise Exception("TestScript not valid: " + str(ae))
+
+
 def validate_profile_assertion(profileRef: str, response: Interaction):
     log_to_file(f"Asserting profile {profileRef}")
 
@@ -72,23 +99,11 @@ def validate_profile_assertion(profileRef: str, response: Interaction):
     os.makedirs(get_full_path("temp"), exist_ok=True)
     with open(resource, "w") as f:
         f.write(response.body)
-    
-    popen = subprocess.Popen(
-        f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a",
-        stdout=subprocess.PIPE, universal_newlines=True, shell=True
-    )
 
-    if popen.stdout is None:
-        raise ValueError("Something went wrong with the subprocess")
-    
-    output = []
-    for line in popen.stdout:
-        output.append(line)
-    popen.stdout.close()
-    popen.wait()
+    cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
+    output = execute_validator(cmd)
     os.remove(resource)
     os.rmdir(get_full_path("temp"))
-
 
     return check_result(output)
 

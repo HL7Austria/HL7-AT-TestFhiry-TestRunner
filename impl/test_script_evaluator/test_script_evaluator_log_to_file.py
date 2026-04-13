@@ -569,7 +569,7 @@ def test_fhir_operations(testscript_data):
     
     testscript, resources = testscript_data
 
-    
+    #validateTS(testscript) --> given path of testScript
     #test capability
     #--> find out how important origin and destnation are
     fixture_list = get_fixture(testscript)
