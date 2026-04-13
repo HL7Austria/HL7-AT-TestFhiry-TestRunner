@@ -547,18 +547,17 @@ def TEST(test_data):
             except OperationError as oe:
                 raise TestScriptError("Test operation failed: ", oe)
 
-            except AssertionError as ae:
-                log_to_file(f"✗ TEST FAILED: {test_name} (but completed all actions)")
-
-            except TestExecutionError as e:
+            except:
                 raise
                 # Continue with next test even if this one was stopped
 
-            log_to_file(f"✓ TEST PASSED: {test_name}")
+        log_to_file(f"✓ TEST PASSED: {test_name}")
 
     except TestExecutionError as e:
         log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         #test schould get stopped, and next test needs to start
+    except AssertionError as ae:
+        log_to_file(f"✗ Test failed (but completed all actions)")
     
 def TEARDOWN(teardown_data):
 
