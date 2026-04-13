@@ -1,12 +1,12 @@
 import json
-from jsonpath_ng import parse, jsonpath
-from fhirpathpy import evaluate
-import json
-from jsonpath_ng import parse, jsonpath
-from fhirpathpy import evaluate
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+import subprocess
+import os
 from fhirpathpy import evaluate
 from lxml import etree
+from jsonpath_ng import parse
+from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+from impl.model.interaction import Interaction
+from impl.test_script_evaluator.utils import get_full_path
 
 
 """ 
@@ -17,6 +17,7 @@ DO NOT DO WHOLE ASSERTIONS
 
 --> add one for every assert??
 """
+
 
 
 def validate_content_type(response, expected_type=None):
@@ -60,6 +61,58 @@ def validate_response(assertion, response):
         log_to_file(f"Asserting response code {status_code} in {expected_codes}")
         #operator = assertion.get("operator")
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
+
+def validate_profile_assertion(profileRef: str, response: Interaction):
+    log_to_file(f"Asserting profile {profileRef}")
+
+    prof_folder = get_full_path("Profiles")
+    resource = get_full_path("temp/temp.json")
+    validator = get_full_path("test_script_evaluator/validator_cli.jar")
+
+    os.makedirs(get_full_path("temp"), exist_ok=True)
+    with open(resource, "w") as f:
+        f.write(response.body)
+    
+    popen = subprocess.Popen(
+        f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a",
+        stdout=subprocess.PIPE, universal_newlines=True, shell=True
+    )
+
+    if popen.stdout is None:
+        raise ValueError("Something went wrong with the subprocess")
+    
+    output = []
+    for line in popen.stdout:
+        output.append(line)
+    popen.stdout.close()
+    popen.wait()
+    os.remove(resource)
+    os.rmdir(get_full_path("temp"))
+
+
+    return check_result(output)
+
+def check_result(output):
+
+    errors = ""
+    warnings = ""
+    information = ""
+    start = False
+
+    for line in output:
+        if "*:" in line: #start getting errors after the Summary-start of the validator
+            start = True
+        if start:
+            if "Error" in line:
+                errors += "\n" + line
+            if "Warning" in line:
+                warnings += "\n" + line
+            if "Information" in line: #weis nicht obs sowas wirklich gibt
+                information += "\n" + line
+    if(errors != ""):
+        raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
+
+    return warnings + "\n" + information #if no warnings and no error
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
