@@ -61,6 +61,12 @@ def validate_response(assertion, response):
         #operator = assertion.get("operator")
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
+def assert_compareTo(fixture, assertion):
+    if "compareToSourceExpression" in assertion:
+        print("smth")
+    else:
+        print("smth")
+
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)

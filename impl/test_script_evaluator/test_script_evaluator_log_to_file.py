@@ -220,6 +220,35 @@ def execute_assertion(assertion):
                 
             elif assertion.get("direction") == "request":
                 log_to_file("direction request out of scope")
+        
+        if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals"]:
+                raise TestScriptError ("compareTo operator value not valid")
+            
+            if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
+                raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
+            
+            if not("path" in assertion or "expression" in assertion):
+                raise TestScriptError("compareTo is only compatible with expression or Path")
+            
+            fix = None
+            
+            for int in REQ_RESP:
+                if int.res_id == assertion.get("compareToSourceId"):
+                    fix = int
+            for fixt in FIXTURES:
+                if fixt.source_id == assertion.get("compareToSourceId"):
+                    fix = fixt
+
+            if fix is None:
+                raise TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+            
+            if not ("value" in assertion): #  Ignored if "assert.value" is used.
+                assert_compareTo(fix, assertion)
+
+
     except AssertionError as e:
         raise
     
