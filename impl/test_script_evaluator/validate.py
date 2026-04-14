@@ -77,12 +77,19 @@ def execute_validator(cmd):
     return output
 
 def validateTS(testScript):
-    full_ts_path = get_full_path(testScript)
     validator = get_full_path("test_script_evaluator/validator_cli.jar")
+    path = get_full_path("temp/temp.json")
+    ts_string = json.dumps(testScript)
 
+    os.makedirs(get_full_path("temp"), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(ts_string)
 
-    cmd = f"java -jar {validator} {full_ts_path} -tx n/a"
+    cmd = f"java -jar {validator} {path} -tx n/a"
     output = execute_validator(cmd)
+    os.remove(path)
+    os.rmdir(get_full_path("temp"))
+
     try: 
         check_result(output)
     except AssertionError as ae:

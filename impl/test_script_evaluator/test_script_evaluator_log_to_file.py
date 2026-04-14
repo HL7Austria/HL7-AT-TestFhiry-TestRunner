@@ -401,18 +401,11 @@ def save_fixtures(jsonFiles, fix_list):
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-def save_profile(profiles : list):
+def save_profile(profilerefs : list, profile_ids : list):
     #save profiles in a list full of ids and references
     global PROFILES
-    for prof in profiles:
-        PROFILES[prof.get("id")] = prof.get("reference")
-        
-        
-def save_profile(profiles : list):
-    #save profiles in a list full of ids and references
-    global PROFILES
-    for prof in profiles:
-        PROFILES[prof.get("id")] = prof.get("reference")
+    for prof, pId in zip(profilerefs, profile_ids):
+        PROFILES[pId.get("id")] = prof
         
         
 def handle_assertion_error(e, stop_test_on_fail : bool):
@@ -569,20 +562,24 @@ def test_fhir_operations(testscript_data):
     
     testscript, resources = testscript_data
 
-    #validateTS(testscript) --> given path of testScript
-    #test capability
-    #--> find out how important origin and destnation are
-    fixture_list = get_fixture(testscript)
-
-    variable_list = get_variables(testscript)
-
-
-    profile_list = get_profile(testscript)
-        # hier eine funktion die die jsonfiles von den profilen zurückgibt?
-    if profile_list:
-        save_profile(profile_list)
+    
         
     try:
+
+        #validateTS(testscript) #see if the TestScript is valid
+        #test capability
+        #--> find out how important origin and destnation are
+
+        fixture_list = get_fixture(testscript)
+
+        variable_list = get_variables(testscript)
+        
+
+        profile_list, prof_ids = get_profile(testscript)
+        # hier eine funktion die die jsonfiles von den profilen zurückgibt?
+        if profile_list:
+            save_profile(profile_list, prof_ids)
+
         if variable_list:
             save_variables(variable_list)
 

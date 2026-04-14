@@ -37,10 +37,13 @@ def get_fixture(testscript):
 
 def get_profile(testscript):
     profiles = []
+    profile_ids = []
     for profile in testscript.get("profile",[]):
         profiles.append(profile)
+    for prof_id in testscript.get("_profile", []):
+        profile_ids.append(prof_id)
     
-    return profiles
+    return profiles, profile_ids
 
 def get_all_profiles():
         PROFILE_FOLDER = "impl/Profiles"
