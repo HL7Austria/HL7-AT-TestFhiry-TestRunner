@@ -259,7 +259,6 @@ def execute_assertion(assertion):
             validate_response(assertion, response)
             log_to_file("✓ Assertion passed \n")
                 
-        elif assertion.get("direction") == "request":
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"

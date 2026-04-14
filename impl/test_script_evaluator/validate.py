@@ -186,6 +186,12 @@ def check_result(output: list[str]) -> str:
 
     return warnings + "\n" + information #if no warnings and no error
 
+def assert_compareTo(fixture, assertion):
+    if "compareToSourceExpression" in assertion:
+        print("smth")
+    else:
+        print("smth")
+
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
