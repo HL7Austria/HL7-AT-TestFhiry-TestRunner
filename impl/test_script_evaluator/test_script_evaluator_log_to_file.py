@@ -543,8 +543,8 @@ def test_fhir_operations(testscript_data):
     HERE --> should only test the basic TS all rounder things (Capability, save variables, save profiles)
     everything that is not defined by an action!!
 
-    1. validate TS itself
-    2. test server
+    1. test server
+    2. validate TS itself
     3. test capability
     4. save variables
     5. save profiles

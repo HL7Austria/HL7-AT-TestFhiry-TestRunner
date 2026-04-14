@@ -9,6 +9,7 @@ from impl.model.interaction import Interaction
 from impl.test_script_evaluator.utils import get_full_path
 
 
+
 """ 
 make small validations
 DO NOT DO WHOLE ASSERTIONS
@@ -164,7 +165,6 @@ def doPath(body, path:str):
     #print("not yet supported")
     return result
 
-
 def xmlPath(body : str, path:str): #get xml as str?
 
     
@@ -186,7 +186,4 @@ def jsonPath(body : str, path:str):
     jsonpath_expr = parse(path)
     return ([match.value for match in jsonpath_expr.find(body)])
     
-
-
-
 

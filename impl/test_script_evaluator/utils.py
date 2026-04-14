@@ -2,6 +2,8 @@ from pathlib import Path
 import os
 from datetime import datetime
 import json
+import xml.etree.ElementTree as ET
+
 
 """
 everything that is small and modular that is not assertions and is not needed anywhere else
@@ -154,5 +156,17 @@ def parse_fhir_header(value : str):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
+def is_xml_or_json(string):
+    try:
+        json.loads(string)
+        return "json"
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        ET.fromstring(string)
+        return "xml"
+    except ET.ParseError:
+        return "Neither XML nor JSON"
 
 
