@@ -117,7 +117,7 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
 
     return check_result(output)
 
-def check_result(output) -> str:
+def check_result(output: list[str]) -> str:
 
     errors = ""
     warnings = ""
