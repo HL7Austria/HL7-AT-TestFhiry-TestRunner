@@ -289,9 +289,6 @@ def execute_assertion(assertion):
     except AssertionError as e:
         raise
     
-def check_assertion(assertion):
-    #validate the assertion for connected Types
-    print("do smth")
 
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
