@@ -4,6 +4,7 @@ import pytest
 from datetime import datetime
 import re
 
+from typing import Any
 from impl.exception.Error import *
 from validate import *
 from impl.transactions.transactions import *
@@ -57,12 +58,11 @@ def replacer(match):
     raise Exception(f"Variable {var_name} could not be found")
 
 
-def execute_operation(operation: dict):
+def execute_operation(operation: dict[str, Any]):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
 
     :param operation: Dictionary containing operation details.
-    :return: HTTP response object.
     :raises: NotImplementedError for unsupported methods.
     :raises: TestScriptError for critical Errors while executing.
     """
@@ -401,7 +401,7 @@ def save_fixtures(jsonFiles, fix_list):
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-def save_profile(profilerefs : list, profile_ids : list):
+def save_profile(profilerefs : list[str], profile_ids : list[dict["id",str]]) -> None:
     #save profiles in a list full of ids and references
     global PROFILES
     for prof, pId in zip(profilerefs, profile_ids):

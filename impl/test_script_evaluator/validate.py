@@ -1,6 +1,7 @@
 import json
 import subprocess
 import os
+from typing import Any
 from fhirpathpy import evaluate
 from lxml import etree
 from jsonpath_ng import parse
@@ -64,20 +65,21 @@ def validate_response(assertion, response):
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 def execute_validator(cmd):
-    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, universal_newlines=True, shell=True)
+    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
 
     if popen.stdout is None:
         raise ValueError("Something went wrong with the subprocess")
     
-    output = []
-    for line in popen.stdout:
-        output.append(line)
+    raw = popen.stdout.read()
     popen.stdout.close()
     popen.wait()
 
+    decoded = raw.decode("utf-8")
+    output = decoded.splitlines(keepends=True)
+
     return output
 
-def validateTS(testScript):
+def validateTS(testScript: dict[str, Any]):
     validator = get_full_path("test_script_evaluator/validator_cli.jar")
     path = get_full_path("temp/temp.json")
     ts_string = json.dumps(testScript)
@@ -97,7 +99,7 @@ def validateTS(testScript):
         raise Exception("TestScript not valid: " + str(ae))
 
 
-def validate_profile_assertion(profileRef: str, response: Interaction):
+def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     log_to_file(f"Asserting profile {profileRef}")
 
     prof_folder = get_full_path("Profiles")
@@ -115,7 +117,7 @@ def validate_profile_assertion(profileRef: str, response: Interaction):
 
     return check_result(output)
 
-def check_result(output):
+def check_result(output) -> str:
 
     errors = ""
     warnings = ""

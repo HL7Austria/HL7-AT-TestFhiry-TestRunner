@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import json
 import xml.etree.ElementTree as ET
+from typing import Literal
 
 
 """
@@ -17,11 +18,13 @@ timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 LOG_FILE_PATH = os.path.abspath(RESULTS_DIR / log_filename)
 
+ContentType = Literal['json', 'xml', 'unknown']
+
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
 
-def get_full_path(path:str):
+def get_full_path(path:str) -> Path:
     return BASE_DIR / path
 
 
@@ -37,7 +40,7 @@ def get_fixture(testscript):
         fixtures.append(fixture)
     return fixtures
 
-def get_profile(testscript):
+def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     profiles = []
     profile_ids = []
     for profile in testscript.get("profile",[]):
@@ -156,7 +159,9 @@ def parse_fhir_header(value : str):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
-def is_xml_or_json(string):
+
+
+def string_type(string: str) -> ContentType:
     try:
         json.loads(string)
         return "json"
@@ -167,6 +172,6 @@ def is_xml_or_json(string):
         ET.fromstring(string)
         return "xml"
     except ET.ParseError:
-        return "Neither XML nor JSON"
+        return "unknown"
 
 
