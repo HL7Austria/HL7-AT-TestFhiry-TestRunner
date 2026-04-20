@@ -222,11 +222,11 @@ def execute_assertion(assertion):
         if "contentType" in assertion:   
             contentType = True
             validate_content_type(response, assertion.get("contentType"))
-            log_to_file("✓ Assertion passed")
+            log_to_file("✓ Assertion passed \n")
                 
         if assertion.get("direction") == "response" and not contentType:
             validate_response(assertion, response)
-            log_to_file("✓ Assertion passed")
+            log_to_file("✓ Assertion passed \n")
                 
         elif assertion.get("direction") == "request":
             log_to_file("direction request out of scope")
@@ -462,6 +462,7 @@ def SETUP(setup_data, fixture_list : list, resources):
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             log_to_file(f"✓ SETUP SUCCESSFUL")
+
     except OperationError as oe:
         raise TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except TestExecutionError as teE:
@@ -498,6 +499,7 @@ def TEST(test_data):
 
             except AssertionError as ae:
                 failed = True
+                log_to_file("✗ Assertion failed!" + str(ae))
 
             except TestExecutionError as e:
                 raise
@@ -566,7 +568,9 @@ def test_fhir_operations(testscript_data):
         
     try:
 
-        #validateTS(testscript) #see if the TestScript is valid
+        validateTS(testscript) #see if the TestScript is valid
+        print("testScript is valid!") #debug message
+
         #test capability
         #--> find out how important origin and destnation are
 
