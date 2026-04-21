@@ -7,6 +7,8 @@ from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from fhirpathpy import evaluate
 from lxml import etree
+from typing import Literal, Any
+from impl.model.interaction import Interaction
 
 
 """ 
@@ -18,8 +20,68 @@ DO NOT DO WHOLE ASSERTIONS
 --> add one for every assert??
 """
 
+operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
-def validate_content_type(response, expected_type=None):
+
+def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
+    
+    match operator:
+        case "equals":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
+            assert valueResp == valueTS 
+
+        case "notEquals":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
+            assert valueResp != valueTS
+
+        case "in":
+            assert valueResp in valueTS
+
+        case "notIn":
+            assert valueResp not in valueTS 
+
+        case "greaterThan":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
+            assert valueResp > valueTS
+
+        case "lessThan":
+            valueTS = list_val(valueTS)
+            valueResp = list_val(valueResp)
+            assert valueResp < valueTS
+
+        case "empty":
+            assert not valueResp #not only is none?
+
+        case "notEmpty":
+            assert valueResp 
+
+        case "contains":
+            assert isinstance(valueResp, str), "contains Operator is only valid with a string"
+            assert isinstance(valueTS, str), "contains Operator is only valid with a string"
+            assert valueTS in valueResp
+
+        case "notContains":
+            assert isinstance(valueResp, str), "notContains Operator is only valid with a string"
+            assert isinstance(valueTS, str), "notContains Operator is only valid with a string"
+            assert valueTS not in valueResp
+        case "eval":
+            assert isinstance(valueResp, bool), "evaluation result is not a boolean"
+            assert valueResp
+
+def list_val(value) -> Any:
+    if isinstance(value, list):
+        if len(value) == 1:
+            return value[0]
+        else:
+            TypeError("value to compare is not the Same type")
+    else:
+        return value
+    
+
+def validate_content_type(response : Interaction, expected_type, operator: operator_type) -> None:
     """
     Validates whether the server response matches the expected content type.
     If no expected_type is specified, no validation is performed.
@@ -29,37 +91,25 @@ def validate_content_type(response, expected_type=None):
     :return: None
     """
 
-    # If no expected type is specified, skip
-    if not expected_type:
-        log_to_file("Skipping Content-Type validation (no expected type provided).")
-        return
-
-    actual_content_type = response.headers.get("Content-Type", "").split(";")[0].strip()
+    actual_content_type = response.header.get("Content-Type", "")
     expected_type = parse_fhir_header(expected_type)
 
-    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
-
-    are_equal = actual_content_type == expected_type  # Python does not create a diff because it does not directly see 'string == string'
-    assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
+    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
+    validate_operator(operator, actual_content_type, expected_type)
 
 
-def validate_response(assertion, response):
-    """
-    Validates HTTP response against assertion rules.
+def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
+    status_code = str(response.status_code)
+    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
+    validate_operator(operator, status_code, expected_codes)
 
-    Checks if response status code matches expected codes from assertion.
+def validate_response(response: Interaction, expected, operator: operator_type) -> None:
+    if not response.reason:
+        raise AssertionError("No response-reason found!")
+    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
+    validate_operator(operator, response.reason, expected)
 
-    :param assertion: Dictionary containing validation rules with 'responseCode' key.
-    :param response: The HTTP response object returned by the server.
-    :return: None
-    """
 
-    if "responseCode" in assertion:
-        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-        status_code = str(response.status_code)
-        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-        #operator = assertion.get("operator")
-        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
@@ -91,8 +141,6 @@ def doPath(body, path:str):
 
 
 def xmlPath(body : str, path:str): #get xml as str?
-
-    
     root = etree.fromstring(body)
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
 
