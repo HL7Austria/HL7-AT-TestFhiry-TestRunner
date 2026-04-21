@@ -94,22 +94,29 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     actual_content_type = response.header.get("Content-Type", "")
     expected_type = parse_fhir_header(expected_type)
 
-    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
-    validate_operator(operator, actual_content_type, expected_type)
+    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
+
+    are_equal = actual_content_type == expected_type  # Python does not create a diff because it does not directly see 'string == string'
+    assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
 
 
-def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
-    status_code = str(response.status_code)
-    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
-    validate_operator(operator, status_code, expected_codes)
+def validate_response(assertion, response):
+    """
+    Validates HTTP response against assertion rules.
 
-def validate_response(response: Interaction, expected, operator: operator_type) -> None:
-    if not response.reason:
-        raise AssertionError("No response-reason found!")
-    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
-    validate_operator(operator, response.reason, expected)
+    Checks if response status code matches expected codes from assertion.
 
+    :param assertion: Dictionary containing validation rules with 'responseCode' key.
+    :param response: The HTTP response object returned by the server.
+    :return: None
+    """
 
+    if "responseCode" in assertion:
+        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+        status_code = str(response.status_code)
+        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+        #operator = assertion.get("operator")
+        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
 def execute_validator(cmd):
     popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
@@ -185,18 +192,13 @@ def check_result(output: list[str]) -> str:
         raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
 
     return warnings + "\n" + information #if no warnings and no error
+
 def eval_compareTo(fixture, assertion : dict[str,Any]):
     if "compareToSourceExpression" in assertion:
         return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
         return doPath(fixture.body, assertion.get("compareToSourcePath"))
 
-
-def assert_compareTo(fixture, assertion):
-    if "compareToSourceExpression" in assertion:
-        print("smth")
-    else:
-        print("smth")
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
