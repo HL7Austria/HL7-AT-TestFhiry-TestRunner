@@ -9,6 +9,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_
 from impl.model.interaction import Interaction
 from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
+from lxml import etree
 
 
 """ 
