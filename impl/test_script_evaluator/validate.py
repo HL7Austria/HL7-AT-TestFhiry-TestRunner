@@ -81,7 +81,6 @@ def list_val(value) -> Any:
     else:
         return value
     
-
 def validate_content_type(response : Interaction, expected_type, operator: operator_type) -> None:
     """
     Validates whether the server response matches the expected content type.
@@ -95,30 +94,21 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     actual_content_type = response.header.get("Content-Type", "")
     expected_type = parse_fhir_header(expected_type)
 
-    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
-
-    are_equal = actual_content_type == expected_type  # Python does not create a diff because it does not directly see 'string == string'
-    assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
+    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
+    validate_operator(operator, actual_content_type, expected_type)
 
 
-def validate_response(assertion, response):
-    """
-    Validates HTTP response against assertion rules.
+def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
+    status_code = str(response.status_code)
+    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
+    validate_operator(operator, status_code, expected_codes)
 
-    Checks if response status code matches expected codes from assertion.
-
-    :param assertion: Dictionary containing validation rules with 'responseCode' key.
-    :param response: The HTTP response object returned by the server.
-    :return: None
-    """
-
-    if "responseCode" in assertion:
-        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
-        status_code = str(response.status_code)
-        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
-        #operator = assertion.get("operator")
-        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
-
+def validate_response(response: Interaction, expected, operator: operator_type) -> None:
+    if not response.reason:
+        raise AssertionError("No response-reason found!")
+    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
+    validate_operator(operator, response.reason, expected)
+    
 def execute_validator(cmd):
     popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
 
