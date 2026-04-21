@@ -185,12 +185,12 @@ def check_result(output: list[str]) -> str:
         raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
 
     return warnings + "\n" + information #if no warnings and no error
-
-def assert_compareTo(fixture, assertion):
+def eval_compareTo(fixture, assertion : dict[str,Any]):
     if "compareToSourceExpression" in assertion:
-        print("smth")
-    else:
-        print("smth")
+        return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
+    elif "compareToSourcePath" in assertion:
+        return doPath(fixture.body, assertion.get("compareToSourcePath"))
+
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?

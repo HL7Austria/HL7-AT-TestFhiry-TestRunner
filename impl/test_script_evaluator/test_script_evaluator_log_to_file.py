@@ -202,10 +202,51 @@ def execute_assertion(assertion):
 
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
-            response = int
-                
+            response = int      
+            #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
+
+    compare_val = assertion.get("value") #empty if there is none
     try:
+
+        if "compareToSourceId" in assertion:
+                if not operator:
+                    operator = "equals"
+                elif operator not in ["equals", "notEquals"]:
+                    raise TestScriptError ("compareTo operator value not valid")
+                
+                if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
+                    raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
+                
+                fix = None
+                for int in REQ_RESP:
+                    if int.res_id == assertion.get("compareToSourceId"):
+                        fix = int
+                for fixt in FIXTURES:
+                    if fixt.source_id == assertion.get("compareToSourceId"):
+                        fix = fixt
+
+                if fix is None:
+                    raise TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+                
+                if not ("value" in assertion): #  Ignored if "assert.value" is used.
+                    compare_val = eval_compareTo(fix, assertion)
+
+        if "validateProfileId" in assertion:
+            #validate_profile_assertion(assertion.get("validateProfileId"))
+            log_to_file("✓ Assertion passed")
             
+            contentType = False
+            if "contentType" in assertion:   
+                contentType = True
+                validate_content_type(response, assertion.get("contentType"))
+                log_to_file("✓ Assertion passed")
+        """
+        The rest of the assertions are to be added here!
+        
+        --> compare_val is used in expression and path (I found no other uses but it is implemented in a way that allowes more uses)
+        --> No Rule in the official TestScript spec says that compareTo is supposed to only work with expression and path, only that it does work with these two
+        """
+
         if "contentType" in assertion:   
             if not operator:
                 operator = "contains"
@@ -285,26 +326,12 @@ def execute_assertion(assertion):
         if "minimumId" in assertion: #kann mit path oder expression
             #operator will be ignored
             raise NotImplementedError
-
-        if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
-            if not operator:
-                operator = "equals"
-            elif operator not in ["equals", "notEquals"]:
-                raise TestScriptError ("compareTo operator value not valid")
-            
-            if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
-                raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
-            
-            if "compareToSourceExpression" in assertion:
-                raise NotImplementedError("compareToSourceExpression is not implemented yet")
-            elif "compareToSourcePath" in assertion:
-                raise NotImplementedError("compareToSourcePath is not implemented yet")
-                
         if "defaultManualCompletion" in assertion:
             raise TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
                 
         elif assertion.get("direction") == "request" or "requestMethod" in assertion or "requestUrl" in assertion:
             log_to_file("direction request out of scope")
+
     except AssertionError as e:
         raise
     
