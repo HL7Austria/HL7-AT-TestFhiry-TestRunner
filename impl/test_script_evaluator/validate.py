@@ -7,6 +7,7 @@ from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from fhirpathpy import evaluate
 from lxml import etree
+from typing import Literal, Any
 from impl.model.interaction import Interaction
 
 
@@ -19,12 +20,10 @@ DO NOT DO WHOLE ASSERTIONS
 --> add one for every assert??
 """
 
+operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
-def validate_operator(operator, valueResp, valueTS):
-    #	equals | notEquals | in | notIn | greaterThan | lessThan | empty | notEmpty | contains | notContains | eval | manualEval
 
-    #https://hl7.org/fhir/testing.html#assertion-table
-
+def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
     
     match operator:
         case "equals":
@@ -54,25 +53,25 @@ def validate_operator(operator, valueResp, valueTS):
             assert valueResp < valueTS
 
         case "empty":
-            assert valueResp is None
+            assert not valueResp #not only is none?
 
         case "notEmpty":
             assert valueResp 
 
         case "contains":
-            assert isinstance(valueResp, str)
-            assert isinstance(valueTS, str)
+            assert isinstance(valueResp, str), "contains Operator is only valid with a string"
+            assert isinstance(valueTS, str), "contains Operator is only valid with a string"
             assert valueTS in valueResp
 
         case "notContains":
-            assert isinstance(valueResp, str)
-            assert isinstance(valueTS, str)
+            assert isinstance(valueResp, str), "notContains Operator is only valid with a string"
+            assert isinstance(valueTS, str), "notContains Operator is only valid with a string"
             assert valueTS not in valueResp
         case "eval":
             assert isinstance(valueResp, bool), "evaluation result is not a boolean"
             assert valueResp
 
-def list_val(value):
+def list_val(value) -> Any:
     if isinstance(value, list):
         if len(value) == 1:
             return value[0]
@@ -82,7 +81,7 @@ def list_val(value):
         return value
     
 
-def validate_content_type(response, expected_type, operator):
+def validate_content_type(response : Interaction, expected_type, operator: operator_type) -> None:
     """
     Validates whether the server response matches the expected content type.
     If no expected_type is specified, no validation is performed.
@@ -99,14 +98,16 @@ def validate_content_type(response, expected_type, operator):
     validate_operator(operator, actual_content_type, expected_type)
 
 
-def validate_responseCode(response, expected_codes, operator):
+def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
     status_code = str(response.status_code)
     log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
-def validate_response(response, expected, operator):
-    log_to_file(f"Asserting response {response} {operator} {expected}")
-    validate_operator(operator, response, expected)
+def validate_response(response: Interaction, expected, operator: operator_type) -> None:
+    if not response.reason:
+        raise AssertionError("No response-reason found!")
+    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
+    validate_operator(operator, response.reason, expected)
 
 
 
