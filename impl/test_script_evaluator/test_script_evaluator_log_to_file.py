@@ -4,14 +4,16 @@ import pytest
 from datetime import datetime
 import re
 
-from impl.transactions.transactions import *
+from typing import Any
 from impl.exception.Error import *
 from validate import *
+from impl.transactions.transactions import *
 from configuration_manager import get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
 from impl.model.variable import Variable
 from utils import *
+
 
 
 saved_resource_id = ""
@@ -20,8 +22,8 @@ log_filename = f"test_results_{timestamp}.txt"
 
 FIXTURES = []
 REQ_RESP = []
-
 VARIABLES = []
+PROFILES = {} #saving profilesIDs with the references
 
 # Init logfile
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -55,13 +57,12 @@ def replacer(match):
     
     raise Exception(f"Variable {var_name} could not be found")
 
-def execute_operation(operation):
 
+def execute_operation(operation: dict[str, Any]):
     """
     Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
 
     :param operation: Dictionary containing operation details.
-    :return: HTTP response object.
     :raises: NotImplementedError for unsupported methods.
     :raises: TestScriptError for critical Errors while executing.
     """
@@ -111,16 +112,18 @@ def execute_operation(operation):
                 else:
                     response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
-                global saved_resource_id
-                try:
-                    saved_resource_id = response.json().get("id")
-                except ValueError:
-                    location = response.headers.get("Location", "")
-                    if location:
-                        saved_resource_id = location.rstrip("/").split("/")[-3]
-                        log_to_file(f"ID from Location header: {saved_resource_id}")
-                    else:
-                        raise ValueError("No ID found in response or Location header")
+            global saved_resource_id
+            try:
+                saved_resource_id = response.json().get("id")
+            except ValueError:
+                location = response.headers.get("Location", "")
+                if location:
+                    saved_resource_id = location.rstrip("/").split("/")[-3]
+                    log_to_file(f"ID from Location header: {saved_resource_id}")
+                else:
+                    raise ValueError("No ID found in response or Location header")
+            finally:
+                log_to_file(f"Accessible at: {url}/{saved_resource_id}")
 
                 
         elif type == "update":
@@ -234,6 +237,29 @@ def execute_assertion(assertion):
             else:
                 raise AssertionError("No Response-display has been sent")
 
+        if "validateProfileId" in assertion:
+            msg = ""
+
+            if PROFILES:
+                #save temporary file with response
+                msg = validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
+            else:
+                raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
+
+            log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
+
+
+        contentType = False
+        if "contentType" in assertion:   
+            contentType = True
+            validate_content_type(response, assertion.get("contentType"))
+            log_to_file("✓ Assertion passed \n")
+                
+        if assertion.get("direction") == "response" and not contentType:
+            validate_response(assertion, response)
+            log_to_file("✓ Assertion passed \n")
+                
+        elif assertion.get("direction") == "request":
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
@@ -260,12 +286,6 @@ def execute_assertion(assertion):
         if "minimumId" in assertion: #kann mit path oder expression
             #operator will be ignored
             raise NotImplementedError
-            
-        if "validateProfileId" in assertion: # kann mit path oder expression
-            #if operator is present it will be ignored
-            #validate_profile_assertion(assertion.get("validateProfileId"))
-            raise NotImplementedError
-            log_to_file("✓ Assertion passed")
 
         if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
             if not operator:
@@ -457,7 +477,14 @@ def save_fixtures(jsonFiles, fix_list):
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-def handle_assertion_error(e, stop_test_on_fail): # could be put into utils
+def save_profile(profilerefs : list[str], profile_ids : list[dict["id",str]]) -> None:
+    #save profiles in a list full of ids and references
+    global PROFILES
+    for prof, pId in zip(profilerefs, profile_ids):
+        PROFILES[pId.get("id")] = prof
+        
+        
+def handle_assertion_error(e, stop_test_on_fail : bool):
     """
     Logs the AssertionError and decides whether to stop or continue the test.
 
@@ -494,6 +521,7 @@ def SETUP(setup_data, fixture_list : list, resources):
         if fixture_list: #if there are fixtures to save
             save_fixtures(resources, fixture_list)
 
+
         if FIXTURES:
             for fix1 in FIXTURES:
                 for fix2 in FIXTURES:
@@ -510,6 +538,7 @@ def SETUP(setup_data, fixture_list : list, resources):
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             log_to_file(f"✓ SETUP SUCCESSFUL")
+
     except OperationError as oe:
         raise TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except TestExecutionError as teE:
@@ -532,7 +561,7 @@ def TEST(test_data):
 
     test_name = test_data.get('name', 'Unnamed Test')
     log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
-
+    failed = False
 
     try:
       
@@ -544,18 +573,23 @@ def TEST(test_data):
             except OperationError as oe:
                 raise TestScriptError("Test operation failed: ", oe)
 
-            except:
+            except AssertionError as ae:
+                failed = True
+                log_to_file("✗ Assertion failed!" + str(ae))
+
+            except TestExecutionError as e:
                 raise
                 # Continue with next test even if this one was stopped
-
-        log_to_file(f"✓ TEST PASSED: {test_name}")
 
     except TestExecutionError as e:
         log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         #test schould get stopped, and next test needs to start
-    except AssertionError as ae:
-        log_to_file(f"✗ Test failed (but completed all actions)")
-    
+    finally:
+        if failed:
+            log_to_file(f"✗ TEST FAILED: {test_name}")
+        else : 
+            log_to_file(f"✓ TEST PASSED: {test_name}")
+        
 def TEARDOWN(teardown_data):
 
     """
@@ -587,8 +621,8 @@ def test_fhir_operations(testscript_data):
     HERE --> should only test the basic TS all rounder things (Capability, save variables, save profiles)
     everything that is not defined by an action!!
 
-    1. validate TS itself
-    2. test server
+    1. test server
+    2. validate TS itself
     3. test capability
     4. save variables
     5. save profiles
@@ -607,13 +641,25 @@ def test_fhir_operations(testscript_data):
     testscript, resources = testscript_data
 
     
-    #test capability
-    #--> find out how important origin and destnation are
-    fixture_list = get_fixture(testscript)
-
-    variable_list = get_variables(testscript)
-
+        
     try:
+
+        validateTS(testscript) #see if the TestScript is valid
+        print("testScript is valid!") #debug message
+
+        #test capability
+        #--> find out how important origin and destnation are
+
+        fixture_list = get_fixture(testscript)
+
+        variable_list = get_variables(testscript)
+        
+
+        profile_list, prof_ids = get_profile(testscript)
+        # hier eine funktion die die jsonfiles von den profilen zurückgibt?
+        if profile_list:
+            save_profile(profile_list, prof_ids)
+
         if variable_list:
             save_variables(variable_list)
 
@@ -641,5 +687,5 @@ def test_fhir_operations(testscript_data):
         
     FIXTURES.clear() 
     REQ_RESP.clear()
-
+    PROFILES.clear()
     VARIABLES.clear()

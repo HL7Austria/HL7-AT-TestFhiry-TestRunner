@@ -1,14 +1,14 @@
 import json
-from jsonpath_ng import parse, jsonpath
-from fhirpathpy import evaluate
-import json
-from jsonpath_ng import parse, jsonpath
-from fhirpathpy import evaluate
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+import subprocess
+import os
+from typing import Any
 from fhirpathpy import evaluate
 from lxml import etree
-from typing import Literal, Any
+from jsonpath_ng import parse
+from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
+from impl.test_script_evaluator.utils import get_full_path
+from typing import Literal, Any
 
 
 """ 
@@ -111,6 +111,81 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
 
 
 
+def execute_validator(cmd):
+    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
+
+    if popen.stdout is None:
+        raise ValueError("Something went wrong with the subprocess")
+    
+    raw = popen.stdout.read()
+    popen.stdout.close()
+    popen.wait()
+
+    decoded = raw.decode("utf-8")
+    output = decoded.splitlines(keepends=True)
+
+    return output
+
+def validateTS(testScript: dict[str, Any]):
+    validator = get_full_path("test_script_evaluator/validator_cli.jar")
+    path = get_full_path("temp/temp.json")
+    ts_string = json.dumps(testScript)
+
+    os.makedirs(get_full_path("temp"), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(ts_string)
+
+    cmd = f"java -jar {validator} {path} -tx n/a"
+    output = execute_validator(cmd)
+    os.remove(path)
+    os.rmdir(get_full_path("temp"))
+
+    try: 
+        check_result(output)
+    except AssertionError as ae:
+        raise Exception("TestScript not valid: " + str(ae))
+
+
+def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
+    log_to_file(f"Asserting profile {profileRef}")
+
+    prof_folder = get_full_path("Profiles")
+    resource = get_full_path("temp/temp.json")
+    validator = get_full_path("test_script_evaluator/validator_cli.jar")
+
+    os.makedirs(get_full_path("temp"), exist_ok=True)
+    with open(resource, "w") as f:
+        f.write(response.body)
+
+    cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
+    output = execute_validator(cmd)
+    os.remove(resource)
+    os.rmdir(get_full_path("temp"))
+
+    return check_result(output)
+
+def check_result(output: list[str]) -> str:
+
+    errors = ""
+    warnings = ""
+    information = ""
+    start = False
+
+    for line in output:
+        if "*:" in line: #start getting errors after the Summary-start of the validator
+            start = True
+        if start:
+            if "Error" in line:
+                errors += "\n" + line
+            if "Warning" in line:
+                warnings += "\n" + line
+            if "Information" in line: #weis nicht obs sowas wirklich gibt
+                information += "\n" + line
+    if(errors != ""):
+        raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
+
+    return warnings + "\n" + information #if no warnings and no error
+
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
@@ -139,7 +214,6 @@ def doPath(body, path:str):
     #print("not yet supported")
     return result
 
-
 def xmlPath(body : str, path:str): #get xml as str?
     root = etree.fromstring(body)
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
@@ -159,7 +233,4 @@ def jsonPath(body : str, path:str):
     jsonpath_expr = parse(path)
     return ([match.value for match in jsonpath_expr.find(body)])
     
-
-
-
 

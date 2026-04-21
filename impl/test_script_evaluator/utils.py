@@ -2,6 +2,9 @@ from pathlib import Path
 import os
 from datetime import datetime
 import json
+import xml.etree.ElementTree as ET
+from typing import Literal
+
 
 """
 everything that is small and modular that is not assertions and is not needed anywhere else
@@ -15,8 +18,14 @@ timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"test_results_{timestamp}.txt"
 LOG_FILE_PATH = os.path.abspath(RESULTS_DIR / log_filename)
 
+ContentType = Literal['json', 'xml', 'unknown']
+
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
+
+
+def get_full_path(path:str) -> Path:
+    return BASE_DIR / path
 
 
 def log_to_file(message: str):
@@ -31,12 +40,15 @@ def get_fixture(testscript):
         fixtures.append(fixture)
     return fixtures
 
-def get_profile(testscript):
+def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     profiles = []
+    profile_ids = []
     for profile in testscript.get("profile",[]):
         profiles.append(profile)
+    for prof_id in testscript.get("_profile", []):
+        profile_ids.append(prof_id)
     
-    return profiles
+    return profiles, profile_ids
 
 def get_all_profiles():
         PROFILE_FOLDER = "impl/Profiles"
@@ -82,7 +94,6 @@ def get_variables(testscript):
         vars.append(var)
     return vars
 
-# Help function for loading JSON files
 def load_json(path : str):
     """
     Loads a JSON File from the given path.
@@ -93,11 +104,15 @@ def load_json(path : str):
     if path.startswith("impl"):
         path = path.replace("impl/", "")
     print(path)
-    full_path = BASE_DIR / path
+
+    if path.startswith("impl"):
+        path = path.replace("impl/", "")
+    print(path)
+    full_path = get_full_path(path)
     printInfoJson(path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
+    
 def load_json_list(paths : list[str]):
     json_list = []
 
@@ -105,7 +120,7 @@ def load_json_list(paths : list[str]):
         return None
 
     for path in paths:
-        full_path = BASE_DIR / path
+        full_path = get_full_path(path)
         printInfoJson(path)
 
         with open(full_path, "r", encoding="utf-8") as f:
@@ -144,5 +159,19 @@ def parse_fhir_header(value : str):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
+
+
+def string_type(string: str) -> ContentType:
+    try:
+        json.loads(string)
+        return "json"
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        ET.fromstring(string)
+        return "xml"
+    except ET.ParseError:
+        return "unknown"
 
 
