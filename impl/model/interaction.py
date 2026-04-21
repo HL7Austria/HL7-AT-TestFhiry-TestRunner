@@ -1,10 +1,10 @@
 class Interaction:
 
-    def __init__(self,direction , header, interaction,status_code = "", res_id = ""):
-        self.direction = direction      # response or request (could also rename to type)
+    def __init__(self , header, interaction,status_code = "", res_id = "", reason = ""):
         self.header = header            # header of interaction
         self.body = interaction  # Body of interaction
-        self.status_code = status_code  # just trying new things
+        self.status_code = status_code  # status code
+        self.reason = reason
         self.res_id = res_id
 
     def __repr__(self):

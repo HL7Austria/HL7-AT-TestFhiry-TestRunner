@@ -169,10 +169,10 @@ def execute_operation(operation: dict[str, Any]):
 
     #trying first to get response to run, afterwards look at request
     int_id = operation.get("responseId")
-    direction = "response"
     global last_interaction
-    last_interaction = Interaction(direction, response.headers, response.text)
+    last_interaction = Interaction(response.headers, response.text)
     last_interaction.status_code = response.status_code
+    last_interaction.reason = response.reason #for later
     last_interaction.res_id = int_id
     
 
@@ -181,8 +181,6 @@ def execute_operation(operation: dict[str, Any]):
 
 def execute_assertion(assertion):
     global last_interaction
-    #If assertion is on a Fixture (Patient etc.) --> see if it can be found in FIXTURES 
-        #--> if it can some assertions aren't valid anymore
 
     """
     Assertion error should be handled by the Test or setup
@@ -198,13 +196,46 @@ def execute_assertion(assertion):
     result = pattern.sub(replacer, json_str)
     assertion = json.loads(result)
 
+    operator = assertion.get("operator")
     response = last_interaction
+
+
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
             response = int
                 
-            #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
     try:
+            
+        if "contentType" in assertion:   
+            if not operator:
+                operator = "contains"
+            elif operator not in ["contains", "notContains", "equals", "notEquals"]:
+                raise TestScriptError("contentType operator value not valid")
+            
+            validate_content_type(response, assertion.get("contentType"), operator)
+            log_to_file("✓ Assertion passed")
+        
+        elif "responseCode" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan"]:
+                raise TestScriptError("responseCode operator value not valid")
+            
+            expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+            validate_responseCode(response, expected_codes, operator)
+            log_to_file("✓ Assertion passed")
+
+        elif "response" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals"]:
+                raise TestScriptError("responseCode operator value not valid")
+            
+            if response.reason != "":
+                expected_resp = assertion.get("response")
+                validate_response(response.reason, response)
+            else:
+                raise AssertionError("No Response-display has been sent")
 
         if "validateProfileId" in assertion:
             msg = ""
@@ -229,11 +260,56 @@ def execute_assertion(assertion):
             log_to_file("✓ Assertion passed \n")
                 
         elif assertion.get("direction") == "request":
+        elif "resource" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals"]:
+                raise TestScriptError("resource operator value not valid")
+        
+        elif "headerField" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
+                raise TestScriptError("headerFiedld operator value not valid")
+            
+        elif "navigationLinks" in assertion:
+            #operator will be ignored
+            raise NotImplementedError
+        
+        elif "expression" in assertion:
+            raise NotImplementedError
+        
+        elif "path" in assertion:
+            raise NotImplementedError
+
+        
+        if "minimumId" in assertion: #kann mit path oder expression
+            #operator will be ignored
+            raise NotImplementedError
+
+        if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals"]:
+                raise TestScriptError ("compareTo operator value not valid")
+            
+            if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
+                raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
+            
+            if "compareToSourceExpression" in assertion:
+                raise NotImplementedError("compareToSourceExpression is not implemented yet")
+            elif "compareToSourcePath" in assertion:
+                raise NotImplementedError("compareToSourcePath is not implemented yet")
+                
+        if "defaultManualCompletion" in assertion:
+            raise TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
+                
+        elif assertion.get("direction") == "request" or "requestMethod" in assertion or "requestUrl" in assertion:
             log_to_file("direction request out of scope")
     except AssertionError as e:
         raise
     
-                                            
+
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
 def testscript_data(request):
@@ -296,17 +372,17 @@ def save_variables(variables : list):
                                   headerField=var.get("headerField"),
                                   defaultValue=var.get("defaultValue"))
         if id is None:
-            raise Exception("Variable not correctly defined!")
+            raise TestScriptError("Variable not correctly defined!")
 
 
         if(((variable.expression is not None) & (variable.headerField is not None)) | 
            ((variable.headerField is not None) & (variable.path is not None)) | 
            ((variable.expression is not None) & (variable.path is not None))):
-            raise Exception(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+            raise TestScriptError(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
 
         if ((variable.expression is None) & (variable.headerField is None) 
             & (variable.path is None) & (variable.defaultValue is None)):
-            raise Exception(f"Variable {id} is not filled!")
+            raise TestScriptError(f"Variable {id} is not filled!")
 
 
 
@@ -323,7 +399,7 @@ def eval_variable(var : Variable):
 
 
     if (not expr) & (not result):
-        raise Exception("variable is not filled!")
+        raise TestScriptError("variable is not filled!")
 
     if expr:
         fix = None
@@ -342,7 +418,7 @@ def eval_variable(var : Variable):
                 raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
             result = fix.header.get(expr)
             if not result:
-                raise Exception(f"HeaderField {var.headerField} could not be evaluated.")
+                raise TestScriptError(f"HeaderField {var.headerField} could not be evaluated.")
 
         elif var.expression:
             result = do_expression(fix.body, expr)
@@ -353,7 +429,7 @@ def eval_variable(var : Variable):
                 if len(result) == 1:
                     result = result[0]
                 elif len(result) == 0:
-                    raise Exception("Path returned an empty result!")
+                    raise TestScriptError("Path returned an empty result!")
                 else:
                     print("error --> more than one result")
 
@@ -454,7 +530,7 @@ def SETUP(setup_data, fixture_list : list, resources):
                     fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
 
                 if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
-                        raise Exception("Unknown Reference remaining.")
+                        raise TestScriptError("Unknown Reference remaining.")
         log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
