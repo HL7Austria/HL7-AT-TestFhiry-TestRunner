@@ -199,10 +199,34 @@ def execute_assertion(assertion):
     response = last_interaction
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
-            response = int
-                
+            response = int      
             #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
+
+    compare_val = assertion.get("value") #empty if there is none
     try:
+
+        if "compareToSourceId" in assertion:
+                if not operator:
+                    operator = "equals"
+                elif operator not in ["equals", "notEquals"]:
+                    raise TestScriptError ("compareTo operator value not valid")
+                
+                if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
+                    raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
+                
+                fix = None
+                for int in REQ_RESP:
+                    if int.res_id == assertion.get("compareToSourceId"):
+                        fix = int
+                for fixt in FIXTURES:
+                    if fixt.source_id == assertion.get("compareToSourceId"):
+                        fix = fixt
+
+                if fix is None:
+                    raise TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+                
+                if not ("value" in assertion): #  Ignored if "assert.value" is used.
+                    compare_val = eval_compareTo(fix, assertion)
 
         if "validateProfileId" in assertion:
             #validate_profile_assertion(assertion.get("validateProfileId"))
@@ -213,41 +237,12 @@ def execute_assertion(assertion):
                 contentType = True
                 validate_content_type(response, assertion.get("contentType"))
                 log_to_file("✓ Assertion passed")
-                
-            if assertion.get("direction") == "response" and not contentType:
-                validate_response(assertion, response)
-                log_to_file("✓ Assertion passed")
-                
-            elif assertion.get("direction") == "request":
-                log_to_file("direction request out of scope")
+        """
+        The rest of the assertions are to be added here!
         
-        if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
-            if not operator:
-                operator = "equals"
-            elif operator not in ["equals", "notEquals"]:
-                raise TestScriptError ("compareTo operator value not valid")
-            
-            if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
-                raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
-            
-            if not("path" in assertion or "expression" in assertion):
-                raise TestScriptError("compareTo is only compatible with expression or Path")
-            
-            fix = None
-            
-            for int in REQ_RESP:
-                if int.res_id == assertion.get("compareToSourceId"):
-                    fix = int
-            for fixt in FIXTURES:
-                if fixt.source_id == assertion.get("compareToSourceId"):
-                    fix = fixt
-
-            if fix is None:
-                raise TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
-            
-            if not ("value" in assertion): #  Ignored if "assert.value" is used.
-                assert_compareTo(fix, assertion)
-
+        --> compare_val is used in expression and path (I found no other uses but it is implemented in a way that allowes more uses)
+        --> No Rule in the official TestScript spec says that compareTo is supposed to only work with expression and path, only that it does work with these two
+        """
 
     except AssertionError as e:
         raise

@@ -7,6 +7,7 @@ from fhirpathpy import evaluate
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from fhirpathpy import evaluate
 from lxml import etree
+from typing import Any
 
 
 """ 
@@ -61,11 +62,12 @@ def validate_response(assertion, response):
         #operator = assertion.get("operator")
         assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
-def assert_compareTo(fixture, assertion):
+def eval_compareTo(fixture, assertion : dict[str,Any]):
     if "compareToSourceExpression" in assertion:
-        print("smth")
-    else:
-        print("smth")
+        return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
+    elif "compareToSourcePath" in assertion:
+        return doPath(fixture.body, assertion.get("compareToSourcePath"))
+
 
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
