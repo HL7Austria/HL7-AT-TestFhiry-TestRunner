@@ -9,6 +9,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_
 from impl.model.interaction import Interaction
 from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
+from lxml import etree
 
 
 """ 
@@ -94,97 +95,30 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     actual_content_type = response.header.get("Content-Type", "")
     expected_type = parse_fhir_header(expected_type)
 
-    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
-    validate_operator(operator, actual_content_type, expected_type)
+    log_to_file(f"Checking Content-Type: expected '{expected_type}', got '{actual_content_type}'")
+
+    are_equal = actual_content_type == expected_type  # Python does not create a diff because it does not directly see 'string == string'
+    assert are_equal, f"Content-Type mismatch: got '{actual_content_type}', expected '{expected_type}'"
 
 
-def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
-    status_code = str(response.status_code)
-    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
-    validate_operator(operator, status_code, expected_codes)
+def validate_response(assertion, response):
+    """
+    Validates HTTP response against assertion rules.
 
-def validate_response(response: Interaction, expected, operator: operator_type) -> None:
-    if not response.reason:
-        raise AssertionError("No response-reason found!")
-    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
-    validate_operator(operator, response.reason, expected)
+    Checks if response status code matches expected codes from assertion.
 
+    :param assertion: Dictionary containing validation rules with 'responseCode' key.
+    :param response: The HTTP response object returned by the server.
+    :return: None
+    """
 
+    if "responseCode" in assertion:
+        expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
+        status_code = str(response.status_code)
+        log_to_file(f"Asserting response code {status_code} in {expected_codes}")
+        #operator = assertion.get("operator")
+        assert status_code in expected_codes, f"Assertion failed: {status_code} not in {expected_codes}"
 
-def execute_validator(cmd):
-    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
-
-    if popen.stdout is None:
-        raise ValueError("Something went wrong with the subprocess")
-    
-    raw = popen.stdout.read()
-    popen.stdout.close()
-    popen.wait()
-
-    decoded = raw.decode("utf-8")
-    output = decoded.splitlines(keepends=True)
-
-    return output
-
-def validateTS(testScript: dict[str, Any]):
-    validator = get_full_path("test_script_evaluator/validator_cli.jar")
-    path = get_full_path("temp/temp.json")
-    ts_string = json.dumps(testScript)
-
-    os.makedirs(get_full_path("temp"), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(ts_string)
-
-    cmd = f"java -jar {validator} {path} -tx n/a"
-    output = execute_validator(cmd)
-    os.remove(path)
-    os.rmdir(get_full_path("temp"))
-
-    try: 
-        check_result(output)
-    except AssertionError as ae:
-        raise Exception("TestScript not valid: " + str(ae))
-
-
-def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
-    log_to_file(f"Asserting profile {profileRef}")
-
-    prof_folder = get_full_path("Profiles")
-    resource = get_full_path("temp/temp.json")
-    validator = get_full_path("test_script_evaluator/validator_cli.jar")
-
-    os.makedirs(get_full_path("temp"), exist_ok=True)
-    with open(resource, "w") as f:
-        f.write(response.body)
-
-    cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
-    output = execute_validator(cmd)
-    os.remove(resource)
-    os.rmdir(get_full_path("temp"))
-
-    return check_result(output)
-
-def check_result(output: list[str]) -> str:
-
-    errors = ""
-    warnings = ""
-    information = ""
-    start = False
-
-    for line in output:
-        if "*:" in line: #start getting errors after the Summary-start of the validator
-            start = True
-        if start:
-            if "Error" in line:
-                errors += "\n" + line
-            if "Warning" in line:
-                warnings += "\n" + line
-            if "Information" in line: #weis nicht obs sowas wirklich gibt
-                information += "\n" + line
-    if(errors != ""):
-        raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
-
-    return warnings + "\n" + information #if no warnings and no error
 def eval_compareTo(fixture, assertion : dict[str,Any]):
     if "compareToSourceExpression" in assertion:
         return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
