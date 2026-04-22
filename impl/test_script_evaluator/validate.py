@@ -109,7 +109,7 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
     log_to_file(f"Asserting response {response.reason} {operator} {expected}")
     validate_operator(operator, response.reason, expected)
     
-def execute_validator(cmd):
+def execute_validator(cmd : str) -> list[str]:
     popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
 
     if popen.stdout is None:
@@ -124,7 +124,7 @@ def execute_validator(cmd):
 
     return output
 
-def validateTS(testScript: dict[str, Any]):
+def validateTS(testScript: dict[str, Any]) -> None:
     validator = get_full_path("test_script_evaluator/validator_cli.jar")
     path = get_full_path("temp/temp.json")
     ts_string = json.dumps(testScript)
@@ -224,7 +224,7 @@ def xmlPath(body : str, path:str): #get xml as str?
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
 
     # Alle Family-Namen
-    result = root.xpath(f"/{path}", namespaces=ns)
+    result = root.xpath(f"//{path}", namespaces=ns)
     for res in result:
         if not isinstance(res, str):
             raise ValueError(f"Path {path} could not be evaluated")
