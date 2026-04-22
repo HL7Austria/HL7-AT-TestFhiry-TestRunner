@@ -231,7 +231,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 
                 if not ("value" in assertion): #  Ignored if "assert.value" is used.
                     compare_val = eval_compareTo(fix, assertion)
-                    print(compare_val)
+                    print(compare_val) #compare_val should be used by path or expression --> depends on their Operator
 
         if "contentType" in assertion:   
             if not operator:
