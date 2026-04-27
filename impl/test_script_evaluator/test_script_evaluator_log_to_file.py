@@ -167,7 +167,6 @@ def execute_operation(operation: dict[str, Any]):
     if(int_id != None):
         REQ_RESP.append(last_interaction)
 
-<<<<<<< 21-operation_types
 def build_url(operation :dict [str, Any]) -> str:
     """
     :returns: complete url string 
@@ -267,10 +266,7 @@ def build_url(operation :dict [str, Any]) -> str:
                     return url +  "/" + url_type +  "/" + id
 
 
-def execute_assertion(assertion):
-=======
 def execute_assertion(assertion : dict[str,Any]) -> None:
->>>>>>> main
     global last_interaction
 
     """
@@ -350,11 +346,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
             if response.reason != "":
                 expected_resp = assertion.get("response")
-<<<<<<< 21-operation_types
                 validate_response(response.reason, expected_resp, operator)
-=======
-                validate_response(response, expected_resp, operator)
->>>>>>> main
             else:
                 raise AssertionError("No Response-display has been sent")
 
@@ -368,20 +360,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
 
             log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
-<<<<<<< 21-operation_types
                        
-=======
-
-
-        if "contentType" in assertion:   
-            if not operator:
-                operator = "contains"
-            elif operator not in ["equals", "notEquals", "contains", "notContains"]:
-                raise TestScriptError("contentType operator value not valid")
-            validate_content_type(response, assertion.get("contentType"), operator)
-            log_to_file("✓ Assertion passed \n")
-
->>>>>>> main
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
@@ -548,12 +527,7 @@ def eval_variable(var : Variable):
                     print("error --> more than one result")
 
     return result
-<<<<<<< 21-operation_types
-
-def save_fixtures(jsonFiles, fix_list):
-=======
 def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
->>>>>>> main
     """
     saves fixtures to the server and saves infos for them
     :param jsonFiles: the json inside the Files
@@ -754,10 +728,7 @@ def test_fhir_operations(testscript_data):
 
         #validateTS(testscript) #see if the TestScript is valid
         #print("testScript is valid!") #debug message
-<<<<<<< 21-operation_types
-=======
         #--> comment so that the execution of the Tests isn't taking as much time
->>>>>>> main
 
         #test capability
         #--> find out how important origin and destnation are
