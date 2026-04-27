@@ -183,4 +183,3 @@ def map_method_type(type : OperationType) -> OperationMethod:
     else:
         return "get"
     
-#def build_url(type: OperationType, )

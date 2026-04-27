@@ -92,13 +92,11 @@ def execute_operation(operation: dict[str, Any]):
         #get all Info from operation
         method = operation.get("method")
         type = operation.get("type", {}).get("code", "").lower()
-        #resource_type = operation.get("resource")
         url = operation.get("url")
         sourceId = operation.get("sourceId")
-        #targetId = operation.get("targetId")
 
-        #--> build url if no url is given with resource, type, params and fixtures
 
+        #kümmere dich um die headers
         headers = {
             "Content-Type": parse_fhir_header(operation.get("contentType")),
             "Accept": parse_fhir_header(operation.get("accept")),
@@ -110,15 +108,12 @@ def execute_operation(operation: dict[str, Any]):
             raise TestScriptError("request method could not be found out!")
         
         if not url:
-            build_url(operation)
+            url = build_url(operation)
         if type == "create":
             log_to_file(f"Executing: {type.upper()} {url}")
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
             if(fixture):
-                if(Ourl):
-                    response = requests.post(Ourl, headers=headers, json=fixture.body) #if fixed url is given
-                else:
-                    response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
+                response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
             global saved_resource_id
             try:
@@ -136,37 +131,21 @@ def execute_operation(operation: dict[str, Any]):
                 
         elif type == "update":
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
             if fixture:
-                #look here for variable
-                resource_id = Tfixture.server_id
-                log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
+                log_to_file(f"Executing: {type.upper()} {url}")
 
-                fixture.body["id"] = resource_id
-                response = requests.put(f"{url}/{resource_id}", headers=headers, json=fixture.body)
+                fixture.body["id"] = url.rstrip("/").split("/")[-1] #if update url is [base]/[type]/[id]
+                response = requests.put(f"{url}", headers=headers, json=fixture.body)
             else:
                 log_to_file("no source found in PUT")
 
-        elif type == "read": #--> change ? does it need sourceId
-            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            if fixture is None:
-                log_to_file("No fixture found in read")
-                return None
-            resource_id = fixture.server_id
-            log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
-            response = requests.get(f"{url}/{resource_id}", headers=headers)
+        elif type == "read":
+            log_to_file(f"Executing: {type.upper()} {url}")
+            response = requests.get(f"{url}", headers=headers)
 
         elif type == "delete":
-            Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
-            if Tfixture is None:
-                log_to_file("No fixture found in delete")
-                return None
-            if Tfixture.server_id is None:
-                log_to_file("No saved fixture found in delete")
-                return None
-            resource_id = Tfixture.server_id
-            log_to_file(f"Executing: {type.upper()} {url}/{resource_id}")
-            response = requests.delete(f"{url}/{resource_id}", headers=headers)
+            log_to_file(f"Executing: {type.upper()} {url}")
+            response = requests.delete(f"{url}", headers=headers)
 
         else:
             raise NotImplementedError(f"Method {type} not implemented")
@@ -187,7 +166,13 @@ def execute_operation(operation: dict[str, Any]):
     if(int_id != None):
         REQ_RESP.append(last_interaction)
 
-def build_url(operation :dict [str, Any]):
+def build_url(operation :dict [str, Any]) -> str:
+    """
+    :returns: complete url string 
+    :raises: TestScriptError if there is a violation of the Testing How-Tos
+    :raises: Exception if XML is needed
+    """
+
     url = FHIR_SERVER_BASE
     params = operation.get("params")
     sourceId = operation.get("sourceId")
@@ -216,19 +201,64 @@ def build_url(operation :dict [str, Any]):
             raise TestScriptError("Create and transaction should not have params!")
         
         if resource:
-            url += resource
-        url += params
+            url += "/" + resource
+        return url + params
     else:
         if not type:
             raise TestScriptError("Could not create url for Operation!")
         
         if sourceId:
+            if not fixture:
+                raise TestScriptError(f"Fixture {sourceId} could not be found")
             url += fixture.body.get("resourceType")
         
+        if targetId:
+            if type == "search":
+                raise TestScriptError("targetId should not be used with search as params cannot be supported together.")
 
-        print("smth")
+            id = ""
+            vid = ""
+            url_type = ""
+            if isinstance(Tfixture, Interaction):
+                if "Location" in Tfixture.header:
+                    location = Tfixture.header.get("Location")
+                    if "_history" in location:
+                        id = location.rstrip("/").split("/")[-3]
+                        vid = location.rstrip("/").split("/")[-1]
+                    else:
+                        id = location.rstrip("/").split("/")[-1]
+                else:
+                    if string_type(Tfixture.body) == "json":
+                        body = json.loads(Tfixture.body)
+                        id = body.get("id")
+                        vid = body.get("meta").get("versionId")
+                    else:
+                        raise Exception("XML is not supported as of now")
+            elif isinstance(Tfixture, Fixture):
+                id = Tfixture.server_id
+            else:
+                raise TestScriptError(f"Fixture {targetId} not found!")
+            
+            if string_type(Tfixture.body) == "json":
+                body = json.loads(Tfixture.body)
+                url_type = body.get("resourceType")
+            else:
+                raise Exception("XML is not supported as of now")
+            
+            if type == "vread":
+                if vid is "":
+                    raise OperationError("No versonId found for vread Operation.")
+                return url +  "/" + url_type +  "/" + id + "_history" +  "/" + vid
+            elif type == "history":
+                return url +  "/" + url_type +  "/" + id + "_history"
+            else:
+                if type == "create":
+                    raise TestScriptError("Create should not have a targetId")
+                elif type == "update" and sourceId:
+                    return url +  "/" + id
+                else:
+                    return url +  "/" + url_type +  "/" + id
 
-    return url
 
 def execute_assertion(assertion):
     global last_interaction
@@ -284,7 +314,7 @@ def execute_assertion(assertion):
             
             if response.reason != "":
                 expected_resp = assertion.get("response")
-                validate_response(response.reason, response)
+                validate_response(response.reason, expected_resp, operator)
             else:
                 raise AssertionError("No Response-display has been sent")
 
@@ -298,18 +328,7 @@ def execute_assertion(assertion):
                 raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
 
             log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
-
-
-        contentType = False
-        if "contentType" in assertion:   
-            contentType = True
-            validate_content_type(response, assertion.get("contentType"))
-            log_to_file("✓ Assertion passed \n")
-                
-        if assertion.get("direction") == "response" and not contentType:
-            validate_response(assertion, response)
-            log_to_file("✓ Assertion passed \n")
-                
+                       
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
