@@ -9,6 +9,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_
 from impl.model.interaction import Interaction
 from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
+from lxml import etree
 
 
 """ 
@@ -80,7 +81,6 @@ def list_val(value) -> Any:
     else:
         return value
     
-
 def validate_content_type(response : Interaction, expected_type, operator: operator_type) -> None:
     """
     Validates whether the server response matches the expected content type.
@@ -108,10 +108,8 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
         raise AssertionError("No response-reason found!")
     log_to_file(f"Asserting response {response.reason} {operator} {expected}")
     validate_operator(operator, response.reason, expected)
-
-
-
-def execute_validator(cmd):
+    
+def execute_validator(cmd : str) -> list[str]:
     popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
 
     if popen.stdout is None:
@@ -126,7 +124,7 @@ def execute_validator(cmd):
 
     return output
 
-def validateTS(testScript: dict[str, Any]):
+def validateTS(testScript: dict[str, Any]) -> None:
     validator = get_full_path("test_script_evaluator/validator_cli.jar")
     path = get_full_path("temp/temp.json")
     ts_string = json.dumps(testScript)
@@ -186,6 +184,13 @@ def check_result(output: list[str]) -> str:
 
     return warnings + "\n" + information #if no warnings and no error
 
+def eval_compareTo(fixture, assertion : dict[str,Any]):
+    if "compareToSourceExpression" in assertion:
+        return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
+    elif "compareToSourcePath" in assertion:
+        return doPath(fixture.body, assertion.get("compareToSourcePath"))
+
+
 def do_expression(body, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
@@ -219,7 +224,7 @@ def xmlPath(body : str, path:str): #get xml as str?
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
 
     # Alle Family-Namen
-    result = root.xpath(f"/{path}", namespaces=ns)
+    result = root.xpath(f"//{path}", namespaces=ns)
     for res in result:
         if not isinstance(res, str):
             raise ValueError(f"Path {path} could not be evaluated")

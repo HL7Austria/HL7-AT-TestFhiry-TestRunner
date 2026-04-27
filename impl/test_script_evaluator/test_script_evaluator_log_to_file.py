@@ -4,6 +4,7 @@ import pytest
 from datetime import datetime
 import re
 
+from impl.transactions.transactions import *
 from typing import Any
 from impl.exception.Error import *
 from validate import *
@@ -179,7 +180,7 @@ def execute_operation(operation: dict[str, Any]):
     if(int_id != None):
         REQ_RESP.append(last_interaction)
 
-def execute_assertion(assertion):
+def execute_assertion(assertion : dict[str,Any]) -> None:
     global last_interaction
 
     """
@@ -202,10 +203,36 @@ def execute_assertion(assertion):
 
     for int in REQ_RESP:
         if int.res_id == assertion.get("sourceId"):
-            response = int
-                
+            response = int      
+            #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
+
+    compare_val = assertion.get("value") #empty if there is none
     try:
-            
+
+        if "compareToSourceId" in assertion:
+                if not operator:
+                    operator = "equals"
+                elif operator not in ["equals", "notEquals"]:
+                    raise TestScriptError ("compareTo operator value not valid")
+                
+                if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
+                    raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
+                
+                fix = None
+                for int in REQ_RESP:
+                    if int.res_id == assertion.get("compareToSourceId"):
+                        fix = int
+                for fixt in FIXTURES:
+                    if fixt.source_id == assertion.get("compareToSourceId"):
+                        fix = fixt
+
+                if fix is None:
+                    raise TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+                
+                if not ("value" in assertion): #  Ignored if "assert.value" is used.
+                    compare_val = eval_compareTo(fix, assertion)
+                    print(compare_val) #compare_val should be used by path or expression --> depends on their Operator
+
         if "contentType" in assertion:   
             if not operator:
                 operator = "contains"
@@ -233,7 +260,7 @@ def execute_assertion(assertion):
             
             if response.reason != "":
                 expected_resp = assertion.get("response")
-                validate_response(response.reason, response)
+                validate_response(response, expected_resp, operator)
             else:
                 raise AssertionError("No Response-display has been sent")
 
@@ -249,17 +276,14 @@ def execute_assertion(assertion):
             log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
 
 
-        contentType = False
         if "contentType" in assertion:   
-            contentType = True
-            validate_content_type(response, assertion.get("contentType"))
+            if not operator:
+                operator = "contains"
+            elif operator not in ["equals", "notEquals", "contains", "notContains"]:
+                raise TestScriptError("contentType operator value not valid")
+            validate_content_type(response, assertion.get("contentType"), operator)
             log_to_file("✓ Assertion passed \n")
-                
-        if assertion.get("direction") == "response" and not contentType:
-            validate_response(assertion, response)
-            log_to_file("✓ Assertion passed \n")
-                
-        elif assertion.get("direction") == "request":
+
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
@@ -277,42 +301,38 @@ def execute_assertion(assertion):
             raise NotImplementedError
         
         elif "expression" in assertion:
+            if not operator:
+                operator = "eval"
+            elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
+                raise TestScriptError("expression operator value not valid")
+            
             raise NotImplementedError
         
         elif "path" in assertion:
+            if not operator:
+                operator = "equals"
+            elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
+                raise TestScriptError("expression operator value not valid")
             raise NotImplementedError
 
         
         if "minimumId" in assertion: #kann mit path oder expression
             #operator will be ignored
             raise NotImplementedError
-
-        if "compareToSourceId" in assertion: # --> interne überprüfung auf path oder expression
-            if not operator:
-                operator = "equals"
-            elif operator not in ["equals", "notEquals"]:
-                raise TestScriptError ("compareTo operator value not valid")
-            
-            if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
-                raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
-            
-            if "compareToSourceExpression" in assertion:
-                raise NotImplementedError("compareToSourceExpression is not implemented yet")
-            elif "compareToSourcePath" in assertion:
-                raise NotImplementedError("compareToSourcePath is not implemented yet")
-                
+        
         if "defaultManualCompletion" in assertion:
             raise TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
                 
         elif assertion.get("direction") == "request" or "requestMethod" in assertion or "requestUrl" in assertion:
             log_to_file("direction request out of scope")
+
     except AssertionError as e:
         raise
     
 
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
-def testscript_data(request):
+def testscript_data(request) -> tuple[dict,list]:
     """
     Pytest fixture that provides testscript and resource data for parameterized tests.
 
@@ -327,13 +347,12 @@ def testscript_data(request):
         resources = None
     return testscript, resources
 
-def execute_actions(action):
+def execute_actions(action: dict[str, Any]) -> None:
     """
     executes any action 
 
     :param test: Test definition dictionary.
     :param resource: FHIR resource to test with.
-    :return: True if test passed, False otherwise.
 
     stopTestOnFail:
     If this element is specified and it is true, then assertion failures should not stop the current test execution from proceeding.
@@ -361,7 +380,7 @@ def execute_actions(action):
     except Exception as e:
         raise TestExecutionError(f"Test stopped: {str(e)}")
 
-def save_variables(variables : list):
+def save_variables(variables : list) -> None:
     global VARIABLES
     for var in variables:
         id = var.get("name")
@@ -383,8 +402,6 @@ def save_variables(variables : list):
         if ((variable.expression is None) & (variable.headerField is None) 
             & (variable.path is None) & (variable.defaultValue is None)):
             raise TestScriptError(f"Variable {id} is not filled!")
-
-
 
         VARIABLES.append(variable)
 
@@ -434,7 +451,7 @@ def eval_variable(var : Variable):
                     print("error --> more than one result")
 
     return result
-def save_fixtures(jsonFiles, fix_list):
+def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
     """
     saves fixtures to the server and saves infos for them
     :param jsonFiles: the json inside the Files
@@ -498,7 +515,7 @@ def handle_assertion_error(e, stop_test_on_fail : bool):
         raise TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
 
-def autodelete():
+def autodelete() -> None:
         global FIXTURES
         for fix in FIXTURES:
             if fix.autodelete and fix.server_id != "":
@@ -590,22 +607,13 @@ def TEST(test_data):
         else : 
             log_to_file(f"✓ TEST PASSED: {test_name}")
         
-def TEARDOWN(teardown_data):
-
-    """
-    1. Teardown actions
-    2. autodelete
-
-    --> if teardown is empty only do autodelete
-    """
-
+def TEARDOWN(teardown_data : dict):
     try:
         for action in teardown_data.get("action", []):
             execute_actions(action)
         
         autodelete()
         
-            
     except OperationError as oe:
         raise TestScriptError("Teardown operation failed: " , oe)
 
@@ -644,8 +652,9 @@ def test_fhir_operations(testscript_data):
         
     try:
 
-        validateTS(testscript) #see if the TestScript is valid
-        print("testScript is valid!") #debug message
+        #validateTS(testscript) #see if the TestScript is valid
+        #print("testScript is valid!") #debug message
+        #--> comment so that the execution of the Tests isn't taking as much time
 
         #test capability
         #--> find out how important origin and destnation are
