@@ -11,16 +11,6 @@ from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
 from lxml import etree
 
-
-""" 
-make small validations
-DO NOT DO WHOLE ASSERTIONS
-
---> split validate_response up
-
---> add one for every assert??
-"""
-
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
 
@@ -142,7 +132,6 @@ def validateTS(testScript: dict[str, Any]) -> None:
         check_result(output)
     except AssertionError as ae:
         raise Exception("TestScript not valid: " + str(ae))
-
 
 def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     log_to_file(f"Asserting profile {profileRef}")
