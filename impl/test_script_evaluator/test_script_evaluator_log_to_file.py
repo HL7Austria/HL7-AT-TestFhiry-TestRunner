@@ -210,11 +210,11 @@ def build_url(operation :dict [str, Any]) -> str:
         if sourceId:
             if not fixture:
                 raise TestScriptError(f"Fixture {sourceId} could not be found")
-            url += fixture.body.get("resourceType")
+            url += "/" + fixture.body.get("resourceType")
         
         if targetId:
             if type == "search":
-                raise TestScriptError("targetId should not be used with search as params cannot be supported together.")
+                raise TestScriptError("targetId should not be used with search.")
 
             id = ""
             vid = ""
@@ -228,7 +228,10 @@ def build_url(operation :dict [str, Any]) -> str:
                     else:
                         id = location.rstrip("/").split("/")[-1]
                 else:
-                    if string_type(Tfixture.body) == "json":
+                    if isinstance(Tfixture.body, dict):
+                        id = Tfixture.body.get("id")
+                        vid = Tfixture.body.get("meta").get("versionId")
+                    elif string_type(Tfixture.body) == "json":
                         body = json.loads(Tfixture.body)
                         id = body.get("id")
                         vid = body.get("meta").get("versionId")
@@ -239,14 +242,16 @@ def build_url(operation :dict [str, Any]) -> str:
             else:
                 raise TestScriptError(f"Fixture {targetId} not found!")
             
-            if string_type(Tfixture.body) == "json":
+            if isinstance(Tfixture.body, dict):
+                url_type = Tfixture.body.get("resourceType")
+            elif string_type(Tfixture.body) == "json":
                 body = json.loads(Tfixture.body)
                 url_type = body.get("resourceType")
             else:
                 raise Exception("XML is not supported as of now")
             
             if type == "vread":
-                if vid is "":
+                if vid == "":
                     raise OperationError("No versonId found for vread Operation.")
                 return url +  "/" + url_type +  "/" + id + "_history" +  "/" + vid
             elif type == "history":
