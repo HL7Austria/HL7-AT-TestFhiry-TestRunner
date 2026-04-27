@@ -19,20 +19,19 @@ log_filename = f"test_results_{timestamp}.txt"
 LOG_FILE_PATH = os.path.abspath(RESULTS_DIR / log_filename)
 
 ContentType = Literal['json', 'xml', 'unknown']
+OperationType = Literal['read', 'vread', 'update', 'patch', 'delete', 'history', 'create', 'search', ' capabilities', 'transaction', 'batch', 'operation']
+OperationMethod = Literal['get', 'put', 'post', 'patch', 'head', 'delete']
 
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
-
 def get_full_path(path:str) -> Path:
     return BASE_DIR / path
-
 
 def log_to_file(message: str):
     print(message)
     with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
         f.write(message + "\n")
-
 
 def get_fixture(testscript):
     fixtures = []
@@ -159,8 +158,6 @@ def parse_fhir_header(value : str):
         return "application/fhir+xml"
     return value  # fallback: use whatever it says
 
-
-
 def string_type(string: str) -> ContentType:
     try:
         json.loads(string)
@@ -174,4 +171,16 @@ def string_type(string: str) -> ContentType:
     except ET.ParseError:
         return "unknown"
 
-
+def map_method_type(type : OperationType) -> OperationMethod:
+    if type == "update":
+        return "put"
+    elif type == "delete":
+        return "delete"
+    elif type == "patch":
+        return "patch"
+    elif type == "create" or type == "batch" or type == "transaction":
+        return "post"
+    else:
+        return "get"
+    
+#def build_url(type: OperationType, )

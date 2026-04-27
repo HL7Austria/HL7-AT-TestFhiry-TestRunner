@@ -90,19 +90,27 @@ def execute_operation(operation: dict[str, Any]):
         operation = json.loads(result)
 
         #get all Info from operation
+        method = operation.get("method")
         type = operation.get("type", {}).get("code", "").lower()
-        method = operation.get("method") #--> find a way to make method work
-        resource_type = operation.get("resource")
-        url = f"{FHIR_SERVER_BASE}/{resource_type}"
+        #resource_type = operation.get("resource")
+        url = operation.get("url")
         sourceId = operation.get("sourceId")
-        targetId = operation.get("targetId")
-        Ourl = operation.get("url")
+        #targetId = operation.get("targetId")
+
+        #--> build url if no url is given with resource, type, params and fixtures
 
         headers = {
             "Content-Type": parse_fhir_header(operation.get("contentType")),
             "Accept": parse_fhir_header(operation.get("accept")),
         }
 
+        if not method and type:
+            method = map_method_type(type) #get method from type if exists
+        if not method:
+            raise TestScriptError("request method could not be found out!")
+        
+        if not url:
+            build_url(operation)
         if type == "create":
             log_to_file(f"Executing: {type.upper()} {url}")
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -178,6 +186,49 @@ def execute_operation(operation: dict[str, Any]):
 
     if(int_id != None):
         REQ_RESP.append(last_interaction)
+
+def build_url(operation :dict [str, Any]):
+    url = FHIR_SERVER_BASE
+    params = operation.get("params")
+    sourceId = operation.get("sourceId")
+    targetId = operation.get("targetId")
+    resource = operation.get("resource")
+    type = operation.get("type", {}).get("code", "").lower()
+
+    fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+    if not fixture:
+        fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+    Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
+    if not Tfixture:
+        Tfixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+    #--> suchen der Fixture wenn leer = None
+
+    if type == "transaction":
+        return url
+    elif type == "capabilities" and not params:
+        return url + "/metadata"
+
+    if params:
+        if type == "read" or type == "vread" or type == "update" or type == "delete":
+            if not resource:
+                raise TestScriptError(f"Resource-Type is needed for Operation {type} {params}")
+        elif type == "create" or type =="transaction":
+            raise TestScriptError("Create and transaction should not have params!")
+        
+        if resource:
+            url += resource
+        url += params
+    else:
+        if not type:
+            raise TestScriptError("Could not create url for Operation!")
+        
+        if sourceId:
+            url += fixture.body.get("resourceType")
+        
+
+        print("smth")
+
+    return url
 
 def execute_assertion(assertion):
     global last_interaction
@@ -259,7 +310,6 @@ def execute_assertion(assertion):
             validate_response(assertion, response)
             log_to_file("✓ Assertion passed \n")
                 
-        elif assertion.get("direction") == "request":
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
@@ -309,7 +359,6 @@ def execute_assertion(assertion):
     except AssertionError as e:
         raise
     
-
 # Fixture for dynamic test data
 @pytest.fixture(params=get_testscript_pairs())
 def testscript_data(request):
@@ -434,6 +483,7 @@ def eval_variable(var : Variable):
                     print("error --> more than one result")
 
     return result
+
 def save_fixtures(jsonFiles, fix_list):
     """
     saves fixtures to the server and saves infos for them
@@ -482,8 +532,7 @@ def save_profile(profilerefs : list[str], profile_ids : list[dict["id",str]]) ->
     global PROFILES
     for prof, pId in zip(profilerefs, profile_ids):
         PROFILES[pId.get("id")] = prof
-        
-        
+             
 def handle_assertion_error(e, stop_test_on_fail : bool):
     """
     Logs the AssertionError and decides whether to stop or continue the test.
@@ -546,7 +595,6 @@ def SETUP(setup_data, fixture_list : list, resources):
     
     except Exception as e: #usually only failure in autocreate
         raise TestScriptError("✗ TEST SKIPPED: Failure to start TestScript: " +str(e))
-
 
 def TEST(test_data):
     """
@@ -644,8 +692,8 @@ def test_fhir_operations(testscript_data):
         
     try:
 
-        validateTS(testscript) #see if the TestScript is valid
-        print("testScript is valid!") #debug message
+        #validateTS(testscript) #see if the TestScript is valid
+        #print("testScript is valid!") #debug message
 
         #test capability
         #--> find out how important origin and destnation are
