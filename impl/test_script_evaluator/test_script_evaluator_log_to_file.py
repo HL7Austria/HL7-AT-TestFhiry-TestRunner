@@ -15,9 +15,6 @@ from impl.model.interaction import Interaction
 from impl.model.variable import Variable
 from utils import *
 
-
-
-saved_resource_id = ""
 last_interaction = None
 log_filename = f"test_results_{timestamp}.txt"
 
@@ -103,6 +100,8 @@ def execute_operation(operation: dict[str, Any]):
             "Accept": parse_fhir_header(operation.get("accept")),
         }
 
+        fixture = None
+
         if not method and type:
             method = map_method_type(type) #get method from type if exists
         if not method:
@@ -110,13 +109,37 @@ def execute_operation(operation: dict[str, Any]):
         
         if not url:
             url = build_url(operation)
-        if type == "create":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            if(fixture):
-                response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
-            global saved_resource_id
+        if sourceId:
+            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+            if not fixture:
+                fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+            if not fixture:
+                raise TestScriptError(f"Fixture {sourceId} nowhere found!")
+
+        log_to_file(f"Executing: {type.upper()} {url}")
+        match (method):
+            case "get":
+                response = requests.get(url,headers=headers)
+            case "post":
+                if not fixture:
+                    raise TestScriptError("No Fixture found in POST!")
+                response = requests.post(url, headers=headers, json=fixture.body)
+            case "put":
+                if not fixture:
+                    raise TestScriptError("No Fixture found in PUT!")
+                
+                fixture.body["id"] = url.rstrip("/").split("/")[-1] #update url is [base]/[type]/[id]
+                response = requests.put(url, headers=headers, json=fixture.body)
+            case "delete":
+                response = requests.delete(url, headers=headers)
+            case "head":
+                response = requests.post(url, headers=headers)
+            case "patch":
+                response = requests.post(url, headers=headers, json=fixture.body)
+
+        if type == "create":
+            saved_resource_id = ""
             try:
                 saved_resource_id = response.json().get("id")
             except ValueError:
@@ -128,39 +151,19 @@ def execute_operation(operation: dict[str, Any]):
                     raise ValueError("No ID found in response or Location header")
             finally:
                 log_to_file(f"Accessible at: {url}/{saved_resource_id}")
+                if isinstance(fixture, Fixture):
+                    fixture.server_id = saved_resource_id
 
-                
-        elif type == "update":
-            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            if fixture:
-                log_to_file(f"Executing: {type.upper()} {url}")
-
-                fixture.body["id"] = url.rstrip("/").split("/")[-1] #if update url is [base]/[type]/[id]
-                response = requests.put(f"{url}", headers=headers, json=fixture.body)
-            else:
-                log_to_file("no source found in PUT")
-
-        elif type == "read":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            response = requests.get(f"{url}", headers=headers)
-
-        elif type == "delete":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            response = requests.delete(f"{url}", headers=headers)
-
-        else:
-            raise NotImplementedError(f"Method {type} not implemented")
     except Exception as e:
         raise TestScriptError(e)
-
+    
     log_to_file(f"Response: {response.status_code}")
 
-    #trying first to get response to run, afterwards look at request
     int_id = operation.get("responseId")
     global last_interaction
     last_interaction = Interaction(response.headers, response.text)
     last_interaction.status_code = response.status_code
-    last_interaction.reason = response.reason #for later
+    last_interaction.reason = response.reason
     last_interaction.res_id = int_id
     
 
@@ -173,7 +176,6 @@ def build_url(operation :dict [str, Any]) -> str:
     :raises: TestScriptError if there is a violation of the Testing How-Tos
     :raises: Exception if XML is needed
     """
-
     url = FHIR_SERVER_BASE
     params = operation.get("params")
     sourceId = operation.get("sourceId")
@@ -264,6 +266,7 @@ def build_url(operation :dict [str, Any]) -> str:
                     return url +  "/" + id
                 else:
                     return url +  "/" + url_type +  "/" + id
+        return url
 
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
