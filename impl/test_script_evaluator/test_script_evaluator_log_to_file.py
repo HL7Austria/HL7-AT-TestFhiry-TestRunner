@@ -303,6 +303,9 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
                     raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
                 
+                if not("expression" in assertion or "path" in assertion):
+                    raise TestScriptError("CompareTo is only valid with expression or path!")
+                
                 fix = None
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("compareToSourceId"):
@@ -367,6 +370,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("resource operator value not valid")
         
         elif "headerField" in assertion:
+            #mit value
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
@@ -381,14 +385,13 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "eval"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
                 raise TestScriptError("expression operator value not valid")
-            
-            raise NotImplementedError
+            validate_expression(response, assertion.get("expression"), operator, compare_val)
         
         elif "path" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
-                raise TestScriptError("expression operator value not valid")
+                raise TestScriptError("path operator value not valid")
             raise NotImplementedError
 
         
@@ -514,6 +517,13 @@ def eval_variable(var : Variable):
 
         elif var.expression:
             result = do_expression(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                elif len(result) == 0:
+                    raise TestScriptError("Expression returnded an empty result")
+                else:
+                    raise TestScriptError("More than one result!")
         elif var.path:
 
             result = doPath(fix.body, expr)
@@ -523,7 +533,7 @@ def eval_variable(var : Variable):
                 elif len(result) == 0:
                     raise TestScriptError("Path returned an empty result!")
                 else:
-                    print("error --> more than one result")
+                    raise TestScriptError("More than one result!")
 
     return result
 def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
@@ -665,8 +675,6 @@ def TEST(test_data):
 
             except AssertionError as ae:
                 failed = True
-                log_to_file("✗ Assertion failed!" + str(ae))
-
             except TestExecutionError as e:
                 raise
                 # Continue with next test even if this one was stopped

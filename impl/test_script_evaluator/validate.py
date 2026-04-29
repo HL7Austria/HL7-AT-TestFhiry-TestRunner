@@ -10,6 +10,7 @@ from impl.model.interaction import Interaction
 from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
 from lxml import etree
+from impl.test_script_evaluator.utils import *
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
@@ -58,6 +59,7 @@ def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> 
             assert isinstance(valueResp, str), "notContains Operator is only valid with a string"
             assert isinstance(valueTS, str), "notContains Operator is only valid with a string"
             assert valueTS not in valueResp
+
         case "eval":
             assert isinstance(valueResp, bool), "evaluation result is not a boolean"
             assert valueResp
@@ -87,6 +89,25 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
+def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
+    
+    if isinstance(fixture.body, str):
+        if string_type(fixture.body) is not "json":
+            raise Exception ("fhirpath does not function if response is not json")
+        body_use = json.loads(fixture.body)
+    else:
+        body_use = fixture.body
+
+    res = do_expression(body_use, expression)
+
+    if isinstance(res, list):
+        if len(res) == 1:
+            res = res[0]
+    if isinstance(value, list):
+        if len(value) == 1:
+            value = value[0]
+    log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
+    validate_operator(operator, res, value)
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
     status_code = str(response.status_code)
@@ -174,13 +195,19 @@ def check_result(output: list[str]) -> str:
     return warnings + "\n" + information #if no warnings and no error
 
 def eval_compareTo(fixture, assertion : dict[str,Any]):
+    if isinstance(fixture.body, str):
+        if string_type(fixture.body) is not "json":
+            raise Exception ("fhirpath does not function if response is not json")
+        body_use = json.loads(fixture.body)
+    else:
+        body_use = fixture.body
+
     if "compareToSourceExpression" in assertion:
         return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
         return doPath(fixture.body, assertion.get("compareToSourcePath"))
 
-
-def do_expression(body, expression : str):
+def do_expression(body : str, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
