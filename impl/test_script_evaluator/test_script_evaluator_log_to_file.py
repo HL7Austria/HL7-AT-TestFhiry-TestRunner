@@ -196,6 +196,13 @@ def build_url(operation :dict [str, Any]) -> str:
     resource = operation.get("resource")
     type = operation.get("type", {}).get("code", "").lower()
 
+    if targetId and type == "search":
+        raise TestScriptError("targetId should not be used with search.")
+    if targetId and type == "create":
+        raise TestScriptError("Create should not have a targetId")
+    if params and (type == "create" or type == "transaction"):
+        raise TestScriptError("Create and transaction should not have params!")
+
     fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
     if not fixture:
         fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
@@ -213,9 +220,6 @@ def build_url(operation :dict [str, Any]) -> str:
         if type == "read" or type == "vread" or type == "update" or type == "delete":
             if not resource:
                 raise TestScriptError(f"Resource-Type is needed for Operation {type} {params}")
-        elif type == "create" or type =="transaction":
-            raise TestScriptError("Create and transaction should not have params!")
-        
         if resource:
             url += "/" + resource
         return url + params
@@ -229,9 +233,6 @@ def build_url(operation :dict [str, Any]) -> str:
             url += "/" + fixture.body.get("resourceType")
         
         if targetId:
-            if type == "search":
-                raise TestScriptError("targetId should not be used with search.")
-
             id = ""
             vid = ""
             url_type = ""
@@ -273,9 +274,7 @@ def build_url(operation :dict [str, Any]) -> str:
             elif type == "history":
                 return url +  "/" + url_type +  "/" + id + "_history"
             else:
-                if type == "create":
-                    raise TestScriptError("Create should not have a targetId")
-                elif type == "update" and sourceId:
+                if type == "update" and sourceId:
                     return url +  "/" + id
                 else:
                     return url +  "/" + url_type +  "/" + id
