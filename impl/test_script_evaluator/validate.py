@@ -15,7 +15,14 @@ operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'le
 
 
 def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
-    
+    """Applies a FHIR TestScript comparison operator to two values.
+
+    :param operator: The comparison operator name as defined in the
+        FHIR TestScript specification.
+    :param valueResp: The actual value obtained from the server response.
+    :param valueTS: The expected value defined in the TestScript assertion.
+    :raises AssertionError: If the comparison does not hold.
+    """
     match operator:
         case "equals":
             valueTS = list_val(valueTS)
@@ -63,6 +70,13 @@ def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> 
             assert valueResp
 
 def list_val(value) -> Any:
+    """Unwraps a single-element list to its contained value.
+
+    :param value: A value that may or may not be a list.
+    :returns: The unwrapped scalar if the input is a single-element list,
+        or the original value unchanged.
+    :raises TypeError: If the input is a list with more than one element.
+    """
     if isinstance(value, list):
         if len(value) == 1:
             return value[0]
@@ -72,13 +86,12 @@ def list_val(value) -> Any:
         return value
     
 def validate_content_type(response : Interaction, expected_type, operator: operator_type) -> None:
-    """
-    Validates whether the server response matches the expected content type.
-    If no expected_type is specified, no validation is performed.
-    :param response: The HTTP response object returned by the server.
-    :param expected_type:  The expected Content-Type (e.g., "json", "xml", or a full MIME type).
-                           If None or empty, no validation is performed.
-    :return: None
+    """Validates the Content-Type header of a server respons
+    
+    :param response: The ``Interaction`` containing the server response headers.
+    :param expected_type: The expected Content-Type value (short form or full MIME type).
+    :param operator: The comparison operator to apply.
+    :raises AssertionError: If the Content-Type does not satisfy the operator check.
     """
 
     actual_content_type = response.header.get("Content-Type", "")
@@ -89,17 +102,40 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
 
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
+    """Validates the HTTP status code of a server response.
+
+    :param response: The ``Interaction`` containing the server response.
+    :param expected_codes: List of expected status code strings.
+    :param operator: The comparison operator to apply.
+    :raises AssertionError: If the status code does not satisfy the operator check.
+    """
     status_code = str(response.status_code)
     log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
 def validate_response(response: Interaction, expected, operator: operator_type) -> None:
+    """Validates the reason phrase (display) of a server response.
+
+    :param response: The ``Interaction`` containing the server response.
+    :param expected: The expected response display string from the TestScript.
+    :param operator: The comparison operator to apply.
+    :raises AssertionError: If the reason phrase does not satisfy the operator
+        check, or if no reason phrase is present.
+    """
     if not response.reason:
         raise AssertionError("No response-reason found!")
     log_to_file(f"Asserting response {response.reason} {operator} {expected}")
     validate_operator(operator, response.reason, expected)
     
 def execute_validator(cmd : str) -> list[str]:
+    """Runs a shell command and returns its stdout as a list of lines.
+
+    Used to invoke the FHIR HL7 Validator CLI JAR.
+
+    :param cmd: The full command-line string to execute.
+    :returns: List of output lines (with line endings preserved).
+    :raises ValueError: If the subprocess stdout pipe could not be opened.
+    """
     popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
 
     if popen.stdout is None:
@@ -115,6 +151,15 @@ def execute_validator(cmd : str) -> list[str]:
     return output
 
 def validateTS(testScript: dict[str, Any]) -> None:
+    """Validates a FHIR TestScript resource using the HL7 Validator CLI.
+
+    Serialises the TestScript to a temporary JSON file, runs the validator,
+    and removes the temp file afterwards.
+
+    :param testScript: Parsed TestScript JSON dictionary.
+    :raises Exception: If the validator reports errors (wraps the
+        ``AssertionError`` from ``check_result``).
+    """
     validator = get_full_path("test_script_evaluator/validator_cli.jar")
     path = get_full_path("temp/temp.json")
     ts_string = json.dumps(testScript)
@@ -134,6 +179,18 @@ def validateTS(testScript: dict[str, Any]) -> None:
         raise Exception("TestScript not valid: " + str(ae))
 
 def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
+    """Validates a server response body against a FHIR StructureDefinition profile.
+
+    Writes the response body to a temporary file, invokes the HL7 Validator
+    CLI with the profile reference and the local Profiles folder as an
+    implementation guide, and removes the temp file afterwards.
+
+    :param profileRef: The canonical URL of the profile to validate against.
+    :param response: The ``Interaction`` whose body will be validated.
+    :returns: A string containing any warnings and information messages from
+        the validator (empty if none).
+    :raises AssertionError: If the validator reports errors.
+    """
     log_to_file(f"Asserting profile {profileRef}")
 
     prof_folder = get_full_path("Profiles")
@@ -152,6 +209,15 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     return check_result(output)
 
 def check_result(output: list[str]) -> str:
+    """Parses HL7 Validator CLI output and raises on errors.
+
+    Scans the output lines for the summary section (starting at ``*:``) and
+    collects error, warning, and information lines.
+
+    :param output: List of stdout lines from the validator process.
+    :returns: A string of warnings and information messages.
+    :raises AssertionError: If any error lines are found in the output.
+    """
 
     errors = ""
     warnings = ""
@@ -174,6 +240,17 @@ def check_result(output: list[str]) -> str:
     return warnings + "\n" + information #if no warnings and no error
 
 def eval_compareTo(fixture, assertion : dict[str,Any]):
+    """Evaluates the comparison value from a ``compareToSourceId`` assertion.
+
+    Extracts the value from the referenced fixture using either
+    ``compareToSourceExpression`` or ``compareToSourcePath``.
+
+    :param fixture: The ``Fixture`` or ``Interaction`` referenced by
+        ``compareToSourceId``.
+    :param assertion: The assertion dictionary containing the comparison
+        field (``compareToSourceExpression`` or ``compareToSourcePath``).
+    :returns: The evaluated comparison value.
+    """
     if "compareToSourceExpression" in assertion:
         return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
@@ -181,17 +258,25 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
 
 
 def do_expression(body, expression : str):
+    """Evaluates a FHIRPath expression against a resource body.
+
+    :param body: The FHIR resource (dict or JSON string) to evaluate against.
+    :param expression: A FHIRPath expression string.
+    :returns: The evaluation result from the FHIRPath engine.
+    """
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
 def doPath(body, path:str):
+    """Evaluates an XPath or JSONPath expression against a resource body.
 
-    """
-    Check  if body is xml or json
-    Check if path is xpath or jsonpath
-    
-    --> different ways to evaluate
-    --> do I want to convert to json or xml?
+    Determines the path type (``'xml'`` or ``'json'``) and delegates to
+    ``xmlPath`` or ``jsonPath`` accordingly.
+
+    :param body: The FHIR resource body (dict, JSON string, or XML string).
+    :param path: The path expression string (XPath or JSONPath).
+    :returns: The evaluation result, or ``None`` if the path type could not
+        be determined.
     """
     type = "xml"
     result = None
@@ -209,6 +294,13 @@ def doPath(body, path:str):
     return result
 
 def xmlPath(body : str, path:str): #get xml as str?
+    """Evaluates an XPath expression against an XML resource body.
+
+    :param body: The XML resource as a string.
+    :param path: The XPath expression to evaluate.
+    :returns: List of matching string values.
+    :raises ValueError: If any match result is not a string.
+    """
     root = etree.fromstring(body)
     ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
 
@@ -221,6 +313,12 @@ def xmlPath(body : str, path:str): #get xml as str?
     return result
 
 def jsonPath(body : str, path:str):
+    """Evaluates a JSONPath expression against a JSON resource body.
+
+    :param body: The FHIR resource as a dict or JSON string.
+    :param path: The JSONPath expression to evaluate.
+    :returns: List of matched values.
+    """
     if isinstance(body,str):
         body = json.loads(body)
 
