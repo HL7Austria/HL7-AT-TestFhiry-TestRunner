@@ -706,10 +706,6 @@ def SETUP(setup_data, fixture_list : list, resources):
     :param resources: List of parsed JSON bodies of the Example Instance
         files that back the fixtures.
     :raises TestScriptError: If a setup operation fails
-        (wraps ``OperationError``), if a setup assertion stops execution
-        (wraps ``TestExecutionError``), if fixture references cannot be
-        resolved, or if any other unexpected error occurs during fixture
-        creation.
     """
     global FIXTURES
 
