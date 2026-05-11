@@ -178,7 +178,7 @@ def map_method_type(type : OperationType) -> OperationMethod:
         return "delete"
     elif type == "patch":
         return "patch"
-    elif type == "create" or type == "batch" or type == "transaction":
+    elif type == "create" or type == "batch" or type == "transaction" or type == "operation":
         return "post"
     else:
         return "get"

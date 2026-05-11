@@ -113,7 +113,8 @@ def execute_operation(operation: dict[str, Any]):
                         raise TestScriptError("No Fixture found in POST!")
                     else:
                         response = requests.post(url, headers=headers)
-                response = requests.post(url, headers=headers, json=fixture.body)
+                else:
+                    response = requests.post(url, headers=headers, json=fixture.body)
             case "put":
                 if not fixture:
                     raise TestScriptError("No Fixture found in PUT!")
@@ -180,7 +181,7 @@ def build_url(operation :dict [str, Any]) -> str:
         Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
     #--> suchen der Fixture wenn leer = None
 
-    if type == "transaction":
+    if type == "transaction" or type == "batch":
         return url
     elif type == "capabilities" and not params:
         return url + "/metadata"
