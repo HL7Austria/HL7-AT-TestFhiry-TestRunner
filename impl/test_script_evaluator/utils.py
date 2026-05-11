@@ -19,7 +19,7 @@ log_filename = f"test_results_{timestamp}.txt"
 LOG_FILE_PATH = os.path.abspath(RESULTS_DIR / log_filename)
 
 ContentType = Literal['json', 'xml', 'unknown']
-OperationType = Literal['read', 'vread', 'update', 'patch', 'delete', 'history', 'create', 'search', ' capabilities', 'transaction', 'batch', 'operation']
+OperationType = Literal['read', 'vread', 'update', 'patch', 'delete', 'history', 'create', 'search', 'capabilities', 'transaction', 'batch', 'operation']
 OperationMethod = Literal['get', 'put', 'post', 'patch', 'head', 'delete']
 
 with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
@@ -94,7 +94,6 @@ def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
     
     temp.clear()
     profFiles.clear()
-    temp.clear()
     return result
 
 def get_variables(testscript):

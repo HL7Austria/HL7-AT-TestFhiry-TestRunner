@@ -4,7 +4,6 @@ import pytest
 from datetime import datetime
 import re
 
-from impl.transactions.transactions import *
 from typing import Any
 from impl.exception.Error import *
 from validate import *
@@ -722,7 +721,7 @@ def SETUP(setup_data, fixture_list : list, resources):
                     my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
                     fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
 
-                if re.search("\"reference\" *: *\"[a-zA-z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
+                if re.search("\"reference\" *: *\"[a-zA-Z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
                         raise TestScriptError("Unknown Reference remaining.")
         log_to_file(f"\n ----------- Starting Setup: -----------")
 
