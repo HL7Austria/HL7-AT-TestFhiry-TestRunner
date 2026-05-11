@@ -202,12 +202,12 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
             body_use = json.loads(fixture.body)
         else:
             body_use = fixture.body
-            
+
         return do_expression(body_use, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
         return doPath(fixture.body, assertion.get("compareToSourcePath"))
 
-def do_expression(body : dict, expression : str):
+def do_expression(body : dict[str, Any], expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
