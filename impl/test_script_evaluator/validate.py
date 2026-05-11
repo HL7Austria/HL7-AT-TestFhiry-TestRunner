@@ -1,9 +1,7 @@
 import json
 import subprocess
 import os
-from typing import Any
 from fhirpathpy import evaluate
-from lxml import etree
 from jsonpath_ng import parse
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
@@ -81,7 +79,7 @@ def list_val(value) -> Any:
         if len(value) == 1:
             return value[0]
         else:
-            TypeError("value to compare is not the Same type")
+            raise TypeError("value to compare is not the Same type")
     else:
         return value
     
@@ -289,8 +287,6 @@ def doPath(body, path:str):
     elif path == "json":
         result = jsonPath(body, path)
 
-
-    #print("not yet supported")
     return result
 
 def xmlPath(body : str, path:str): #get xml as str?

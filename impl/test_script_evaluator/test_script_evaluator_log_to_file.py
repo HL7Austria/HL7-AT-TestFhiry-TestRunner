@@ -644,7 +644,7 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-def save_profile(profilerefs : list[str], profile_ids : list[dict["id",str]]) -> None:
+def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
     """
     Stores FHIR StructureDefinition profile references in the global
     ``PROFILES`` dictionary, keyed by their TestScript-local ID.
