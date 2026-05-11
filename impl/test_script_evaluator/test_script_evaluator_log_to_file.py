@@ -92,12 +92,18 @@ def execute_operation(operation: dict[str, Any]):
         url = operation.get("url")
         sourceId = operation.get("sourceId")
 
+        headers = {}
+        reqHeader = operation.get("requestHeader")
 
-        #kümmere dich um die headers
-        headers = {
-            "Content-Type": utils.parse_fhir_header(operation.get("contentType")),
-            "Accept": utils.parse_fhir_header(operation.get("accept")),
-        }
+        if operation.get("contentType"):
+            headers["Content-Type"]= operation.get("contentType")
+        if operation.get("accept"):
+            headers["Accept"] = operation.get("accept")
+        for head in reqHeader:
+            headers[head.get("field")] = head.get("value")
+        
+        print(headers)
+
 
         fixture = None
 
