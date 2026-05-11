@@ -146,10 +146,11 @@ def execute_operation(operation: dict[str, Any]):
                 if isinstance(fixture, Fixture):
                     fixture.server_id = saved_resource_id
 
+        log_to_file(f"Response: {response.status_code}")
     except Exception as e:
         raise TestScriptError(e)
     
-    log_to_file(f"Response: {response.status_code}")
+    
 
     int_id = operation.get("responseId")
     global last_interaction
