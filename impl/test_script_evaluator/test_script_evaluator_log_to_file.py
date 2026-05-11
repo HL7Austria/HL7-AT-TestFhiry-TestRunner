@@ -327,6 +327,9 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
                     raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
                 
+                if not("expression" in assertion or "path" in assertion):
+                    raise TestScriptError("CompareTo is only valid with expression or path!")
+                
                 fix = None
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("compareToSourceId"):
@@ -340,7 +343,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 
                 if not ("value" in assertion): #  Ignored if "assert.value" is used.
                     compare_val = eval_compareTo(fix, assertion)
-                    print(compare_val) #compare_val should be used by path or expression --> depends on their Operator
+                    #compare_val should be used by path or expression --> depends on their Operator
 
         if "contentType" in assertion:   
             if not operator:
@@ -349,7 +352,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("contentType operator value not valid")
             
             validate_content_type(response, assertion.get("contentType"), operator)
-            log_to_file("✓ Assertion passed")
         
         elif "responseCode" in assertion:
             if not operator:
@@ -359,7 +361,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
             expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
             validate_responseCode(response, expected_codes, operator)
-            log_to_file("✓ Assertion passed")
 
         elif "response" in assertion:
             if not operator:
@@ -381,8 +382,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 msg = validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
             else:
                 raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
-
-            log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
                        
         elif "resource" in assertion:
             if not operator:
@@ -391,6 +390,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("resource operator value not valid")
         
         elif "headerField" in assertion:
+            #mit value
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
@@ -405,14 +405,13 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "eval"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
                 raise TestScriptError("expression operator value not valid")
-            
-            raise NotImplementedError
+            validate_expression(response, assertion.get("expression"), operator, compare_val)
         
         elif "path" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
-                raise TestScriptError("expression operator value not valid")
+                raise TestScriptError("path operator value not valid")
             raise NotImplementedError
 
         
@@ -477,6 +476,7 @@ def execute_actions(action: dict[str, Any]) -> None:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
             execute_assertion(assertion)
+            log_to_file("✓ Assertion passed\n")
         
     except AssertionError as ae:
         if not stopTestOnFail:
@@ -575,6 +575,13 @@ def eval_variable(var : Variable):
 
         elif var.expression:
             result = do_expression(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                elif len(result) == 0:
+                    raise TestScriptError("Expression returnded an empty result")
+                else:
+                    raise TestScriptError("More than one result!")
         elif var.path:
 
             result = doPath(fix.body, expr)
@@ -584,7 +591,7 @@ def eval_variable(var : Variable):
                 elif len(result) == 0:
                     raise TestScriptError("Path returned an empty result!")
                 else:
-                    print("error --> more than one result")
+                    raise TestScriptError("More than one result!")
 
     return result
 def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
@@ -772,8 +779,6 @@ def TEST(test_data):
 
             except AssertionError as ae:
                 failed = True
-                log_to_file("✗ Assertion failed!" + str(ae))
-
             except TestExecutionError as e:
                 raise
                 # Continue with next test even if this one was stopped
