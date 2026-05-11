@@ -73,7 +73,7 @@ def execute_operation(operation: dict[str, Any]):
 
         #get all Info from operation
         method = operation.get("method")
-        type = operation.get("type", {}).get("code", "").lower()
+        operation_type = operation.get("type", {}).get("code", "").lower()
         url = operation.get("url")
         sourceId = operation.get("sourceId")
 
@@ -86,8 +86,8 @@ def execute_operation(operation: dict[str, Any]):
 
         fixture = None
 
-        if not method and type:
-            method = map_method_type(type) #get method from type if exists
+        if not method and operation_type:
+            method = map_method_type(operation_type) #get method from type if exists
         if not method:
             raise TestScriptError("request method could not be found out!")
         
@@ -101,13 +101,13 @@ def execute_operation(operation: dict[str, Any]):
             if not fixture:
                 raise TestScriptError(f"Fixture {sourceId} nowhere found!")
 
-        log_to_file(f"Executing: {type.upper()} {url}")
+        log_to_file(f"Executing: {operation_type.upper()} {url}")
         match (method):
             case "get":
                 response = requests.get(url,headers=headers)
             case "post":
                 if not fixture:
-                    if not (type == "search" or type == "capabilities"):
+                    if not (operation_type == "search" or operation_type == "capabilities"):
                         raise TestScriptError("No Fixture found in POST!")
                     else:
                         response = requests.post(url, headers=headers)
@@ -130,7 +130,7 @@ def execute_operation(operation: dict[str, Any]):
             case _:
                 raise TestScriptError(f"Method {method} not supported.")
 
-        if type == "create":
+        if operation_type == "create":
             saved_resource_id = ""
             try:
                 saved_resource_id = response.json().get("id")
