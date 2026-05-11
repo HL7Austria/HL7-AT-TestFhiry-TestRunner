@@ -3,7 +3,6 @@ import requests
 import pytest
 from datetime import datetime
 import re
-
 from typing import Any
 from impl.exception.Error import *
 from validate import *
@@ -14,9 +13,6 @@ from impl.model.interaction import Interaction
 from impl.model.variable import Variable
 from utils import *
 
-
-
-saved_resource_id = ""
 last_interaction = None
 log_filename = f"test_results_{timestamp}.txt"
 
@@ -92,7 +88,7 @@ def execute_operation(operation: dict[str, Any]):
 
         #get all Info from operation
         method = operation.get("method")
-        type = operation.get("type", {}).get("code", "").lower()
+        operation_type = operation.get("type", {}).get("code", "").lower()
         url = operation.get("url")
         sourceId = operation.get("sourceId")
 
@@ -103,20 +99,54 @@ def execute_operation(operation: dict[str, Any]):
             "Accept": parse_fhir_header(operation.get("accept")),
         }
 
-        if not method and type:
-            method = map_method_type(type) #get method from type if exists
+        fixture = None
+
+        if not method and operation_type:
+            method = map_method_type(operation_type) #get method from type if exists
         if not method:
             raise TestScriptError("request method could not be found out!")
         
         if not url:
             url = build_url(operation)
-        if type == "create":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            if(fixture):
-                response = requests.post(url, headers=headers, json=fixture.body) #if I need to make my own url
 
-            global saved_resource_id
+        if sourceId:
+            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
+            if not fixture:
+                fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+            if not fixture:
+                raise TestScriptError(f"Fixture {sourceId} nowhere found!")
+
+        log_to_file(f"Executing: {operation_type.upper()} {url}")
+        match (method):
+            case "get":
+                response = requests.get(url,headers=headers)
+            case "post":
+                if not fixture:
+                    if not (operation_type == "search" or operation_type == "capabilities"):
+                        raise TestScriptError("No Fixture found in POST!")
+                    else:
+                        response = requests.post(url, headers=headers)
+                else:
+                    response = requests.post(url, headers=headers, json=fixture.body)
+            case "put":
+                if not fixture:
+                    raise TestScriptError("No Fixture found in PUT!")
+                
+                fixture.body["id"] = url.rstrip("/").split("/")[-1] #update url is [base]/[type]/[id]
+                response = requests.put(url, headers=headers, json=fixture.body)
+            case "delete":
+                response = requests.delete(url, headers=headers)
+            case "head":
+                response = requests.head(url, headers=headers)
+            case "patch":
+                if not fixture:
+                    raise TestScriptError("No Fixture found in PATCH!")
+                response = requests.patch(url, headers=headers, json=fixture.body)
+            case _:
+                raise TestScriptError(f"Method {method} not supported.")
+
+        if operation_type == "create":
+            saved_resource_id = ""
             try:
                 saved_resource_id = response.json().get("id")
             except ValueError:
@@ -128,39 +158,20 @@ def execute_operation(operation: dict[str, Any]):
                     raise ValueError("No ID found in response or Location header")
             finally:
                 log_to_file(f"Accessible at: {url}/{saved_resource_id}")
+                if isinstance(fixture, Fixture):
+                    fixture.server_id = saved_resource_id
 
-                
-        elif type == "update":
-            fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
-            if fixture:
-                log_to_file(f"Executing: {type.upper()} {url}")
-
-                fixture.body["id"] = url.rstrip("/").split("/")[-1] #if update url is [base]/[type]/[id]
-                response = requests.put(f"{url}", headers=headers, json=fixture.body)
-            else:
-                log_to_file("no source found in PUT")
-
-        elif type == "read":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            response = requests.get(f"{url}", headers=headers)
-
-        elif type == "delete":
-            log_to_file(f"Executing: {type.upper()} {url}")
-            response = requests.delete(f"{url}", headers=headers)
-
-        else:
-            raise NotImplementedError(f"Method {type} not implemented")
+        log_to_file(f"Response: {response.status_code}")
     except Exception as e:
         raise TestScriptError(e)
+    
+    
 
-    log_to_file(f"Response: {response.status_code}")
-
-    #trying first to get response to run, afterwards look at request
     int_id = operation.get("responseId")
     global last_interaction
     last_interaction = Interaction(response.headers, response.text)
     last_interaction.status_code = response.status_code
-    last_interaction.reason = response.reason #for later
+    last_interaction.reason = response.reason
     last_interaction.res_id = int_id
     
 
@@ -187,7 +198,6 @@ def build_url(operation :dict [str, Any]) -> str:
         can be found.
     :raises Exception: If the fixture body is in XML format, which is not yet supported.
     """
-
     url = FHIR_SERVER_BASE
     params = operation.get("params")
     sourceId = operation.get("sourceId")
@@ -207,10 +217,10 @@ def build_url(operation :dict [str, Any]) -> str:
         fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
     Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
     if not Tfixture:
-        Tfixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+        Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
     #--> suchen der Fixture wenn leer = None
 
-    if type == "transaction":
+    if type == "transaction" or type == "batch":
         return url
     elif type == "capabilities" and not params:
         return url + "/metadata"
@@ -269,14 +279,15 @@ def build_url(operation :dict [str, Any]) -> str:
             if type == "vread":
                 if vid == "":
                     raise OperationError("No versonId found for vread Operation.")
-                return url +  "/" + url_type +  "/" + id + "_history" +  "/" + vid
+                return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
             elif type == "history":
-                return url +  "/" + url_type +  "/" + id + "_history"
+                return url +  "/" + url_type +  "/" + id + "/_history"
             else:
                 if type == "update" and sourceId:
                     return url +  "/" + id
                 else:
                     return url +  "/" + url_type +  "/" + id
+        return url
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
     """
