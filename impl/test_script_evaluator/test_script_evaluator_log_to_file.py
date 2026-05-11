@@ -319,7 +319,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 
                 if not ("value" in assertion): #  Ignored if "assert.value" is used.
                     compare_val = eval_compareTo(fix, assertion)
-                    print(compare_val) #compare_val should be used by path or expression --> depends on their Operator
+                    #compare_val should be used by path or expression --> depends on their Operator
 
         if "contentType" in assertion:   
             if not operator:
@@ -328,7 +328,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("contentType operator value not valid")
             
             validate_content_type(response, assertion.get("contentType"), operator)
-            log_to_file("✓ Assertion passed")
         
         elif "responseCode" in assertion:
             if not operator:
@@ -338,7 +337,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
             expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
             validate_responseCode(response, expected_codes, operator)
-            log_to_file("✓ Assertion passed")
 
         elif "response" in assertion:
             if not operator:
@@ -360,8 +358,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 msg = validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
             else:
                 raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
-
-            log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
                        
         elif "resource" in assertion:
             if not operator:
@@ -450,6 +446,7 @@ def execute_actions(action: dict[str, Any]) -> None:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
             execute_assertion(assertion)
+            log_to_file("✓ Assertion passed\n")
         
     except AssertionError as ae:
         if not stopTestOnFail:
