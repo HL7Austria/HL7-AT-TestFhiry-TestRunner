@@ -124,6 +124,8 @@ def execute_operation(operation: dict[str, Any]):
             case "head":
                 response = requests.head(url, headers=headers)
             case "patch":
+                if not fixture:
+                    raise TestScriptError("No Fixture found in PATCH!")
                 response = requests.patch(url, headers=headers, json=fixture.body)
             case _:
                 raise TestScriptError(f"Method {method} not supported.")
