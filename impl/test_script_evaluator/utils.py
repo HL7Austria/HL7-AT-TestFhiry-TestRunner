@@ -40,6 +40,11 @@ def get_fixture(testscript):
     return fixtures
 
 def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
+    """Extracts profile references and their corresponding IDs from a TestScript.
+
+    :param testscript: Parsed TestScript JSON dictionary.
+    :returns: Tuple of (profile reference list, profile ID list).
+    """
     profiles = []
     profile_ids = []
     for profile in testscript.get("profile",[]):
@@ -50,6 +55,10 @@ def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     return profiles, profile_ids
 
 def get_all_profiles():
+        """Scans the ``impl/Profiles`` folder and returns paths to all JSON profile files.
+
+        :returns: List of file path strings for every ``.json`` file in the Profiles folder.
+        """
         PROFILE_FOLDER = "impl/Profiles"
 
         profiles = [
@@ -60,18 +69,19 @@ def get_all_profiles():
         return profiles
 
 def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
+    """Loads profile JSON files whose ``url`` matches one of the given references.
+
+    Reads every JSON file from the Profiles folder and returns the
+    JSON-serialised string of the last matching profile.
+
+    :param profile_list: List of profile canonical URL strings to match against.
+    :returns: JSON string of the matching profile, or an empty list if none matched.
+    """
 
     result = []
     profFiles = []
     temp = []
 
-    """
-    hier einfach alle files durchgehen --> schaun ob das Profil drinnen is (ob ich referenz oder id nimm noch nicht sicher)
-    --> diese Files dann in enine json-list zusammenstecken, dann kann ich später einfach element für element in ein bundle reinschmeißen
-    
-    with open(full_path, "r", encoding="utf-8") as f:
-            json_list.append(json.load(f))
-            """
     profFiles = get_all_profiles()
     for file in profFiles:
         with open(file, "r", encoding="utf-8") as f:
@@ -87,6 +97,11 @@ def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
     return result
 
 def get_variables(testscript):
+    """Extracts the list of variable definitions from a TestScript.
+
+    :param testscript: Parsed TestScript JSON dictionary.
+    :returns: List of variable dictionaries (empty list if none defined).
+    """
     vars = []
     for var in testscript.get("variable", []):
         vars.append(var)
@@ -112,6 +127,11 @@ def load_json(path : str):
         return json.load(f)
     
 def load_json_list(paths : list[str]):
+    """Loads multiple JSON files from the given paths.
+
+    :param paths: List of relative path strings to JSON files.
+    :returns: List of parsed JSON dictionaries, or ``None`` if ``paths`` is empty.
+    """
     json_list = []
 
     if not paths:
@@ -158,6 +178,11 @@ def parse_fhir_header(value : str):
     return value  # fallback: use whatever it says
 
 def string_type(string: str) -> ContentType:
+    """Detects whether a string contains JSON, XML, or an unknown format.
+
+    :param string: The raw string to inspect.
+    :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
+    """
     try:
         json.loads(string)
         return "json"
@@ -171,6 +196,11 @@ def string_type(string: str) -> ContentType:
         return "unknown"
 
 def map_method_type(type : OperationType) -> OperationMethod:
+    """Maps a FHIR operation type to the corresponding HTTP method.
+
+    :param type: A FHIR operation type
+    :returns: The HTTP method string. Defaults to ``'get'`` for unrecognised types.
+    """
     if type == "update":
         return "put"
     elif type == "delete":

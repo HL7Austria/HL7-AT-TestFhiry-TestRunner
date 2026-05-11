@@ -41,7 +41,16 @@ def extract_test_source_id(container): #do i even need this anymore?
 
 def replacer(match):
     """
-    helper function used to replace a variable match with the value of the variable
+    Regex substitution callback that resolves a FHIR TestScript variable placeholder
+    (e.g. ``${varName}``) to its evaluated value.
+
+    Used as the ``repl`` argument of ``re.sub`` so that every variable reference
+    inside a JSON-serialised operation or assertion is replaced with the
+    concrete value before the action is executed.
+
+    :param match: A ``re.Match`` object whose first capture group contains the variable name.
+    :returns: The string value of the resolved variable.
+    :raises Exception: If no variable with the given name exists in the global VARIABLES list.
     """
     global VARIABLES
     var_name = match.group(1)
@@ -56,11 +65,17 @@ def replacer(match):
 
 def execute_operation(operation: dict[str, Any]):
     """
-    Executes a FHIR operation (CREATE, UPDATE, READ) on the server.
+    Executes a single FHIR TestScript operation against the configured FHIR server.
 
-    :param operation: Dictionary containing operation details.
-    :raises: NotImplementedError for unsupported methods.
-    :raises: TestScriptError for critical Errors while executing.
+    Resolves any variable placeholders in the operation dictionary, determines the
+    HTTP method (from ``method`` or by mapping the operation ``type``), builds the
+    request URL, and dispatches the appropriate HTTP call (POST for create, PUT for
+    update, GET for read, DELETE for delete). The server response is stored for later use.
+
+    :param operation: Dictionary representing a single FHIR TestScript operation element.
+    :raises NotImplementedError: If the operation type is not yet supported.
+    :raises TestScriptError: If the HTTP method cannot be determined, or if any other
+        error occurs during execution (wraps the original exception).
     """
     global FIXTURES
     try:
@@ -165,9 +180,23 @@ def execute_operation(operation: dict[str, Any]):
 
 def build_url(operation :dict [str, Any]) -> str:
     """
-    :returns: complete url string 
-    :raises: TestScriptError if there is a violation of the Testing How-Tos
-    :raises: Exception if XML is needed
+    Constructs the full request URL for a FHIR TestScript operation when no
+    explicit ``url`` field is provided.
+
+    Combines the FHIR server base URL with the operation's ``resource``,
+    ``params``, ``sourceId``, and ``targetId`` fields according to the FHIR
+    TestScript specification rules.  Special cases such as ``transaction``
+    (base URL only) and ``capabilities`` (``/metadata``) are handled
+    separately.
+
+    :param operation: Dictionary representing a single FHIR TestScript operation element.
+    :returns: The fully constructed URL string.
+    :raises TestScriptError: If required fields are missing or if the combination of
+        fields violates the FHIR TestScript specification (e.g. ``params`` on a
+        create, ``targetId`` on a search, unknown references).
+    :raises OperationError: If a ``vread`` operation is requested but no version ID
+        can be found.
+    :raises Exception: If the fixture body is in XML format, which is not yet supported.
     """
     url = FHIR_SERVER_BASE
     params = operation.get("params")
@@ -175,6 +204,13 @@ def build_url(operation :dict [str, Any]) -> str:
     targetId = operation.get("targetId")
     resource = operation.get("resource")
     type = operation.get("type", {}).get("code", "").lower()
+
+    if targetId and type == "search":
+        raise TestScriptError("targetId should not be used with search.")
+    if targetId and type == "create":
+        raise TestScriptError("Create should not have a targetId")
+    if params and (type == "create" or type == "transaction"):
+        raise TestScriptError("Create and transaction should not have params!")
 
     fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
     if not fixture:
@@ -193,9 +229,6 @@ def build_url(operation :dict [str, Any]) -> str:
         if type == "read" or type == "vread" or type == "update" or type == "delete":
             if not resource:
                 raise TestScriptError(f"Resource-Type is needed for Operation {type} {params}")
-        elif type == "create" or type =="transaction":
-            raise TestScriptError("Create and transaction should not have params!")
-        
         if resource:
             url += "/" + resource
         return url + params
@@ -209,9 +242,6 @@ def build_url(operation :dict [str, Any]) -> str:
             url += "/" + fixture.body.get("resourceType")
         
         if targetId:
-            if type == "search":
-                raise TestScriptError("targetId should not be used with search.")
-
             id = ""
             vid = ""
             url_type = ""
@@ -253,24 +283,32 @@ def build_url(operation :dict [str, Any]) -> str:
             elif type == "history":
                 return url +  "/" + url_type +  "/" + id + "/_history"
             else:
-                if type == "create":
-                    raise TestScriptError("Create should not have a targetId")
-                elif type == "update" and sourceId:
+                if type == "update" and sourceId:
                     return url +  "/" + id
                 else:
                     return url +  "/" + url_type +  "/" + id
         return url
 
-
 def execute_assertion(assertion : dict[str,Any]) -> None:
+    """
+    Evaluates a single FHIR TestScript assertion against the most recent server
+    interaction (or an explicitly referenced interaction/fixture).
+
+    Resolves variable placeholders in the assertion, selects the correct
+    operator and response to compare against, and delegates to the appropriate
+    validation function (content-type, response code, response display, profile,
+    etc.).  If the assertion passes, the result is logged; if it fails, an
+    ``AssertionError`` is raised and re-raised to the caller.
+
+    :param assertion: Dictionary representing a single FHIR TestScript assert element.
+    :raises AssertionError: If the assertion check fails.
+    :raises TestScriptError: If the operator is invalid for the given assertion type,
+        if mutually exclusive fields are both present, or if a required fixture /
+        profile cannot be found.
+    :raises NotImplementedError: If the assertion type (e.g. navigationLinks,
+        expression, path, minimumId) is not yet implemented.
+    """
     global last_interaction
-
-    """
-    Assertion error should be handled by the Test or setup
-    Assertions --> you should probably save the results here
-
-    no return value anymore --> if no error comes back everything is great
-    """
     global REQ_RESP
 
     #--> not checking if the variable is at the right place!
@@ -300,6 +338,9 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 if "compareToSourceExpression" in assertion and "compareToSourcePath" in assertion: 
                     raise TestScriptError("only one of [compareToSourceExpression, compareToSourcePath] can exist per Assertion")
                 
+                if not("expression" in assertion or "path" in assertion):
+                    raise TestScriptError("CompareTo is only valid with expression or path!")
+                
                 fix = None
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("compareToSourceId"):
@@ -322,7 +363,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("contentType operator value not valid")
             
             validate_content_type(response, assertion.get("contentType"), operator)
-            log_to_file("✓ Assertion passed")
         
         elif "responseCode" in assertion:
             if not operator:
@@ -332,7 +372,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
             expected_codes = [code.strip() for code in assertion.get("responseCode", "").split(",")]
             validate_responseCode(response, expected_codes, operator)
-            log_to_file("✓ Assertion passed")
 
         elif "response" in assertion:
             if not operator:
@@ -354,8 +393,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 msg = validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
             else:
                 raise TestScriptError("No profiles found in testscript, but validateProfileId asserted")
-
-            log_to_file("✓ Assertion passed\n" + msg) #--> if no Error came back
                        
         elif "resource" in assertion:
             if not operator:
@@ -364,6 +401,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 raise TestScriptError("resource operator value not valid")
         
         elif "headerField" in assertion:
+            #mit value
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
@@ -378,14 +416,13 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "eval"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
                 raise TestScriptError("expression operator value not valid")
-            
-            raise NotImplementedError
+            validate_expression(response, assertion.get("expression"), operator, compare_val)
         
         elif "path" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
-                raise TestScriptError("expression operator value not valid")
+                raise TestScriptError("path operator value not valid")
             raise NotImplementedError
 
         
@@ -421,14 +458,20 @@ def testscript_data(request) -> tuple[dict,list]:
 
 def execute_actions(action: dict[str, Any]) -> None:
     """
-    executes any action 
+    Dispatches a single FHIR TestScript action — either an operation or an
+    assertion — to the corresponding execution function.
 
-    :param test: Test definition dictionary.
-    :param resource: FHIR resource to test with.
+    Acts as the central routing point for every action inside the setup, test,
+    and teardown phases of a TestScript.  When an assertion carries
+    ``stopTestOnFail`` set to false, a failing assertion is logged but does not
+    abort the current test; otherwise the error propagates.
 
-    stopTestOnFail:
-    If this element is specified and it is true, then assertion failures should not stop the current test execution from proceeding.
-    is test excecusion the TestScript?
+    :param action: Dictionary representing one action element from a FHIR
+        TestScript phase (must contain either an ``operation`` or ``assert`` key).
+    :raises AssertionError: Re-raised when an assertion fails and
+        ``stopTestOnFail`` is not false.
+    :raises TestExecutionError: If the operation or assertion raises any
+        non-assertion exception, wrapped with context.
     """
 
     stopTestOnFail = True
@@ -444,6 +487,7 @@ def execute_actions(action: dict[str, Any]) -> None:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
             execute_assertion(assertion)
+            log_to_file("✓ Assertion passed\n")
         
     except AssertionError as ae:
         if not stopTestOnFail:
@@ -453,6 +497,20 @@ def execute_actions(action: dict[str, Any]) -> None:
         raise TestExecutionError(f"Test stopped: {str(e)}")
 
 def save_variables(variables : list) -> None:
+    """
+    Parses and stores FHIR TestScript variable definitions into the global
+    ``VARIABLES`` list so they can be resolved during operation and assertion
+    execution.
+
+    Each variable must have a ``name`` and exactly one value source (``path``,
+    ``expression``, ``headerField``, or ``defaultValue``).  The function
+    validates these constraints before appending.
+
+    :param variables: List of raw variable dictionaries from the TestScript JSON.
+    :raises TestScriptError: If a variable has no ``name``, if more than one
+        value-expression field is set simultaneously, or if no value source is
+        provided at all.
+    """
     global VARIABLES
     for var in variables:
         id = var.get("name")
@@ -478,6 +536,23 @@ def save_variables(variables : list) -> None:
         VARIABLES.append(variable)
 
 def eval_variable(var : Variable):
+    """
+    Resolves a single FHIR TestScript variable to its concrete value.
+
+    Looks up the referenced fixture or interaction via ``sourceId`` and
+    evaluates the variable's value source (``headerField``, ``expression``,
+    or ``path``).  Falls back to ``defaultValue`` when no expression-based
+    source is defined.
+
+    :param var: A ``Variable`` instance holding the variable definition.
+    :returns: The resolved value as a string (or the type returned by the
+        expression / path evaluator).
+    :raises TestScriptError: If the variable has no value source at all, if a
+        header field cannot be found on the interaction, or if a path evaluation
+        returns an empty result.
+    :raises TypeError: If ``headerField`` is used but the referenced source is
+        a static ``Fixture`` instead of a server ``Interaction``.
+    """
     global REQ_RESP
     global FIXTURES
 
@@ -511,6 +586,13 @@ def eval_variable(var : Variable):
 
         elif var.expression:
             result = do_expression(fix.body, expr)
+            if isinstance(result, list):
+                if len(result) == 1:
+                    result = result[0]
+                elif len(result) == 0:
+                    raise TestScriptError("Expression returnded an empty result")
+                else:
+                    raise TestScriptError("More than one result!")
         elif var.path:
 
             result = doPath(fix.body, expr)
@@ -520,13 +602,26 @@ def eval_variable(var : Variable):
                 elif len(result) == 0:
                     raise TestScriptError("Path returned an empty result!")
                 else:
-                    print("error --> more than one result")
+                    raise TestScriptError("More than one result!")
 
     return result
 def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
     """
-    saves fixtures to the server and saves infos for them
-    :param jsonFiles: the json inside the Files
+    Registers FHIR TestScript fixtures locally and, for those marked with
+    ``autocreate``, uploads them to the FHIR server as a transaction bundle.
+
+    Each fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
+    ``autocreate`` flag is true are bundled into a single FHIR transaction
+    POST.  After a successful upload the server-assigned IDs are written back
+    into the corresponding ``Fixture`` objects so that later operations and
+    assertions can reference them.
+
+    :param jsonFiles: List of parsed JSON bodies of the Example Instance files
+        (one per fixture).
+    :param fix_list: List of raw fixture definition dictionaries from the
+        TestScript JSON (parallel to ``jsonFiles``).
+    :raises Exception: If the transaction bundle POST fails, with the
+        diagnostic messages extracted from the server's OperationOutcome.
     """
     bundle_json = [] #die zu erstellenden Fixtures als json
     for jsonf, fixture in zip(jsonFiles, fix_list):
@@ -566,20 +661,36 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
                 msg += item.get("diagnostics")
             raise Exception(msg)
     
-def save_profile(profilerefs : list[str], profile_ids : list[dict["id",str]]) -> None:
-    #save profiles in a list full of ids and references
+def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
+    """
+    Stores FHIR StructureDefinition profile references in the global
+    ``PROFILES`` dictionary, keyed by their TestScript-local ID.
+
+    :param profilerefs: List of profile canonical URL references.
+    :param profile_ids: List of dictionaries each containing an ``id`` key
+        that serves as the TestScript-local identifier for the profile.
+    """
     global PROFILES
     for prof, pId in zip(profilerefs, profile_ids):
         PROFILES[pId.get("id")] = prof
              
 def handle_assertion_error(e, stop_test_on_fail : bool):
     """
-    Logs the AssertionError and decides whether to stop or continue the test.
+    Logs a failed assertion and decides whether the current test should be
+    aborted or is allowed to continue.
 
-    :param e: The AssertionError exception.
-    :param stop_test_on_fail: Boolean flag indicating if test should stop on failure.
-    :return: True if test should continue, False if test failed.
-    :raises: TestExecutionError if stop_test_on_fail is True.
+    Called when an ``AssertionError`` is caught inside ``execute_actions``.
+    If ``stop_test_on_fail`` is ``False`` the error is escalated to a
+    ``TestExecutionError`` so the caller can halt; otherwise the failure is
+    only recorded and execution may proceed.
+
+    :param e: The ``AssertionError`` exception that was raised.
+    :param stop_test_on_fail: When ``False``, the test must be stopped;
+        when ``True``, execution may continue despite the failure.
+    :returns: ``False`` to signal that the assertion failed but continuing
+        is allowed.
+    :raises TestExecutionError: If ``stop_test_on_fail`` is ``False``,
+        indicating the test must not continue.
     """
     log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
     if stop_test_on_fail == False:
@@ -587,6 +698,11 @@ def handle_assertion_error(e, stop_test_on_fail : bool):
     return False  # Test failed, but continuing allowed
 
 def autodelete() -> None:
+        """
+        Deletes every fixture from the FHIR server whose ``autodelete`` flag
+        is ``True`` and that was successfully created (i.e. has a non-empty
+        ``server_id``).
+        """
         global FIXTURES
         for fix in FIXTURES:
             if fix.autodelete and fix.server_id != "":
@@ -594,13 +710,19 @@ def autodelete() -> None:
 
 def SETUP(setup_data, fixture_list : list, resources):
     """
-    1. metadata.Capability
-    2. fixture autocreate
+    Executes the **setup** phase of a FHIR TestScript.
 
-    --> do all setup.actions (operations and asserts)
-    You ONLY know the setup and already saved variables and mayhaps profiles
+    Creates fixtures on the server (autocreate), rewrites inter-fixture
+    references so they point to server-assigned IDs, and then runs every
+    setup action in order.
 
-    --> save the results?
+    :param setup_data: The ``setup`` dictionary from the TestScript JSON,
+        or an empty dict when there is no explicit setup section.
+    :param fixture_list: List of raw fixture definition dictionaries from
+        the TestScript.
+    :param resources: List of parsed JSON bodies of the Example Instance
+        files that back the fixtures.
+    :raises TestScriptError: If a setup operation fails
     """
     global FIXTURES
 
@@ -637,12 +759,18 @@ def SETUP(setup_data, fixture_list : list, resources):
 
 def TEST(test_data):
     """
-    1. metadata.capabilities
-        if there are problems --> skip this test (some kind of skip Exception? or straight return)
-    
-    --> do all test-actions (operation or assertion)
-    --> save Test Results for all tests
-    --> U only know of urself and the saved fixtures / responses / variables
+    Executes a single **test** phase of a FHIR TestScript.
+
+    Iterates over all actions defined in the test.
+    Assertion failures are logged and flagged but do not necessarily
+    abort the remaining actions; a ``TestExecutionError`` (e.g. from
+    ``stopTestOnFail``) does stop the test.  The overall pass/fail result
+    is logged after all actions have been attempted.
+
+    :param test_data: A single ``test`` element dictionary from the
+        TestScript JSON.
+    :raises TestScriptError: If an operation within the test fails
+        (wraps ``OperationError``).
     """
     #Test Capabilities --> if Error --> skip test --> maybe in main
 
@@ -662,8 +790,6 @@ def TEST(test_data):
 
             except AssertionError as ae:
                 failed = True
-                log_to_file("✗ Assertion failed!" + str(ae))
-
             except TestExecutionError as e:
                 raise
                 # Continue with next test even if this one was stopped
@@ -678,6 +804,18 @@ def TEST(test_data):
             log_to_file(f"✓ TEST PASSED: {test_name}")
         
 def TEARDOWN(teardown_data : dict):
+    """
+    Executes the **teardown** phase of a FHIR TestScript.
+
+    Runs every teardown action (operations and assertions) and afterwards
+    calls ``autodelete`` to remove all fixtures whose ``autodelete`` flag
+    is set.
+
+    :param teardown_data: The ``teardown`` dictionary from the TestScript
+        JSON, or an empty dict when there is no explicit teardown section.
+    :raises TestScriptError: If a teardown operation fails
+        (wraps ``OperationError``).
+    """
     try:
         for action in teardown_data.get("action", []):
             execute_actions(action)
@@ -689,27 +827,19 @@ def TEARDOWN(teardown_data : dict):
 
 def test_fhir_operations(testscript_data):
     """
-    Main test function for FHIR operations testing.
-    Executes all tests in a testscript with GIVEN-WHEN-THEN structure.
+    Main pytest entry point that orchestrates a complete FHIR TestScript run.
 
-    :param testscript_data: Tuple containing testscript and resource data.
-    """
+    Extracts fixtures, variables, and profiles from the TestScript, then
+    drives execution through the three TestScript phases in order:
+    **SETUP** → **TEST** → **TEARDOWN**.  On severe errors
+    the run is aborted and ``autodelete`` is invoked to clean up
+    server-side resources.  All global state (``FIXTURES``, ``REQ_RESP``,
+    ``PROFILES``, ``VARIABLES``) is cleared at the end regardless of
+    outcome.
 
-    """
-    HERE --> should only test the basic TS all rounder things (Capability, save variables, save profiles)
-    everything that is not defined by an action!!
-
-    1. test server
-    2. validate TS itself
-    3. test capability
-    4. save variables
-    5. save profiles
-
-    6. SETUP
-    7. TEST
-    8. TEARDOWN
-
-    9. clear up everything that needs cleaning up (all global usw.)
+    :param testscript_data: Tuple of ``(testscript_dict, resources_list)``
+        as provided by the ``testscript_data`` pytest fixture.
+    :raises pytest.skip: If no FHIR server is configured.
     """
 
     if not has_fhir_server():
