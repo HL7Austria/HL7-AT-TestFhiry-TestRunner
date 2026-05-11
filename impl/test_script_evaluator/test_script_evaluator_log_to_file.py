@@ -64,20 +64,6 @@ def execute_operation(operation: dict[str, Any]):
     :raises: NotImplementedError for unsupported methods.
     :raises: TestScriptError for critical Errors while executing.
     """
-
-    """
-    for supporting all methods:
-        somehow map type to operation method
-        --> maybe dict?? maybe not
-        ---> check what is better helper function or dict (is public from utils)
-    
-    1. check for method if no method check for type
-        -> if type => map method to use
-        -> if no type => is mayhaps a client test i don't really know
-           
-    for different types of operation different params/headerfield whatever?
-    """
-
     global FIXTURES
     try:
 
@@ -123,7 +109,10 @@ def execute_operation(operation: dict[str, Any]):
                 response = requests.get(url,headers=headers)
             case "post":
                 if not fixture:
-                    raise TestScriptError("No Fixture found in POST!")
+                    if not (type == "search" or type == "capabilities"):
+                        raise TestScriptError("No Fixture found in POST!")
+                    else:
+                        response = requests.post(url, headers=headers)
                 response = requests.post(url, headers=headers, json=fixture.body)
             case "put":
                 if not fixture:
@@ -134,9 +123,9 @@ def execute_operation(operation: dict[str, Any]):
             case "delete":
                 response = requests.delete(url, headers=headers)
             case "head":
-                response = requests.post(url, headers=headers)
+                response = requests.head(url, headers=headers)
             case "patch":
-                response = requests.post(url, headers=headers, json=fixture.body)
+                response = requests.patch(url, headers=headers, json=fixture.body)
 
         if type == "create":
             saved_resource_id = ""
@@ -188,7 +177,7 @@ def build_url(operation :dict [str, Any]) -> str:
         fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
     Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
     if not Tfixture:
-        Tfixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
+        Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
     #--> suchen der Fixture wenn leer = None
 
     if type == "transaction":
@@ -256,9 +245,9 @@ def build_url(operation :dict [str, Any]) -> str:
             if type == "vread":
                 if vid == "":
                     raise OperationError("No versonId found for vread Operation.")
-                return url +  "/" + url_type +  "/" + id + "_history" +  "/" + vid
+                return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
             elif type == "history":
-                return url +  "/" + url_type +  "/" + id + "_history"
+                return url +  "/" + url_type +  "/" + id + "/_history"
             else:
                 if type == "create":
                     raise TestScriptError("Create should not have a targetId")
