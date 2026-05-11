@@ -125,6 +125,8 @@ def execute_operation(operation: dict[str, Any]):
                 response = requests.head(url, headers=headers)
             case "patch":
                 response = requests.patch(url, headers=headers, json=fixture.body)
+            case _:
+                raise TestScriptError(f"Method {method} not supported.")
 
         if type == "create":
             saved_resource_id = ""
