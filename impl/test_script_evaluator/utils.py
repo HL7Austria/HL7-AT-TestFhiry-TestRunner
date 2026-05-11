@@ -84,7 +84,6 @@ def get_profile_json(profile_list : list[str]):#brauch ich das wirklich
     
     temp.clear()
     profFiles.clear()
-    temp.clear()
     return result
 
 def get_variables(testscript):
