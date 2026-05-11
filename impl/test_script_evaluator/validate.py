@@ -7,7 +7,6 @@ from lxml import etree
 from jsonpath_ng import parse
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
-from impl.test_script_evaluator.utils import get_full_path
 from typing import Literal, Any
 from lxml import etree
 from impl.test_script_evaluator.utils import *
@@ -92,7 +91,7 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
 def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
     
     if isinstance(fixture.body, str):
-        if string_type(fixture.body) is not "json":
+        if string_type(fixture.body) != "json":
             raise Exception ("fhirpath does not function if response is not json")
         body_use = json.loads(fixture.body)
     else:
@@ -195,19 +194,20 @@ def check_result(output: list[str]) -> str:
     return warnings + "\n" + information #if no warnings and no error
 
 def eval_compareTo(fixture, assertion : dict[str,Any]):
-    if isinstance(fixture.body, str):
-        if string_type(fixture.body) is not "json":
-            raise Exception ("fhirpath does not function if response is not json")
-        body_use = json.loads(fixture.body)
-    else:
-        body_use = fixture.body
 
     if "compareToSourceExpression" in assertion:
-        return do_expression(fixture.body, assertion.get("compareToSourceExpression"))
+        if isinstance(fixture.body, str):
+            if string_type(fixture.body) != "json":
+                raise Exception ("fhirpath does not function if response is not json")
+            body_use = json.loads(fixture.body)
+        else:
+            body_use = fixture.body
+            
+        return do_expression(body_use, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
         return doPath(fixture.body, assertion.get("compareToSourcePath"))
 
-def do_expression(body : str, expression : str):
+def do_expression(body : dict, expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
