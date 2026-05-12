@@ -3,6 +3,7 @@ import requests
 import pytest
 from datetime import datetime
 import re
+import urllib
 from typing import Any
 from impl.exception.Error import *
 from validate import *
@@ -99,12 +100,10 @@ def execute_operation(operation: dict[str, Any]):
             headers["Content-Type"]= operation.get("contentType")
         if operation.get("accept"):
             headers["Accept"] = operation.get("accept")
-        for head in reqHeader:
-            headers[head.get("field")] = head.get("value")
+        if reqHeader:
+            for head in reqHeader:
+                headers[head.get("field")] = head.get("value")
         
-        print(headers)
-
-
         fixture = None
 
         if not method and operation_type:
@@ -114,6 +113,10 @@ def execute_operation(operation: dict[str, Any]):
         
         if not url:
             url = build_url(operation)
+
+        if operation.get("encodeRequestUrl") == True:
+            url = requests.utils.quote(url, safe=":/?=")
+
 
         if sourceId:
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -385,11 +388,8 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             elif operator not in ["equals", "notEquals"]:
                 raise TestScriptError("responseCode operator value not valid")
             
-            if response.reason != "":
-                expected_resp = assertion.get("response")
-                validate_response(response.reason, expected_resp, operator)
-            else:
-                raise AssertionError("No Response-display has been sent")
+            expected_resp = assertion.get("response")
+            validate_response(response, expected_resp, operator)
 
         if "validateProfileId" in assertion:
             msg = ""
