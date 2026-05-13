@@ -103,7 +103,7 @@ def validate_expression(fixture, expression : str, operator: operator_type, valu
     
     if isinstance(fixture.body, str):
         if utils.string_type(fixture.body) != "json":
-            raise Exception ("fhirpath does not function if response is not json")
+            raise Exception ("XML is not yet supported")
         body_use = json.loads(fixture.body)
     else:
         body_use = fixture.body
@@ -234,9 +234,17 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     """
     log_to_file(f"Asserting profile {profileRef}")
 
-    prof_folder = utils.get_full_path("Profiles")
-    resource = utils.get_full_path("temp/temp.json")
-    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
+    pathF = "temp/temp"
+    if string_type(response.body) == "json":
+        pathF += "json"
+    elif string_type(response.body) == "xml":
+        pathF += "xml"
+    else:
+        raise TypeError("Response body in unexpected format!")
+
+    prof_folder = get_full_path("Profiles")
+    resource = get_full_path(pathF)
+    validator = get_full_path("test_script_evaluator/validator_cli.jar")
 
     os.makedirs(utils.get_full_path("temp"), exist_ok=True)
     with open(resource, "w") as f:

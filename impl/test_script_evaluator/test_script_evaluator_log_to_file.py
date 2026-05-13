@@ -248,7 +248,8 @@ def build_url(operation :dict [str, Any]) -> str:
         if sourceId:
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} could not be found")
-            url += "/" + fixture.body.get("resourceType")
+            if isinstance(fixture.body, dict):
+                url += "/" + fixture.body.get("resourceType")
         
         if targetId:
             id = ""
@@ -285,17 +286,20 @@ def build_url(operation :dict [str, Any]) -> str:
             else:
                 raise Exception("XML is not supported as of now")
             
-            if type == "vread":
-                if vid == "":
-                    raise error.OperationError("No versonId found for vread Operation.")
-                return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
-            elif type == "history":
-                return url +  "/" + url_type +  "/" + id + "/_history"
-            else:
-                if type == "update" and sourceId:
-                    return url +  "/" + id
+            if (not sourceId) or type == "patch": #path has a source BUT that source isn't a normal resource
+                if type == "vread":
+                    if vid == "":
+                        raise error.OperationError("No versonId found for vread Operation.")
+                    return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
+                elif type == "history":
+                    return url +  "/" + url_type +  "/" + id + "/_history"
                 else:
-                    return url +  "/" + url_type +  "/" + id
+                    if type == "update" and sourceId:
+                        return url +  "/" + id
+                    else:
+                        return url +  "/" + url_type +  "/" + id
+            else:
+                return url + "/" + id
         return url
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
@@ -629,8 +633,9 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
     """
     bundle_json = [] #die zu erstellenden Fixtures als json
     for jsonf, fixture in zip(jsonFiles, fix_list):
-        fix_id = jsonf.get("id")
-        fix_type = jsonf.get("resourceType")
+        if isinstance(jsonf, dict):
+            fix_id = jsonf.get("id")
+            fix_type = jsonf.get("resourceType")
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
         autodelete = fixture.get("autodelete", False)
@@ -740,8 +745,8 @@ def SETUP(setup_data, fixture_list : list, resources):
             for fix1 in FIXTURES:
                 for fix2 in FIXTURES:
                     json_string = json.dumps(fix1.body)
-                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
-                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
+                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + str(fix2.type) + "/" + str(fix2.fixture_id) + "\""
+                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + str(fix2.type) +"/"+ str(fix2.server_id) + "\"", json_string))
 
                 if re.search("\"reference\" *: *\"[a-zA-Z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
                         raise error.TestScriptError("Unknown Reference remaining.")
