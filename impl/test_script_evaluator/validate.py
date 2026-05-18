@@ -25,48 +25,48 @@ def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> 
         case "equals":
             valueTS = list_val(valueTS)
             valueResp = list_val(valueResp)
-            assert valueResp == valueTS 
+            assert valueResp == valueTS, f"Expected '{valueTS}', got '{valueResp}'"
 
         case "notEquals":
             valueTS = list_val(valueTS)
             valueResp = list_val(valueResp)
-            assert valueResp != valueTS
+            assert valueResp != valueTS, f"Expected value different from '{valueTS}', got '{valueResp}'"
 
         case "in":
-            assert valueResp in valueTS
+            assert valueResp in valueTS, f"Expected '{valueResp}' to be in '{valueTS}'"
 
         case "notIn":
-            assert valueResp not in valueTS 
+            assert valueResp not in valueTS, f"Expected '{valueResp}' to not be in '{valueTS}'"
 
         case "greaterThan":
             valueTS = list_val(valueTS)
             valueResp = list_val(valueResp)
-            assert valueResp > valueTS
+            assert valueResp > valueTS, f"Expected '{valueResp}' to be greater than '{valueTS}'"
 
         case "lessThan":
             valueTS = list_val(valueTS)
             valueResp = list_val(valueResp)
-            assert valueResp < valueTS
+            assert valueResp < valueTS, f"Expected '{valueResp}' to be less than '{valueTS}'"
 
         case "empty":
-            assert not valueResp #not only is none?
+            assert not valueResp, f"Expected empty value, got '{valueResp}'" #not only is none?
 
         case "notEmpty":
-            assert valueResp 
+            assert valueResp, f"Expected non-empty value, got '{valueResp}'"
 
         case "contains":
             assert isinstance(valueResp, str), "contains Operator is only valid with a string"
             assert isinstance(valueTS, str), "contains Operator is only valid with a string"
-            assert valueTS in valueResp
+            assert valueTS in valueResp, f"Expected '{valueResp}' to contain '{valueTS}'"
 
         case "notContains":
             assert isinstance(valueResp, str), "notContains Operator is only valid with a string"
             assert isinstance(valueTS, str), "notContains Operator is only valid with a string"
-            assert valueTS not in valueResp
+            assert valueTS not in valueResp, f"Expected '{valueResp}' to not contain '{valueTS}'"
 
         case "eval":
             assert isinstance(valueResp, bool), "evaluation result is not a boolean"
-            assert valueResp
+            assert valueResp, f"Expected evaluation result to be True, got '{valueResp}'"
 
 def list_val(value) -> Any:
     """Unwraps a single-element list to its contained value.
