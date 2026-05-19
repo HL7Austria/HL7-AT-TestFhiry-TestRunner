@@ -5,7 +5,7 @@ Handles loading and accessing configuration settings.
 import json
 import os
 from pathlib import Path
-from utils import *
+from impl.test_script_evaluator.utils import *
 
 class ConfigManager:
     """

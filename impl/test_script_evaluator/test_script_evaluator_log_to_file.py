@@ -3,14 +3,15 @@ import requests
 from datetime import datetime
 import re
 from typing import Any
+
+from impl.test_script_evaluator.configuration_manager import *
 from impl.exception.Error import *
-from validate import *
-from impl.transactions.transactions import *
-from configuration_manager import get_fhir_server, get_testscript_pairs, has_fhir_server
 from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
 from impl.model.variable import Variable
-from utils import *
+from impl.test_script_evaluator.validate import *
+from impl.transactions.transactions import build_whole_transaction_bundle
+from impl.test_script_evaluator.utils import *
 
 last_interaction = None
 log_filename = f"test_results_{timestamp}.txt"
