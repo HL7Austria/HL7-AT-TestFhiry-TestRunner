@@ -1,6 +1,5 @@
 import json
 import requests
-import pytest
 from datetime import datetime
 import re
 from typing import Any
@@ -439,16 +438,14 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
     except AssertionError as e:
         raise
     
-# Fixture for dynamic test data
-@pytest.fixture(params=get_testscript_pairs())
-def testscript_data(request) -> tuple[dict,list]:
+def load_testscript_data(testscript_path, resource_path) -> tuple[dict,list]:
     """
-    Pytest fixture that provides testscript and resource data for parameterized tests.
+    Loads testscript and resource data for a given pair of paths.
 
-    :param request: Pytest fixture request object.
-    :return: Tuple of (testscript, resource) data.
+    :param testscript_path: Path to the TestScript JSON file.
+    :param resource_path: Path to the resource JSON file(s), or None.
+    :return: Tuple of (testscript, resources) data.
     """
-    testscript_path, resource_path = request.param
     testscript = load_json(testscript_path)
     if resource_path:
         resources = load_json_list(resource_path)
@@ -844,7 +841,7 @@ def test_fhir_operations(testscript_data):
 
     if not has_fhir_server():
         log_to_file("✗ TEST SKIPPED: No FHIR server configured")
-        pytest.skip("No FHIR server configured in config.json")
+        return
     
     testscript, resources = testscript_data
 
@@ -898,3 +895,8 @@ def test_fhir_operations(testscript_data):
     REQ_RESP.clear()
     PROFILES.clear()
     VARIABLES.clear()
+
+if __name__ == "__main__":
+    for testscript_path, resource_path in get_testscript_pairs():
+        testscript_data = load_testscript_data(testscript_path, resource_path)
+        test_fhir_operations(testscript_data)

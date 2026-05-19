@@ -10,11 +10,6 @@ Copyright (c) Leonard Richardson
 License: MIT License
 Source: https://pypi.org/project/beautifulsoup4/
 
-pytest
-Copyright (c) Holger Krekel and contributors
-License: MIT License
-Source: https://docs.pytest.org/
-
 NumPy
 Copyright (c) NumPy Developers
 License: BSD 3-Clause License
