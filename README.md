@@ -214,12 +214,12 @@ sequenceDiagram
 
 ```bash
 git clone https://github.com/.../TestFhiry.git
-cd TestFhiry/impl
+cd TestFhiry
 pip install -r requirements.txt
-cd ig_loader
+cd impl/ig_loader
 python load_ig_from_internet.py
 cd ../..
-python impl/test_script_evaluator/test_script_evaluator_log_to_file.py
+python -m impl
 ```
 
 ---

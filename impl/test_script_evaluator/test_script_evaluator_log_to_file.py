@@ -825,7 +825,7 @@ def TEARDOWN(teardown_data : dict):
 
 def test_fhir_operations(testscript_data):
     """
-    Main pytest entry point that orchestrates a complete FHIR TestScript run.
+    Main entry point that orchestrates a complete FHIR TestScript run.
 
     Extracts fixtures, variables, and profiles from the TestScript, then
     drives execution through the three TestScript phases in order:
@@ -836,8 +836,7 @@ def test_fhir_operations(testscript_data):
     outcome.
 
     :param testscript_data: Tuple of ``(testscript_dict, resources_list)``
-        as provided by the ``testscript_data`` pytest fixture.
-    :raises pytest.skip: If no FHIR server is configured.
+        as provided by ``load_testscript_data``.
     """
 
     if not has_fhir_server():
