@@ -5,7 +5,7 @@ Handles loading and accessing configuration settings.
 import json
 import os
 from pathlib import Path
-from utils import *
+import impl.test_script_evaluator.utils as utils
 
 class ConfigManager:
     """
@@ -53,9 +53,9 @@ class ConfigManager:
 
             # in dein Log schreiben
 
-            log_to_file(message)
+            utils.log_to_file(message)
         except (FileNotFoundError) as er:
-            log_to_file(f"Warning: Could not load config from {self.config_path}: {er}")
+            utils.log_to_file(f"Warning: Could not load config from {self.config_path}: {er}")
             return {}
 
     @property
@@ -151,9 +151,9 @@ class ConfigManager:
 
                 # in dein Log schreiben
 
-                log_to_file(message)
+                utils.log_to_file(message)
 
-            fixtures_raw = get_fixture(testscript)
+            fixtures_raw = utils.get_fixture(testscript)
             fixture_list = []
 
             for fixture in fixtures_raw:

@@ -136,7 +136,7 @@ flowchart TD
 1. Konfiguration aus `config.json` wird geladen.
 2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
 3. Alle JSON-Ressourcen werden zu einem FHIR®-Bundle kombiniert.
-4. Tests werden mit `pytest` ausgeführt (POST, GET, PUT).
+4. Tests werden ausgeführt (POST, GET, PUT).
 5. Ergebnisse werden analysiert und als Logdatei exportiert.
 
 ```mermaid
@@ -162,7 +162,6 @@ sequenceDiagram
 | Bibliothek              | Zweck                              |
 | ----------------------- | ---------------------------------- |
 | `requests`              | Kommunikation mit FHIR®-Server      |
-| `pytest`                | Testautomatisierung                |
 | `beautifulsoup4`        | Parsing von Webseiteninhalten      |
 | `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung |
 
@@ -215,12 +214,12 @@ sequenceDiagram
 
 ```bash
 git clone https://github.com/.../TestFhiry.git
-cd TestFhiry/impl
+cd TestFhiry
 pip install -r requirements.txt
-cd ig_loader
+cd impl/ig_loader
 python load_ig_from_internet.py
 cd ../..
-python -m pytest impl/test_script_evaluator/test_script_evaluator_log_to_file.py
+python -m impl
 ```
 
 ---
