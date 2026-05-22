@@ -7,7 +7,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_
 from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
-from impl.test_script_evaluator.utils import *
+import impl.test_script_evaluator.utils as utils
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
@@ -102,7 +102,7 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
 def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
     
     if isinstance(fixture.body, str):
-        if string_type(fixture.body) != "json":
+        if utils.string_type(fixture.body) != "json":
             raise Exception ("fhirpath does not function if response is not json")
         body_use = json.loads(fixture.body)
     else:
@@ -178,18 +178,18 @@ def validateTS(testScript: dict[str, Any]) -> None:
     :raises Exception: If the validator reports errors (wraps the
         ``AssertionError`` from ``check_result``).
     """
-    validator = get_full_path("test_script_evaluator/validator_cli.jar")
-    path = get_full_path("temp/temp.json")
+    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
+    path = utils.get_full_path("temp/temp.json")
     ts_string = json.dumps(testScript)
 
-    os.makedirs(get_full_path("temp"), exist_ok=True)
+    os.makedirs(utils.get_full_path("temp"), exist_ok=True)
     with open(path, "w") as f:
         f.write(ts_string)
 
     cmd = f"java -jar {validator} {path} -tx n/a"
     output = execute_validator(cmd)
     os.remove(path)
-    os.rmdir(get_full_path("temp"))
+    os.rmdir(utils.get_full_path("temp"))
 
     try: 
         check_result(output)
@@ -211,18 +211,18 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     """
     log_to_file(f"Asserting profile {profileRef}")
 
-    prof_folder = get_full_path("Profiles")
-    resource = get_full_path("temp/temp.json")
-    validator = get_full_path("test_script_evaluator/validator_cli.jar")
+    prof_folder = utils.get_full_path("Profiles")
+    resource = utils.get_full_path("temp/temp.json")
+    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
 
-    os.makedirs(get_full_path("temp"), exist_ok=True)
+    os.makedirs(utils.get_full_path("temp"), exist_ok=True)
     with open(resource, "w") as f:
         f.write(response.body)
 
     cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
     output = execute_validator(cmd)
     os.remove(resource)
-    os.rmdir(get_full_path("temp"))
+    os.rmdir(utils.get_full_path("temp"))
 
     return check_result(output)
 
@@ -271,7 +271,7 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
     """
     if "compareToSourceExpression" in assertion:
         if isinstance(fixture.body, str):
-            if string_type(fixture.body) != "json":
+            if utils.string_type(fixture.body) != "json":
                 raise Exception ("fhirpath does not function if response is not json")
             body_use = json.loads(fixture.body)
         else:
