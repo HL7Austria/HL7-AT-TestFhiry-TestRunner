@@ -3,7 +3,7 @@ import subprocess
 import os
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
+from impl.test_script_evaluator.utils import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
