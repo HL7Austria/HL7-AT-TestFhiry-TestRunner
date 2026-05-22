@@ -303,10 +303,15 @@ def doPath(body, path:str):
     :returns: The evaluation result, or ``None`` if the path type could not
         be determined.
     """
-    type = "xml"
+    type = utils.string_type(body)
     result = None
+    path_type = utils.detect_path_type(path)
 
-    print("temporary bridging until path issue is resolved")
+    if isinstance(body, dict):
+        type = "json"
+
+    if type != path_type:
+        raise Exception("Path cannot compute with different Content-Type")
 
     #check if xml or jsonpath
     if path == "xml":

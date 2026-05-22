@@ -3,7 +3,8 @@ import os
 from datetime import datetime
 import json
 import xml.etree.ElementTree as ET
-from typing import Literal
+from typing import Literal, Optional
+import re
 
 
 """
@@ -211,4 +212,59 @@ def map_method_type(type : OperationType) -> OperationMethod:
         return "post"
     else:
         return "get"
+    
+def detect_path_type(path: str) -> Optional[Literal["xpath", "jsonpath"]]:
+    """
+    Checks if string is Xpath or JsonPath
+    """
+
+    if not path or not isinstance(path, str):
+        return None
+    
+    path = path.strip()
+    
+    xpath_patterns = [
+        r'^/',                    
+        r'^\.\.',                 
+        r'^\./',                  
+        r'^[a-zA-Z_][\w]*::',     
+        r'^[a-zA-Z_][\w]*\(',     
+        r'^\$[a-zA-Z_]',          
+        r'^@',                    
+        r'^\*',                   
+        r'^\[',                   
+        r'^\(',                   
+    ]
+    
+    jsonpath_patterns = [
+        r'^\$\.?',                
+        r'^\$\[',                 
+        r'^\.',                   
+        r'^\.\.',                 
+        r'^\[',                   
+    ]
+    
+    for pattern in xpath_patterns:
+        if re.match(pattern, path):
+            if any(char in path for char in ['[', ']', '@', '/', '::', '(', ')']):
+                return "xpath"
+            if re.search(r'[a-zA-Z_][\w]*\s*=', path): 
+                return "xpath"
+            if re.search(r'::[a-zA-Z_][\w]*\(', path): 
+                return "xpath"
+    
+    for pattern in jsonpath_patterns:
+        if re.match(pattern, path):
+            if any(char in path for char in ['.', '[', ']', '$', '..']):
+                return "jsonpath"
+            if re.search(r'["\'][^"\']*["\']', path):
+                return "jsonpath"
+    
+    if re.search(r'^[a-zA-Z_][\w]*(?:/[a-zA-Z_][\w]*)*$', path):
+        return "xpath"
+    
+    if re.search(r'^[a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*)*$', path):
+        return "jsonpath"
+    
+    return None
     
