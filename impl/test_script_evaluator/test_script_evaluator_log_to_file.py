@@ -1,3 +1,4 @@
+import argparse
 import json
 import requests
 from datetime import datetime
@@ -25,7 +26,7 @@ PROFILES = {} #saving profilesIDs with the references
 with open(utils.LOG_FILE_PATH, "w", encoding="utf-8") as f:
     f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
-FHIR_SERVER_BASE = conf_man.get_fhir_server()
+FHIR_SERVER_BASE = None
 
 def extract_test_source_id(container): #do i even need this anymore?
     """
@@ -839,6 +840,9 @@ def test_fhir_operations(testscript_data):
         as provided by ``load_testscript_data``.
     """
 
+    global FHIR_SERVER_BASE
+    FHIR_SERVER_BASE = conf_man.get_fhir_server()
+
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         return
@@ -897,6 +901,12 @@ def test_fhir_operations(testscript_data):
     VARIABLES.clear()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="FHIR TestScript Runner")
+    parser.add_argument("--config", required=True, help="Path to config.json")
+    args = parser.parse_args()
+
+    conf_man.get_config_manager(args.config)
+
     for testscript_path, resource_path in conf_man.get_testscript_pairs():
         testscript_data = load_testscript_data(testscript_path, resource_path)
         test_fhir_operations(testscript_data)

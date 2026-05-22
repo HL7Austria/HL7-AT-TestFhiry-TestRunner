@@ -1,3 +1,4 @@
+import argparse
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -8,8 +9,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def read_config_file():
-    config_path = BASE_DIR / "config.json"
+def read_config_file(config_path=None):
+    if config_path is None:
+        config_path = BASE_DIR / "config.json"
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -23,17 +25,21 @@ def read_config_file():
     url = config.get("url")
     if not url:
         raise ValueError(f"'url' key not found in {config_path}")
-    return url
+    resource_path = config.get("path", "")
+    return url, resource_path
 
-def save_example_instances():
+def save_example_instances(config_path=None):
+    # Base URL and resource path
+    base_url, resource_path = read_config_file(config_path)
+
     # Use the specific directory path
-    json_dir = BASE_DIR / "Example_Instances"
+    if resource_path:
+        json_dir = Path(resource_path) / "Example_Instances"
+    else:
+        json_dir = BASE_DIR / "Example_Instances"
 
     # Create directory if it doesn't exist
     os.makedirs(json_dir, exist_ok=True)
-
-    # Base URL
-    base_url = read_config_file()
 
     # Get the artifacts page
     response = requests.get(f"{base_url}/artifacts.html")
@@ -59,15 +65,18 @@ def save_example_instances():
     save_links(links, json_dir, base_url)
 
 
-def save_profiles():
+def save_profiles(config_path=None):
+    # Base URL and resource path
+    base_url, resource_path = read_config_file(config_path)
+
     # Use the specific directory path
-    json_dir = BASE_DIR / "Profiles"
+    if resource_path:
+        json_dir = Path(resource_path) / "Profiles"
+    else:
+        json_dir = BASE_DIR / "Profiles"
 
     # Create directory if it doesn't exist
     os.makedirs(json_dir, exist_ok=True)
-
-    # Base URL
-    base_url = read_config_file()
 
     # Get the artifacts page
     response = requests.get(f"{base_url}/artifacts.html")
@@ -117,13 +126,17 @@ def save_links(links, json_dir, url):
             print(f"Failed to get JSON content from {json_url} (status {json_response.status_code})")
 
 
-def save_test_scripts():
+def save_test_scripts(config_path=None):
+    # Base URL and resource path
+    base_url, resource_path = read_config_file(config_path)
+
     # Use the specific directory path
-    json_dir = BASE_DIR / "Test_Scripts"
+    if resource_path:
+        json_dir = Path(resource_path) / "Test_Scripts"
+    else:
+        json_dir = BASE_DIR / "Test_Scripts"
     print(f"\nUsing directory: {json_dir}")
     os.makedirs(json_dir, exist_ok=True)
-    # Base URL
-    base_url = read_config_file()
 
     # Get the main test page
     response = requests.get(f"{base_url}/tests.html", timeout=30)
@@ -140,6 +153,10 @@ def save_test_scripts():
 
 
 if __name__ == "__main__":
-    save_example_instances()
-    save_profiles()
-    save_test_scripts()
+    parser = argparse.ArgumentParser(description="Download IG resources from the internet")
+    parser.add_argument("--config", default=None, help="Path to config.json")
+    args = parser.parse_args()
+
+    save_example_instances(args.config)
+    save_profiles(args.config)
+    save_test_scripts(args.config)

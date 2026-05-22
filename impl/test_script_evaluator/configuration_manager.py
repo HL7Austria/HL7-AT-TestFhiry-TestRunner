@@ -114,11 +114,19 @@ class ConfigManager:
 
     def get_testscripts_from_config(self):
 
-        TESTSCRIPT_FOLDER = "../Test_Scripts"
+        if not self.path or not Path(self.path).is_dir():
+            utils.log_to_file(f"Test konnte nicht gestartet werden: 'path' ist leer oder existiert nicht ({self.path!r})")
+            return []
+
+        TESTSCRIPT_FOLDER = str(Path(self.path) / "Test_Scripts")
 
         # Testscripts aus der Config ODER Ordner
 
-        testscripts = self.config.get("testscripts", [])
+        testscripts_raw = self.config.get("testscripts", [])
+        testscripts = [
+            str(Path(self.path) / ts).replace("\\", "/") if not Path(ts).is_absolute() else ts
+            for ts in testscripts_raw
+        ]
 
         if not testscripts:
             testscripts = [
@@ -160,11 +168,10 @@ class ConfigManager:
                 fixture_ref = fixture.get("resource", {}).get("reference")
                 if fixture_ref:
                     filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
-                    fixture_path = f"Example_Instances/{filename}".replace("\\", "/")
+                    fixture_path = str(Path(self.path) / "Example_Instances" / filename).replace("\\", "/")
                     fixture_list.append(fixture_path)
 
-            ts_path_clean = ts_path.replace("../", "")
-            result.append((ts_path_clean, fixture_list))
+            result.append((ts_path, fixture_list))
 
         return result
 
