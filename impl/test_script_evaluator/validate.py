@@ -318,7 +318,6 @@ def doPath(body, path:str):
 
     if isinstance(body, dict):
         type = "json"
-
     if type != path_type:
         raise Exception("Path cannot compute with different Content-Type")
     
@@ -341,9 +340,25 @@ def xmlPath(body : str, path:str): #get xml as str?
     :raises ValueError: If any match result is not a string.
     """
     root = etree.fromstring(body)
-    ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
+    ns = {}
+    for prefix, uri in root.nsmap.items():
+        if prefix is not None:
+            ns[prefix] = uri
+        else:
+            ns['ns'] = uri
 
-    # Alle Family-Namen
+    # Wenn Default-Namespace existiert und Pfad keine Prefixe enthält,
+    # automatisch 'ns:' vor jeden Elementnamen setzen
+    if 'ns' in ns and ':' not in path.replace('@', '').replace('//', '/'):
+        parts = path.split('/')
+        prefixed = []
+        for part in parts:
+            if part and not part.startswith('@') and not part.startswith('*'):
+                prefixed.append(f'ns:{part}')
+            else:
+                prefixed.append(part)
+        path = '/'.join(prefixed)
+
     result = root.xpath(f"//{path}", namespaces=ns)
     for res in result:
         if not isinstance(res, str):

@@ -5,6 +5,8 @@ import json
 import xml.etree.ElementTree as ET
 from typing import Literal, Optional
 import re
+from lxml import etree
+from jsonpath_ng import parse as jp_parse
 
 
 """
@@ -222,49 +224,30 @@ def detect_path_type(path: str) -> ContentType:
         return None
     
     path = path.strip()
-    
-    xpath_patterns = [
-        r'^/',                    
-        r'^\.\.',                 
-        r'^\./',                  
-        r'^[a-zA-Z_][\w]*::',     
-        r'^[a-zA-Z_][\w]*\(',     
-        r'^\$[a-zA-Z_]',          
-        r'^@',                    
-        r'^\*',                   
-        r'^\[',                   
-        r'^\(',                   
-    ]
-    
-    jsonpath_patterns = [
-        r'^\$\.?',                
-        r'^\$\[',                 
-        r'^\.',                   
-        r'^\.\.',                 
-        r'^\[',                   
-    ]
-    
-    for pattern in xpath_patterns:
-        if re.match(pattern, path):
-            if any(char in path for char in ['[', ']', '@', '/', '::', '(', ')']):
-                return "xml"
-            if re.search(r'[a-zA-Z_][\w]*\s*=', path): 
-                return "xml"
-            if re.search(r'::[a-zA-Z_][\w]*\(', path): 
-                return "xml"
-    
-    for pattern in jsonpath_patterns:
-        if re.match(pattern, path):
-            if any(char in path for char in ['.', '[', ']', '$', '..']):
-                return "json"
-            if re.search(r'["\'][^"\']*["\']', path):
-                return "json"
-    
-    if re.search(r'^[a-zA-Z_][\w]*(?:/[a-zA-Z_][\w]*)*$', path):
+
+    is_xpath = False
+    is_jsonpath = False
+
+    try:
+        prefixes = set(re.findall(r'([a-zA-Z_][\w]*):(?!:)', path))
+        dummy_ns = {p: f'http://dummy/{p}' for p in prefixes}
+        etree.XPath(path, namespaces=dummy_ns)
+        is_xpath = True
+    except Exception:
+        pass
+
+    try:
+        jp_parse(path)
+        is_jsonpath = True
+    except Exception:
+        pass
+
+    if is_xpath and not is_jsonpath:
         return "xml"
-    
-    if re.search(r'^[a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*)*$', path):
+    if is_jsonpath and not is_xpath:
         return "json"
+    if is_xpath and is_jsonpath:
+        return "xml" if '/' in path else "json"
     
     return "unknown"
     
