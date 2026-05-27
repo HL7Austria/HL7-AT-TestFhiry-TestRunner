@@ -387,10 +387,9 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
 
         if "validateProfileId" in assertion:
             msg = ""
-
             if PROFILES:
-                #save temporary file with response
                 msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
+                
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
                        
@@ -406,6 +405,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
                 raise error.TestScriptError("headerFiedld operator value not valid")
+            validate.validate_headerfield(response, assertion.get("headerField"), compare_val, operator)
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
@@ -426,7 +426,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             validate.validatePath(response, assertion.get("path"), compare_val, operator)
 
         
-        if "minimumId" in assertion: #kann mit path oder expression
+        if "minimumId" in assertion:
             #operator will be ignored
             raise NotImplementedError
         

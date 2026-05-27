@@ -254,7 +254,7 @@ def check_result(output: list[str]) -> str:
     if(errors != ""):
         raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
 
-    return warnings + "\n" + information #if no warnings and no error
+    return warnings + "\n" + information #if no error
 
 def eval_compareTo(fixture, assertion : dict[str,Any]):
     """Evaluates the comparison value from a ``compareToSourceId`` assertion.
@@ -309,6 +309,10 @@ def validatePath(response: Interaction, path:str, expected, operator: operator_t
     utils.log_to_file(f"Asserting Path: {path}, {res} {operator} {expected}.")
     validate_operator(operator, res, expected)
 
+def validate_headerfield(response: Interaction, field:str, expected: Any, operator: operator_type) -> None:
+    if not response.header:
+        raise AssertionError("Response has no saved Headers!")
+    validate_operator(operator, response.header.get(field), expected)
 
 def doPath(body, path:str):
     """Evaluates an XPath or JSONPath expression against a resource body.
@@ -374,7 +378,6 @@ def xmlPath(body : str, path:str): #get xml as str?
     for res in result:
         if not isinstance(res, str):
             raise ValueError(f"Path {path} could not be evaluated")
-    print(result)
     return result
 
 def jsonPath(body : str, path:str):
