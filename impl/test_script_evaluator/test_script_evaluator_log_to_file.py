@@ -389,7 +389,6 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             msg = ""
             if PROFILES:
                 msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
-                
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
                        
@@ -398,6 +397,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
+            """
+            check if xml or json
+            xml --> regex? look what resource-Type (should be root)
+            json --> resourceType aus dict
+            """
+            raise NotImplementedError
         
         elif "headerField" in assertion:
             #mit value
@@ -409,6 +414,11 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
+            """
+            check if bundle
+            check if first, last and next links
+            --> Error needs to reflect what is missing
+            """
             raise NotImplementedError
         
         elif "expression" in assertion:
@@ -428,6 +438,10 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         
         if "minimumId" in assertion:
             #operator will be ignored
+            """
+            find a way to check if this fixture is inside the response
+            --> find out if there is a library, find out if validator has that
+            """
             raise NotImplementedError
         
         if "defaultManualCompletion" in assertion:
