@@ -213,7 +213,7 @@ def map_method_type(type : OperationType) -> OperationMethod:
     else:
         return "get"
     
-def detect_path_type(path: str) -> Optional[Literal["xpath", "jsonpath"]]:
+def detect_path_type(path: str) -> ContentType:
     """
     Checks if string is Xpath or JsonPath
     """
@@ -247,24 +247,24 @@ def detect_path_type(path: str) -> Optional[Literal["xpath", "jsonpath"]]:
     for pattern in xpath_patterns:
         if re.match(pattern, path):
             if any(char in path for char in ['[', ']', '@', '/', '::', '(', ')']):
-                return "xpath"
+                return "xml"
             if re.search(r'[a-zA-Z_][\w]*\s*=', path): 
-                return "xpath"
+                return "xml"
             if re.search(r'::[a-zA-Z_][\w]*\(', path): 
-                return "xpath"
+                return "xml"
     
     for pattern in jsonpath_patterns:
         if re.match(pattern, path):
             if any(char in path for char in ['.', '[', ']', '$', '..']):
-                return "jsonpath"
+                return "json"
             if re.search(r'["\'][^"\']*["\']', path):
-                return "jsonpath"
+                return "json"
     
     if re.search(r'^[a-zA-Z_][\w]*(?:/[a-zA-Z_][\w]*)*$', path):
-        return "xpath"
+        return "xml"
     
     if re.search(r'^[a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*)*$', path):
-        return "jsonpath"
+        return "json"
     
-    return None
+    return "unknown"
     

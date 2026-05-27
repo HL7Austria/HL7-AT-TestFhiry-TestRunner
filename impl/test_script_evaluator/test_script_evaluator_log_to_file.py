@@ -423,7 +423,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            raise NotImplementedError
+            validate.validatePath(response, assertion.get("path"), compare_val, operator)
 
         
         if "minimumId" in assertion: #kann mit path oder expression
