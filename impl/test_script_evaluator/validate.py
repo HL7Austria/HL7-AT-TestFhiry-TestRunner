@@ -292,6 +292,17 @@ def do_expression(body : dict[str, Any], expression : str):
     return evaluate(body, expression)
 
 def validatePath(response: Interaction, path:str, expected, operator: operator_type) -> None:
+    
+    """Validates the Path from an Assertion.
+    The Content-Type of the response-body is expected to math with the needed type for the path.
+
+    :param response: The ``Interaction`` containing the server response.
+    :param path: XPath or JsonPath of the Assertion.
+    :param expected: the expected value for the comparison.
+    :param operator: The comparison operator to apply.
+    :raises AssertionError: If the path-result does not satisfy the operator check.
+    """
+
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
     res = doPath(response.body, path)
@@ -332,7 +343,9 @@ def doPath(body, path:str):
     return result
 
 def xmlPath(body : str, path:str): #get xml as str?
-    """Evaluates an XPath expression against an XML resource body.
+    """
+    Evaluates an XPath expression against an XML resource body.
+    If a namespace exists but no prefix in path it uses that ns as prefix.
 
     :param body: The XML resource as a string.
     :param path: The XPath expression to evaluate.
@@ -347,8 +360,6 @@ def xmlPath(body : str, path:str): #get xml as str?
         else:
             ns['ns'] = uri
 
-    # Wenn Default-Namespace existiert und Pfad keine Prefixe enthält,
-    # automatisch 'ns:' vor jeden Elementnamen setzen
     if 'ns' in ns and ':' not in path.replace('@', '').replace('//', '/'):
         parts = path.split('/')
         prefixed = []
