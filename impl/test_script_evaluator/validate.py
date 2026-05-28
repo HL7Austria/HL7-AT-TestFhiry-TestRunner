@@ -3,7 +3,6 @@ import subprocess
 import os
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
@@ -94,9 +93,9 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     """
 
     actual_content_type = response.header.get("Content-Type", "")
-    expected_type = parse_fhir_header(expected_type)
+    expected_type = utils.parse_fhir_header(expected_type)
 
-    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
+    utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
 def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
@@ -116,7 +115,7 @@ def validate_expression(fixture, expression : str, operator: operator_type, valu
     if isinstance(value, list):
         if len(value) == 1:
             value = value[0]
-    log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
+    utils.log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
     validate_operator(operator, res, value)
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
@@ -128,7 +127,7 @@ def validate_responseCode(response: Interaction, expected_codes, operator: opera
     :raises AssertionError: If the status code does not satisfy the operator check.
     """
     status_code = str(response.status_code)
-    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
+    utils.log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
 def validate_response(response: Interaction, expected, operator: operator_type) -> None:
@@ -142,7 +141,7 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
     """
     if not response.reason:
         raise AssertionError("No response-reason found!")
-    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
+    utils.log_to_file(f"Asserting response {response.reason} {operator} {expected}")
     validate_operator(operator, response.reason, expected)
     
 def execute_validator(cmd : str) -> list[str]:
@@ -209,11 +208,18 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
         the validator (empty if none).
     :raises AssertionError: If the validator reports errors.
     """
-    log_to_file(f"Asserting profile {profileRef}")
+    utils.log_to_file(f"Asserting profile {profileRef}")
 
     prof_folder = utils.get_full_path("Profiles")
-    resource = utils.get_full_path("temp/temp.json")
+    resource = utils.get_full_path("temp/temp") #the dummy path without file-ending
     validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
+    type_s = utils.string_type(response.body)
+    if type_s == "xml":
+        resource += ".xml"
+    elif type_s == "json":
+        resource += ".json"
+    else: #unknown
+        raise AssertionError("Response Body could not be typed.")
 
     os.makedirs(utils.get_full_path("temp"), exist_ok=True)
     with open(resource, "w") as f:

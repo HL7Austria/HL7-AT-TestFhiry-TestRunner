@@ -2,6 +2,7 @@ import json
 import requests
 from datetime import datetime
 import re
+import xml.etree.ElementTree as ET
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -262,7 +263,17 @@ def build_url(operation :dict [str, Any]) -> str:
                         id = body.get("id")
                         vid = body.get("meta").get("versionId")
                     else:
-                        raise Exception("XML is not supported as of now")
+                        root = ET.fromstring(Tfixture.body)
+                        ns_match = root.tag.split('}')[0] + '}' if '{' in root.tag else ''
+                        ns = {'ns': ns_match.strip('{}')} if ns_match else {}
+                        if ns:
+                            id_el = root.find('ns:id', ns)
+                            meta_el = root.find('ns:meta/ns:versionId', ns)
+                        else:
+                            id_el = root.find('id')
+                            meta_el = root.find('meta/versionId')
+                        id = id_el.get('value', '') if id_el is not None else ''
+                        vid = meta_el.get('value', '') if meta_el is not None else ''
             elif isinstance(Tfixture, Fixture):
                 id = Tfixture.server_id
             else:
@@ -274,7 +285,8 @@ def build_url(operation :dict [str, Any]) -> str:
                 body = json.loads(Tfixture.body)
                 url_type = body.get("resourceType")
             else:
-                raise Exception("XML is not supported as of now")
+                root = ET.fromstring(Tfixture.body)
+                url_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
             
             if type == "vread":
                 if vid == "":
@@ -387,9 +399,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
 
         if "validateProfileId" in assertion:
             msg = ""
-
             if PROFILES:
-                #save temporary file with response
                 msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
@@ -399,6 +409,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
+            """
+            check if xml or json
+            xml --> regex? look what resource-Type (should be root)
+            json --> resourceType aus dict
+            """
+            raise NotImplementedError
         
         elif "headerField" in assertion:
             #mit value
@@ -406,9 +422,15 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
                 raise error.TestScriptError("headerFiedld operator value not valid")
+            validate.validate_headerfield(response, assertion.get("headerField"), compare_val, operator)
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
+            """
+            check if bundle
+            check if first, last and next links
+            --> Error needs to reflect what is missing
+            """
             raise NotImplementedError
         
         elif "expression" in assertion:
@@ -423,11 +445,15 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            raise NotImplementedError
+            #validate.validatePath(response, assertion.get("path"), compare_val, operator) --> in another branch
 
         
-        if "minimumId" in assertion: #kann mit path oder expression
+        if "minimumId" in assertion:
             #operator will be ignored
+            """
+            find a way to check if this fixture is inside the response
+            --> find out if there is a library, find out if validator has that
+            """
             raise NotImplementedError
         
         if "defaultManualCompletion" in assertion:
