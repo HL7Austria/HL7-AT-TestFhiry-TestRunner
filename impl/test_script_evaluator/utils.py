@@ -161,6 +161,57 @@ def printInfoJson(path : str):
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
 
+def load_resource(path : str):
+    """
+    Loads a FHIR resource file (JSON or XML) from the given path.
+    :param path: The path to the resource file.
+    :return: Parsed JSON content as dict, or raw XML content as str.
+    """
+    if path.startswith("impl"):
+        path = path.replace("impl/", "")
+    full_path = get_full_path(path)
+    printInfoJson(path)
+    with open(full_path, "r", encoding="utf-8") as f:
+        if str(full_path).endswith(".xml"):
+            return f.read()
+        else:
+            return json.load(f)
+
+def load_resource_list(paths : list[str]):
+    """Loads multiple FHIR resource files (JSON or XML) from the given paths.
+
+    :param paths: List of relative path strings to resource files.
+    :returns: List of parsed JSON dicts or raw XML strings, or ``None`` if ``paths`` is empty.
+    """
+    resource_list = []
+
+    if not paths:
+        return None
+
+    for path in paths:
+        resource_list.append(load_resource(path))
+
+    return resource_list
+
+def extract_fhir_meta(resource):
+    """Extracts id and resourceType from a FHIR resource (dict, JSON string, or XML string).
+
+    :param resource: A parsed JSON dict, JSON string, or raw XML string.
+    :returns: Tuple of (resource_id, resource_type).
+    """
+    if isinstance(resource, dict):
+        return resource.get("id"), resource.get("resourceType")
+    elif string_type(resource) == "json":
+        parsed = json.loads(resource)
+        return parsed.get("id"), parsed.get("resourceType")
+    else:
+        root = ET.fromstring(resource)
+        ns = {'fhir': 'http://hl7.org/fhir'}
+        tag = root.tag.split('}')[-1] if '}' in root.tag else root.tag
+        id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
+        res_id = id_el.get('value', '') if id_el is not None else ''
+        return res_id, tag
+
 def parse_fhir_header(value : str):
     """
     Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.

@@ -159,9 +159,17 @@ class ConfigManager:
             for fixture in fixtures_raw:
                 fixture_ref = fixture.get("resource", {}).get("reference")
                 if fixture_ref:
-                    filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
-                    fixture_path = f"Example_Instances/{filename}".replace("\\", "/")
-                    fixture_list.append(fixture_path)
+                    base_name = os.path.splitext(os.path.basename(fixture_ref))[0]
+                    fixture_path = None
+                    for ext in [".json", ".xml"]:
+                        candidate = f"Example_Instances/{base_name}{ext}".replace("\\", "/")
+                        if os.path.exists(utils.get_full_path(candidate)):
+                            fixture_path = candidate
+                            break
+                    if fixture_path:
+                        fixture_list.append(fixture_path)
+                    else:
+                        utils.log_to_file(f"Warning: Example Instance not found for {base_name} (.json or .xml)")
 
             ts_path_clean = ts_path.replace("../", "")
             result.append((ts_path_clean, fixture_list))
