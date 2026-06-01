@@ -93,8 +93,7 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     """
 
     actual_content_type = response.header.get("Content-Type", "")
-    expected_type = utils.parse_fhir_header(expected_type)
-
+    
     utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 

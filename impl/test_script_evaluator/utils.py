@@ -212,22 +212,6 @@ def extract_fhir_meta(resource):
         res_id = id_el.get('value', '') if id_el is not None else ''
         return res_id, tag
 
-def parse_fhir_header(value : str):
-    """
-    Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.
-
-    :param value: The header value to parse.
-    :return: Full MIME type string.
-    """
-    if not value:
-        return "application/fhir+json"
-    value = value.lower()
-    if value == "json":
-        return "application/fhir+json"
-    elif value == "xml":
-        return "application/fhir+xml"
-    return value  # fallback: use whatever it says
-
 def string_type(string: str) -> ContentType:
     """Detects whether a string contains JSON, XML, or an unknown format.
 

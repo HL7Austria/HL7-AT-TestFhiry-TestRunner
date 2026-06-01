@@ -185,7 +185,7 @@ def execute_operation(operation: dict[str, Any]):
     last_interaction.res_id = int_id
     
 
-    if(int_id != None):
+    if int_id != None:
         REQ_RESP.append(last_interaction)
 
 def build_url(operation :dict [str, Any]) -> str:
@@ -213,13 +213,13 @@ def build_url(operation :dict [str, Any]) -> str:
     sourceId = operation.get("sourceId")
     targetId = operation.get("targetId")
     resource = operation.get("resource")
-    type = operation.get("type", {}).get("code", "").lower()
+    op_type = operation.get("type", {}).get("code", "").lower()
 
-    if targetId and type == "search":
+    if targetId and op_type == "search":
         raise error.TestScriptError("targetId should not be used with search.")
-    if targetId and type == "create":
+    if targetId and op_type == "create":
         raise error.TestScriptError("Create should not have a targetId")
-    if params and (type == "create" or type == "transaction"):
+    if params and (op_type == "create" or op_type == "transaction"):
         raise error.TestScriptError("Create and transaction should not have params!")
 
     fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -230,20 +230,20 @@ def build_url(operation :dict [str, Any]) -> str:
         Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
     #--> suchen der Fixture wenn leer = None
 
-    if type == "transaction" or type == "batch":
+    if op_type == "transaction" or op_type == "batch":
         return url
-    elif type == "capabilities" and not params:
+    elif op_type == "capabilities" and not params:
         return url + "/metadata"
 
     if params:
-        if type == "read" or type == "vread" or type == "update" or type == "delete":
+        if op_type == "read" or op_type == "vread" or op_type == "update" or op_type == "delete":
             if not resource:
-                raise error.TestScriptError(f"Resource-Type is needed for Operation {type} {params}")
+                raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
             url += "/" + resource
         return url + params
     else:
-        if not type:
+        if not op_type:
             raise error.TestScriptError("Could not create url for Operation!")
         
         if sourceId:
@@ -256,24 +256,24 @@ def build_url(operation :dict [str, Any]) -> str:
                 url += "/" + res_type
         
         if targetId:
-            id = ""
+            res_id = ""
             vid = ""
             url_type = ""
             if isinstance(Tfixture, Interaction):
                 if "Location" in Tfixture.header:
                     location = Tfixture.header.get("Location")
                     if "_history" in location:
-                        id = location.rstrip("/").split("/")[-3]
+                        res_id = location.rstrip("/").split("/")[-3]
                         vid = location.rstrip("/").split("/")[-1]
                     else:
-                        id = location.rstrip("/").split("/")[-1]
+                        res_id = location.rstrip("/").split("/")[-1]
                 else:
                     if isinstance(Tfixture.body, dict):
-                        id = Tfixture.body.get("id")
+                        res_id = Tfixture.body.get("id")
                         vid = Tfixture.body.get("meta").get("versionId")
                     elif utils.string_type(Tfixture.body) == "json":
                         body = json.loads(Tfixture.body)
-                        id = body.get("id")
+                        res_id = body.get("id")
                         vid = body.get("meta").get("versionId")
                     else:
                         root = ET.fromstring(Tfixture.body)
@@ -285,10 +285,10 @@ def build_url(operation :dict [str, Any]) -> str:
                         else:
                             id_el = root.find('id')
                             meta_el = root.find('meta/versionId')
-                        id = id_el.get('value', '') if id_el is not None else ''
+                        res_id = id_el.get('value', '') if id_el is not None else ''
                         vid = meta_el.get('value', '') if meta_el is not None else ''
             elif isinstance(Tfixture, Fixture):
-                id = Tfixture.server_id
+                res_id = Tfixture.server_id
             else:
                 raise error.TestScriptError(f"Fixture {targetId} not found!")
             
@@ -303,17 +303,17 @@ def build_url(operation :dict [str, Any]) -> str:
                 root = ET.fromstring(Tfixture.body)
                 url_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
             
-            if type == "vread":
+            if op_type == "vread":
                 if vid == "":
                     raise error.OperationError("No versonId found for vread Operation.")
-                return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
-            elif type == "history":
-                return url +  "/" + url_type +  "/" + id + "/_history"
+                return url +  "/" + url_type +  "/" + res_id + "/_history" +  "/" + vid
+            elif op_type == "history":
+                return url +  "/" + url_type +  "/" + res_id + "/_history"
             else:
-                if type == "update" and sourceId:
-                    return url +  "/" + id
+                if op_type == "update" and sourceId:
+                    return url +  "/" + res_id
                 else:
-                    return url +  "/" + url_type +  "/" + id
+                    return url +  "/" + url_type +  "/" + res_id
         return url
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
@@ -552,25 +552,25 @@ def save_variables(variables : list) -> None:
     """
     global VARIABLES
     for var in variables:
-        id = var.get("name")
+        var_id = var.get("name")
 
-        variable = Variable(id,path=var.get("path"), 
+        variable = Variable(var_id,path=var.get("path"), 
                                   expression=var.get("expression"),
                                   sourceId=var.get("sourceId"),
                                   headerField=var.get("headerField"),
                                   defaultValue=var.get("defaultValue"))
-        if id is None:
+        if var_id is None:
             raise error.TestScriptError("Variable not correctly defined!")
 
 
-        if(((variable.expression is not None) & (variable.headerField is not None)) | 
-           ((variable.headerField is not None) & (variable.path is not None)) | 
-           ((variable.expression is not None) & (variable.path is not None))):
-            raise error.TestScriptError(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+        if ((variable.expression is not None and variable.headerField is not None) or 
+           (variable.headerField is not None and variable.path is not None) or 
+           (variable.expression is not None and variable.path is not None)):
+            raise error.TestScriptError(f"Variable {var_id} not valid Fhir, two value-expressions cannot be filled at the same time!")
 
-        if ((variable.expression is None) & (variable.headerField is None) 
-            & (variable.path is None) & (variable.defaultValue is None)):
-            raise error.TestScriptError(f"Variable {id} is not filled!")
+        if (variable.expression is None and variable.headerField is None 
+            and variable.path is None and variable.defaultValue is None):
+            raise error.TestScriptError(f"Variable {var_id} is not filled!")
 
         VARIABLES.append(variable)
 
@@ -678,7 +678,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
         autodelete = fixture.get("autodelete", False)
-        if(autocreate):
+        if autocreate:
             bundle_resources.append(res)
         FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, res)) #erstes Anlegen vor bundle
 
