@@ -631,17 +631,16 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
     :raises Exception: If the transaction bundle POST fails, with the
         diagnostic messages extracted from the server's OperationOutcome.
     """
-    bundle_json = [] #die zu erstellenden Fixtures als json
+    bundle_json = []
     for jsonf, fixture in zip(jsonFiles, fix_list):
-        if isinstance(jsonf, dict):
-            fix_id = jsonf.get("id")
-            fix_type = jsonf.get("resourceType")
+        fix_id = jsonf.get("id")
+        fix_type = jsonf.get("resourceType")
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
         autodelete = fixture.get("autodelete", False)
         if(autocreate):
             bundle_json.append(jsonf)
-        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf)) #erstes Anlegen vor bundle
+        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf))
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
