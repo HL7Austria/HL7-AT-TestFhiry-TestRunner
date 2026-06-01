@@ -8,6 +8,8 @@ from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
+from impl.test_script_evaluator.utils import *
+from impl.exception.Error import *
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
