@@ -3,11 +3,11 @@ import subprocess
 import os
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
-from impl.test_script_evaluator.test_script_evaluator_log_to_file import log_to_file, parse_fhir_header
 from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
+import impl.exception.Error as error
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
@@ -94,16 +94,16 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     """
 
     actual_content_type = response.header.get("Content-Type", "")
-    expected_type = parse_fhir_header(expected_type)
+    expected_type = utils.parse_fhir_header(expected_type)
 
-    log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
+    utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
 def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
     
     if isinstance(fixture.body, str):
         if utils.string_type(fixture.body) != "json":
-            raise Exception ("fhirpath does not function if response is not json")
+            raise Exception ("XML is not yet supported")
         body_use = json.loads(fixture.body)
     else:
         body_use = fixture.body
@@ -116,7 +116,7 @@ def validate_expression(fixture, expression : str, operator: operator_type, valu
     if isinstance(value, list):
         if len(value) == 1:
             value = value[0]
-    log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
+    utils.log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
     validate_operator(operator, res, value)
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
@@ -128,22 +128,45 @@ def validate_responseCode(response: Interaction, expected_codes, operator: opera
     :raises AssertionError: If the status code does not satisfy the operator check.
     """
     status_code = str(response.status_code)
-    log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
+    utils.log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
+RESPONSE_CODE_MAP = {
+    "okay": "200",
+    "created": "201",
+    "noContent": "204",
+    "notModified": "304",
+    "bad": "400",
+    "forbidden": "403",
+    "notFound": "404",
+    "methodNotAllowed": "405",
+    "conflict": "409",
+    "gone": "410",
+    "preconditionFailed": "412",
+    "unprocessable": "422",
+}
+
 def validate_response(response: Interaction, expected, operator: operator_type) -> None:
-    """Validates the reason phrase (display) of a server response.
+    """Validates the HTTP status code of a server response using the FHIR
+    ``assert.response`` code as a shorthand for ``assert.responseCode``.
+
+    Maps the FHIR response display code (e.g. ``'okay'``, ``'created'``) to
+    the corresponding HTTP status code and compares it against the actual
+    status code of the response.
 
     :param response: The ``Interaction`` containing the server response.
-    :param expected: The expected response display string from the TestScript.
+    :param expected: The expected FHIR response display code from the TestScript.
     :param operator: The comparison operator to apply.
-    :raises AssertionError: If the reason phrase does not satisfy the operator
-        check, or if no reason phrase is present.
+    :raises AssertionError: If the status code does not satisfy the operator check.
+    :raises TestScriptError: If the expected response code is not a recognized
+        FHIR AssertionResponseTypes value.
     """
-    if not response.reason:
-        raise AssertionError("No response-reason found!")
-    log_to_file(f"Asserting response {response.reason} {operator} {expected}")
-    validate_operator(operator, response.reason, expected)
+    expected_status = RESPONSE_CODE_MAP.get(expected)
+    if not expected_status:
+        raise error.TestScriptError(f"Unknown response code '{expected}'. Must be one of: {', '.join(RESPONSE_CODE_MAP.keys())}")
+    actual_status = str(response.status_code)
+    utils.log_to_file(f"Asserting response {actual_status} {operator} {expected} (mapped to {expected_status})")
+    validate_operator(operator, actual_status, expected_status)
     
 def execute_validator(cmd : str) -> list[str]:
     """Runs a shell command and returns its stdout as a list of lines.
@@ -209,10 +232,18 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
         the validator (empty if none).
     :raises AssertionError: If the validator reports errors.
     """
-    log_to_file(f"Asserting profile {profileRef}")
+    utils.log_to_file(f"Asserting profile {profileRef}")
+
+    pathF = "temp/temp"
+    if utils.string_type(response.body) == "json":
+        pathF += ".json"
+    elif utils.string_type(response.body) == "xml":
+        pathF += ".xml"
+    else:
+        raise TypeError("Response body in unexpected format!")
 
     prof_folder = utils.get_full_path("Profiles")
-    resource = utils.get_full_path("temp/temp.json")
+    resource = utils.get_full_path(pathF)
     validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
 
     os.makedirs(utils.get_full_path("temp"), exist_ok=True)
