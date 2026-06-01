@@ -749,7 +749,7 @@ def SETUP(setup_data, fixture_list : list, resources):
                     fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + str(fix2.type) +"/"+ str(fix2.server_id) + "\"", json_string))
 
                 if re.search("\"reference\" *: *\"[a-zA-Z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
-                        raise error.TestScriptError("Unknown Reference remaining.")
+                    raise error.TestScriptError("Unknown Reference remaining.")
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
