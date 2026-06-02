@@ -172,11 +172,6 @@ class ConfigManager:
         result = []
 
         for ts_path in testscripts:
-
-            # Testscript laden
-            with open(ts_path, "r", encoding="utf-8") as ts_file:
-                testscript = json.load(ts_file)
-
             try:
                 with open(ts_path, "r", encoding="utf-8") as ts_file:
                     testscript = json.load(ts_file)

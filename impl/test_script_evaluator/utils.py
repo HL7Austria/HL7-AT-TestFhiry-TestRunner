@@ -69,7 +69,7 @@ def get_all_profiles(base_path=None):
                     ]
         return profiles
 
-def get_profile_json(profile_list : list[str], base_path=None):#brauch ich das wirklich
+def get_profile_json(profile_list : list[str], base_path=None):
     """Loads profile JSON files whose ``url`` matches one of the given references.
 
     Reads every JSON file from the Profiles folder and returns the
