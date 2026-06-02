@@ -15,16 +15,11 @@ from impl.transactions.transactions import build_whole_transaction_bundle
 import impl.test_script_evaluator.utils as utils
 
 last_interaction = None
-log_filename = f"test_results_{utils.timestamp}.txt"
 
 FIXTURES = []
 REQ_RESP = []
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
-
-# Init logfile
-with open(utils.LOG_FILE_PATH, "w", encoding="utf-8") as f:
-    f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
 FHIR_SERVER_BASE = None
 
