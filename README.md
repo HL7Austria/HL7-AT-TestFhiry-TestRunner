@@ -31,7 +31,6 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
     - [Installation](#installation)
   - [Projektteam](#projektteam)
   - [TestScript-Mapping](#testscript-mapping)
-  - [Potentielle Erweiterungen](#potentielle-erweiterungen)
 
 ---
 ## Einleitung
@@ -56,17 +55,9 @@ Konkret ermöglicht es:
 
 #### Speicherung der TestScripts
 
-Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und automatisiert aktualisiert.
+Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und können über `load_ig_from_internet.py` automatisiert heruntergeladen werden.
 
-* **Speicherort**: Die Scripts werden als **JSON-Dateien** in folgendem Verzeichnis abgelegt:
-    ```
-    impl/testscripts/test_script_json_files
-    ```
-
-* **Automatisierte Aktualisierung**: Die Aktualisierung erfolgt über das Python-Skript:
-    ```
-    impl/testscripts/parse_testScripts_save_as_json.py
-    ```
+* **Speicherort**: Die Scripts werden als **JSON-Dateien** im konfigurierten `path`-Verzeichnis unter `Test_Scripts/` abgelegt.
 
 ## Systemüberblick und Architektur
 
@@ -75,42 +66,46 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
 ```
 .
 ├─ impl/
-│  ├─ Example_Instances/        # Wird automatisch erstellt und enthält Example Instances
 │  ├─ exception/               # Benutzerdefinierte Exceptions
 │  ├─ ig_loader/               # Lädt IGs, Example Instances und Profile aus dem Internet
 │  ├─ model/                   # Modelle für config.json und Fixtures
-│  ├─ Profiles/                # Wird automatisch erstellt und enthält Profile
-│  ├─ Results/                 # Wird automatisch erstellt und enthält Log-Dateien
-│  ├─ test-script_evaluator/   # Dateien zur Evaluierung der Test-Scripts
-│  ├─ Test_Scripts/            # Wird automatisch erstellt und enthält Test-Scripts
+│  ├─ test_script_evaluator/   # Dateien zur Evaluierung der Test-Scripts
 │  ├─ transactions/            # Dateien für FHIR® Transaction Bundles
 │  ├─ config.json              # Konfiguration für die Ausführung
-│  └─ requirements.txt         # Python-Abhängigkeiten
+│  └─ __main__.py              # Einstiegspunkt der Anwendung
+├─ requirements.txt            # Python-Abhängigkeiten
+│
+│  # Folgende Ordner werden im konfigurierten 'path'-Verzeichnis erstellt:
+│  <path>/
+│  ├─ Example_Instances/       # Wird automatisch erstellt und enthält Example Instances
+│  ├─ Profiles/                # Wird automatisch erstellt und enthält Profile
+│  ├─ Test_Scripts/            # Wird automatisch erstellt und enthält Test-Scripts
+│  └─ Results/                 # Wird automatisch erstellt und enthält Log-Dateien
 
 ```
 ### Verzeichnis-Zweck
-**Example_Instance/:** Wird automatisch erstellt. Enthält alle heruntergeladenen Example Instances.
+**Example_Instances/:** Wird im `path`-Verzeichnis automatisch erstellt. Enthält alle heruntergeladenen Example Instances.
 
 
-**Profiles/:** Wird automatisch erstellt. Enthält alle geladenen Profile. 
+**Profiles/:** Wird im `path`-Verzeichnis automatisch erstellt. Enthält alle geladenen Profile.
 
 
-**Test_Scripts/:** Wird automatisch erstellt. Enthält alle Test-Skripte.
+**Test_Scripts/:** Wird im `path`-Verzeichnis automatisch erstellt. Enthält alle Test-Skripte.
 
 
-**Results/:** Wird automatisch erstellt. Enthält die Log-Dateien der Ausführungen.
+**Results/:** Wird automatisch erstellt. Standardmäßig im `path`-Verzeichnis, oder im `results_path`-Verzeichnis falls konfiguriert. Enthält die Log-Dateien der Ausführungen.
 
 
 **exception/:** Enthält alle benutzerdefinierten Exceptions.
 
 
-**ig_loader/:** Enthält das Skript load_ig_from_internet.py, das manuell ausgeführt werden muss, um die benötigten Ordner zu erstellen und Dateien aus dem Internet zu laden.
+**ig_loader/:** Enthält das Skript `load_ig_from_internet.py`, das optional ausgeführt werden kann, um die benötigten Ordner zu erstellen und Dateien aus dem Internet zu laden (nur nötig wenn die Ordner noch nicht vorhanden sind).
 
 
-**model/:** Enthält alle Datenmodelle, z. B. für die Konfiguration und Fixtures.
+**model/:** Enthält alle Datenmodelle, z. B. für die Konfiguration, Fixtures, Interaktionen und Variablen.
 
 
-**test-script_evaluator/:** Enthält alle Dateien, die für die Evaluierung der Test-Scripts benötigt werden.
+**test_script_evaluator/:** Enthält alle Dateien, die für die Evaluierung der Test-Scripts benötigt werden.
 
 
 **transactions/:** Enthält Dateien, die für die Erstellung von FHIR® Transaction Bundles benötigt werden.
@@ -122,11 +117,10 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und au
 
 ```mermaid
 flowchart TD
-    A[configuration.py<br/><i>liest Konfiguration</i>] --> B[load_ig_from_internet.py<br/><i>lädt IGs & TestScripts</i>]
+    A[configuration_manager.py<br/><i>liest Konfiguration</i>] --> B[load_ig_from_internet.py<br/><i>lädt IGs & TestScripts</i>]
     B --> C[transactions.py<br/><i>erstellt Bundle</i>]
     C --> D[test_script_evaluator_log_to_file.py<br/><i>führt Tests aus & loggt</i>]
-    D --> E[logger.py<br/><i>erstellt Logdateien</i>]
-    D --> F((FHIR® Server<br/><i>externer Testserver</i>))
+    D --> E((FHIR® Server<br/><i>externer Testserver</i>))
 ```
 
 ---
@@ -141,19 +135,18 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant Config as configuration.py
+    participant Config as configuration_manager.py
     participant Loader as load_ig_from_internet.py
     participant Builder as transactions.py
     participant Evaluator as test_script_evaluator_log_to_file.py
     participant Server as FHIR® Server
-    participant Log as logger.py
 
     Config->>Loader: Lade Einstellungen
     Loader->>Builder: Übergibt Ressourcen
     Builder->>Evaluator: Erzeugt Bundle
     Evaluator->>Server: Führt HTTP Requests aus
     Server-->>Evaluator: Sendet Statuscodes
-    Evaluator->>Log: Speichert Ergebnisse
+    Evaluator->>Evaluator: Speichert Ergebnisse
 ```
 ---
 
@@ -184,7 +177,7 @@ lxml~=5.4.0
 ### exception/
 
 **Hauptdateien:**
-- `TestExecutionError.py` → Eigene Exception für Testausführungsfehler. 
+- `Error.py` → Benutzerdefinierte Exceptions (`TestExecutionError`, `TestScriptError`, `OperationError`). 
 
 ### ig_loader/
 
@@ -197,13 +190,13 @@ lxml~=5.4.0
 **Hauptdateien:**
 - `configuration.py` → Modell für das config.json-File. 
 - `fixture.py` → Modell für die Fixtures. 
+- `interaction.py` → Modell für HTTP-Interaktionen (Request/Response). 
+- `variable.py` → Modell für TestScript-Variablen. 
 
 ### test_script_evaluator/
 
 **Hauptdateien:**
 - `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
-- `logger.py` → Zuständig für das Logging in die Log-Dateien. 
-- `profile_manager.py` → Speichert und verwaltet Profile. 
 - `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
 - `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
 - `validate.py` → Validierungen der Test-Scripts. 
@@ -227,8 +220,8 @@ lxml~=5.4.0
 ### Installation
 
 ```bash
-git clone https://github.com/.../TestFhiry.git
-cd TestFhiry
+git clone https://github.com/HL7Austria/HL7-AT-TestFhiry-TestRunner.git
+cd HL7-AT-TestFhiry-TestRunner
 pip install -r requirements.txt
 ```
 
@@ -267,6 +260,16 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 
 > **Results-Ordner:** Der `Results/`-Ordner mit den Log-Dateien wird standardmäßig unter `<path>/Results/` erstellt. Über das optionale Feld `results_path` kann ein alternativer Speicherort angegeben werden – in diesem Fall wird der Ordner unter `<results_path>/Results/` erstellt.
 
+### Ressourcen herunterladen (optional)
+
+Falls die Ordner `Profiles/`, `Example_Instances/` und `Test_Scripts/` noch nicht existieren oder leer sind, können die Ressourcen automatisch aus dem Internet heruntergeladen werden:
+
+```bash
+python -m impl.ig_loader.load_ig_from_internet --config Pfad/zur/config.json
+```
+
+> **Hinweis:** Dieser Schritt ist nur nötig, wenn die Ordner mit Profiles, Example Instances und Test Scripts noch nicht vorhanden sind. Wenn diese bereits befüllt sind, kann dieser Schritt übersprungen werden.
+
 ### Ausführung
 
 Das Argument `--config` ist **pflicht** und muss den Pfad zur `config.json` angeben:
@@ -301,12 +304,12 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | --------------- | ----------------- | ----------------------------------- | --------- | ------------- |
 | Fixture         | autodelete        | Fixture wird beim Teardown gelöscht | hoch      | ✅             |
 | Fixture         | autocreate        | Fixture wird beim Setup erstellt    | hoch      | ✅             |
-| Setup–Action    | operation         | Aktion beim Setup      | –         | –             |
+| Setup–Action    | operation         | Aktion beim Setup      | –         | ✅             |
 | Test–Action    | operation         | Führt definierte Operation aus      | –         | ✅             |
 | Test–Assert    | destination       | Zielobjekt der Assertion            | hoch      | ✅             |
 | Test–Assert    | stopTestOnFail    | Testabbruch bei Fehlschlag          | hoch      | ✅             |
-| Test–Assert    | validateProfileId | Profil-ID zur Validierung           | hoch      | –             |
+| Test–Assert    | validateProfileId | Profil-ID zur Validierung           | hoch      | ✅             |
 | Test–Assert    | responseCode      | Erwarteter HTTP-Code                | –         | ✅             |
 | Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
-| Teardown–Action | operation         | Aktion beim Teardown                | mittel    | –             |
+| Teardown–Action | operation         | Aktion beim Teardown                | mittel    | ✅             |
 
