@@ -303,7 +303,9 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     :param operator: The comparison operator to apply.
     :raises AssertionError: If the path-result does not satisfy the operator check.
     """
-
+    path_type = utils.detect_path_type(path)
+    if not path_type in response.header.get("Content-type"):
+        raise AssertionError(f"Response-Body is not of type {path_type}!")
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
     res = eval_path(response.body, path)
@@ -327,14 +329,9 @@ def eval_path(body, path:str):
         be determined.
     """
 
-
-    type = utils.string_type(body)
     result = None
     path_type = utils.detect_path_type(path)
 
-    if type != path_type:
-        raise Exception("Path cannot compute with different Content-Type")
-    
     #check if xml or jsonpath
     if path_type == "xml":
         result = eval_xpath(str(body), path)
@@ -358,7 +355,7 @@ def eval_xpath(body : str, path:str):
     if isinstance(body, str):
         body = re.sub(r'<\?xml[^?]*\?>', '', body, count=1).encode('utf-8')
     root = etree.fromstring(body)
-    for elem in root.iter():
+    for elem in root.iter(): #removing namespaces... do I want that?
         elem.tag = etree.QName(elem).localname
         for attr_name in list(elem.attrib):
             local = etree.QName(attr_name).localname
