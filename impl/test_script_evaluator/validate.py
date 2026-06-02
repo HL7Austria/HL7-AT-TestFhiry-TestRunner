@@ -238,17 +238,19 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     """
     utils.log_to_file(f"Asserting profile {profileRef}")
 
-    pathF = "temp/temp"
+    base_path = Path(conf_man.get_config_manager().path)
+    temp_dir = base_path / "temp"
+    pathF = temp_dir / "temp"
     if utils.string_type(response.body) == "json":
-        pathF += ".json"
+        pathF = Path(str(pathF) + ".json")
     elif utils.string_type(response.body) == "xml":
-        pathF += ".xml"
+        pathF = Path(str(pathF) + ".xml")
     else:
         raise TypeError("Response body in unexpected format!")
 
-    prof_folder = utils.get_full_path("Profiles")
-    resource = utils.get_full_path(pathF)
-    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
+    prof_folder = base_path / "Profiles"
+    resource = pathF
+    validator = base_path / "validator_cli.jar"
 
     os.makedirs(temp_dir, exist_ok=True)
     with open(resource, "w") as f:

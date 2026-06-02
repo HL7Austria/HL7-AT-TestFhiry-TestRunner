@@ -14,22 +14,15 @@ class ConfigManager:
 
     Attributes:
         config (dict): Loaded configuration dictionary
-        base_dir (Path): Base directory of the project
     """
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path):
         """
         Initializes the ConfigManager and loads configuration.
 
-        :param config_path: Optional custom path to config.json file.
-                           If None, uses default location.
+        :param config_path: Path to config.json file.
         """
-        self.base_dir = Path(__file__).resolve().parent.parent
-
-        if config_path is None:
-            self.config_path = self.base_dir / "config.json"
-        else:
-            self.config_path = Path(config_path)
+        self.config_path = Path(config_path)
 
         self.config = self._load_config()
         self._results_dir = None
@@ -228,7 +221,7 @@ def get_config_manager():
     """
     return _config_manager
 
-def init_config_manager(config_path=None):
+def init_config_manager(config_path):
     """Initializes the global ConfigManager instance."""
     global _config_manager
     _config_manager = ConfigManager(config_path)

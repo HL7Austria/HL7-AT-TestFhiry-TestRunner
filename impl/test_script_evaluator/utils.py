@@ -20,6 +20,10 @@ def get_full_path(path:str) -> Path:
     p = Path(path)
     if p.is_absolute():
         return p
+    import impl.test_script_evaluator.configuration_manager as conf_man
+    config_path = conf_man.get_config_manager().path
+    if config_path:
+        return Path(config_path) / path
     return BASE_DIR / path
 
 def log_to_file(message: str):
@@ -60,7 +64,12 @@ def get_all_profiles(base_path=None):
         if base_path:
             PROFILE_FOLDER = str(Path(base_path) / "Profiles")
         else:
-            PROFILE_FOLDER = str(BASE_DIR / "Profiles")
+            import impl.test_script_evaluator.configuration_manager as conf_man
+            config_path = conf_man.get_config_manager().path
+            if config_path:
+                PROFILE_FOLDER = str(Path(config_path) / "Profiles")
+            else:
+                PROFILE_FOLDER = str(BASE_DIR / "Profiles")
 
         profiles = [
             os.path.join(PROFILE_FOLDER, name).replace("\\", "/")
