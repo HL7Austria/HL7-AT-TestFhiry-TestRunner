@@ -310,15 +310,3 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
 | Teardown–Action | operation         | Aktion beim Teardown                | mittel    | –             |
 
----
-## Potentielle Erweiterungen
-
-Hier werdend die möglichen bekannten Erweiterungen für dieses Projekt aufgelistet
-
-- Teardown hinzufügen
-- Setup hinzufügen
-- standardisierte Formatierung bei der Ausgabe der Ergebnisse
-- Client-Test unterstützung
-- Unterschiede mit TestFhiry-TinkerTool abgleichen
-
-Die dokumentierten Unterschiede zum TestFhiry-TinkerTool sind im UnterschiedeZuTinkerTool.md zu finden.
