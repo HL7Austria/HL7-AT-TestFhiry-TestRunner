@@ -3,6 +3,7 @@ import json
 import requests
 from datetime import datetime
 import re
+import urllib
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -88,13 +89,17 @@ def execute_operation(operation: dict[str, Any]):
         url = operation.get("url")
         sourceId = operation.get("sourceId")
 
+        headers = {}
+        reqHeader = operation.get("requestHeader")
 
-        #kümmere dich um die headers
-        headers = {
-            "Content-Type": utils.parse_fhir_header(operation.get("contentType")),
-            "Accept": utils.parse_fhir_header(operation.get("accept")),
-        }
-
+        if operation.get("contentType"):
+            headers["Content-Type"]= operation.get("contentType")
+        if operation.get("accept"):
+            headers["Accept"] = operation.get("accept")
+        if reqHeader:
+            for head in reqHeader:
+                headers[head.get("field")] = head.get("value")
+        
         fixture = None
 
         if not method and operation_type:
@@ -104,6 +109,10 @@ def execute_operation(operation: dict[str, Any]):
         
         if not url:
             url = build_url(operation)
+
+        if operation.get("encodeRequestUrl") == True:
+            url = requests.utils.quote(url, safe=":/?=")
+
 
         if sourceId:
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -235,7 +244,8 @@ def build_url(operation :dict [str, Any]) -> str:
         if sourceId:
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} could not be found")
-            url += "/" + fixture.body.get("resourceType")
+            if isinstance(fixture.body, dict):
+                url += "/" + fixture.body.get("resourceType")
         
         if targetId:
             id = ""
@@ -272,17 +282,20 @@ def build_url(operation :dict [str, Any]) -> str:
             else:
                 raise Exception("XML is not supported as of now")
             
-            if type == "vread":
-                if vid == "":
-                    raise error.OperationError("No versonId found for vread Operation.")
-                return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
-            elif type == "history":
-                return url +  "/" + url_type +  "/" + id + "/_history"
-            else:
-                if type == "update" and sourceId:
-                    return url +  "/" + id
+            if (not sourceId) or type == "patch": #path has a source BUT that source isn't a normal resource
+                if type == "vread":
+                    if vid == "":
+                        raise error.OperationError("No versonId found for vread Operation.")
+                    return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
+                elif type == "history":
+                    return url +  "/" + url_type +  "/" + id + "/_history"
                 else:
-                    return url +  "/" + url_type +  "/" + id
+                    if type == "update" and sourceId:
+                        return url +  "/" + id
+                    else:
+                        return url +  "/" + url_type +  "/" + id
+            else:
+                return url + "/" + id
         return url
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
@@ -375,11 +388,8 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("responseCode operator value not valid")
             
-            if response.reason != "":
-                expected_resp = assertion.get("response")
-                validate.validate_response(response.reason, expected_resp, operator)
-            else:
-                raise AssertionError("No Response-display has been sent")
+            expected_resp = assertion.get("response")
+            validate.validate_response(response, expected_resp, operator)
 
         if "validateProfileId" in assertion:
             msg = ""
@@ -617,7 +627,7 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
     :raises Exception: If the transaction bundle POST fails, with the
         diagnostic messages extracted from the server's OperationOutcome.
     """
-    bundle_json = [] #die zu erstellenden Fixtures als json
+    bundle_json = []
     for jsonf, fixture in zip(jsonFiles, fix_list):
         fix_id = jsonf.get("id")
         fix_type = jsonf.get("resourceType")
@@ -626,7 +636,7 @@ def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
         autodelete = fixture.get("autodelete", False)
         if(autocreate):
             bundle_json.append(jsonf)
-        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf)) #erstes Anlegen vor bundle
+        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf))
 
     if bundle_json:
         bundle = build_whole_transaction_bundle(bundle_json)
@@ -730,11 +740,11 @@ def SETUP(setup_data, fixture_list : list, resources):
             for fix1 in FIXTURES:
                 for fix2 in FIXTURES:
                     json_string = json.dumps(fix1.body)
-                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
-                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
+                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + str(fix2.type) + "/" + str(fix2.fixture_id) + "\""
+                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + str(fix2.type) +"/"+ str(fix2.server_id) + "\"", json_string))
 
                 if re.search("\"reference\" *: *\"[a-zA-Z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
-                        raise error.TestScriptError("Unknown Reference remaining.")
+                    raise error.TestScriptError("Unknown Reference remaining.")
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
