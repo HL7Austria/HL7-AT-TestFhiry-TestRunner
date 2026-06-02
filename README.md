@@ -159,11 +159,24 @@ sequenceDiagram
 
 ## Bibliotheken
 
-| Bibliothek              | Zweck                              |
-| ----------------------- | ---------------------------------- |
-| `requests`              | Kommunikation mit FHIR®-Server      |
-| `beautifulsoup4`        | Parsing von Webseiteninhalten      |
-| `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung |
+| Bibliothek              | Zweck                                        |
+| ----------------------- | -------------------------------------------- |
+| `requests`              | Kommunikation mit FHIR®-Server               |
+| `beautifulsoup4`        | Parsing von Webseiteninhalten                |
+| `fhirpathpy`            | Auswertung von FHIRPath-Ausdrücken           |
+| `jsonpath_ng`           | Auswertung von JSONPath-Ausdrücken           |
+| `lxml`                  | XML-Parsing und Validierung                  |
+| `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung (stdlib)  |
+
+Alle Abhängigkeiten sind in der `requirements.txt` definiert:
+
+```
+requests~=2.32.3
+beautifulsoup4~=4.14.2
+fhirpathpy~=0.2.3
+jsonpath_ng~=1.7.0
+lxml~=5.4.0
+```
 
 ---
 ## Codebase Overview
@@ -209,6 +222,7 @@ sequenceDiagram
 * **Python >= 3.10**
 * Internetverbindung (für `load_ig_from_internet.py`)
 * Zugriff auf einen **FHIR®-kompatiblen Server**
+* **Java Runtime** (für `validator.jar`, falls Validierung verwendet wird)
 
 ### Installation
 
@@ -216,10 +230,55 @@ sequenceDiagram
 git clone https://github.com/.../TestFhiry.git
 cd TestFhiry
 pip install -r requirements.txt
-cd impl/ig_loader
-python load_ig_from_internet.py
-cd ../..
-python -m impl
+```
+
+### Konfiguration (`config.json`)
+
+Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
+
+```json
+{
+  "url": "<url_to_IG>",
+  "path": "C:/Pfad/zum/Überordner",
+  "testscripts": [
+    "Test_Scripts/TestScript-beispiel.json"
+  ],
+  "fhirServer": "<fhirServer>",
+  "results_path": ""
+}
+```
+
+| Feld            | Pflicht | Beschreibung                                                                                                                                                  |
+| --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`           | Ja      | URL des Implementation Guide, aus dem TestScripts und Example Instances heruntergeladen werden.                                                               |
+| `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator.jar` enthält (bzw. in dem sie erstellt werden). |
+| `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
+| `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
+| `results_path`  | Nein    | Pfad, in dem der `Results/`-Ordner erstellt wird. Wenn leer, wird `Results/` im `path`-Verzeichnis angelegt.                                                  |
+
+> **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
+> ```
+> <path>/
+> ├── Profiles/
+> ├── Example_Instances/
+> ├── Test_Scripts/
+> └── validator.jar
+> ```
+
+> **Results-Ordner:** Der `Results/`-Ordner mit den Log-Dateien wird standardmäßig unter `<path>/Results/` erstellt. Über das optionale Feld `results_path` kann ein alternativer Speicherort angegeben werden – in diesem Fall wird der Ordner unter `<results_path>/Results/` erstellt.
+
+### Ausführung
+
+Das Argument `--config` ist **pflicht** und muss den Pfad zur `config.json` angeben:
+
+```bash
+python -m impl --config Pfad/zur/config.json
+```
+
+Beispiel:
+
+```bash
+python -m impl --config impl/config.json
 ```
 
 ---

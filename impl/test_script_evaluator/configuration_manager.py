@@ -97,6 +97,15 @@ class ConfigManager:
         """
         return self.config.get("testscripts", [])
 
+    @property
+    def results_path(self):
+        """
+        Gets the results_path from configuration.
+
+        :return: results_path string or empty string if not configured.
+        """
+        return self.config.get("results_path", "")
+
     def get(self, key, default=None):
         """
         Gets a configuration value by key.
@@ -130,7 +139,10 @@ class ConfigManager:
         Initializes the Results directory and log file based on config path.
         Creates the directory and an initial log file.
         """
-        self._results_dir = Path(self.path) / "Results"
+        if self.results_path:
+            self._results_dir = Path(self.results_path) / "Results"
+        else:
+            self._results_dir = Path(self.path) / "Results"
         self._results_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_filename = f"test_results_{timestamp}.txt"
