@@ -381,7 +381,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             
             if response.reason != "":
                 expected_resp = assertion.get("response")
-                validate.validate_response(response.reason, expected_resp, operator)
+                validate.validate_response(response, expected_resp, operator)
             else:
                 raise AssertionError("No Response-display has been sent")
 

@@ -248,8 +248,11 @@ def detect_path_type(path: str) -> ContentType:
         return "xml"
     if is_jsonpath and not is_xpath:
         return "json"
-    if is_xpath and is_jsonpath:
-        return "xml" if '/' in path else "json"
+    if is_xpath and is_jsonpath: #only if both libraries can parse the path
+        if "$" in path or path.startswith("@"):
+            return "json"
+        elif "/" in path:
+            return "xml"
     
     return "unknown"
     

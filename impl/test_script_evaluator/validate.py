@@ -295,7 +295,7 @@ def eval_expression(body : dict[str, Any], expression : str):
 def validate_path(response: Interaction, path:str, expected, operator: operator_type) -> None:
     
     """Validates the Path from an Assertion.
-    The Content-Type of the response-body is expected to math with the needed type for the path.
+    The Path-type is checked so it matches with the Content-Type.
 
     :param response: The ``Interaction`` containing the server response.
     :param path: XPath or JsonPath of the Assertion.
@@ -304,8 +304,9 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     :raises AssertionError: If the path-result does not satisfy the operator check.
     """
     path_type = utils.detect_path_type(path)
-    if not path_type in response.header.get("Content-type"):
+    if not path_type in response.header.get("Content-type"): #check if pathtype is the same as content-type
         raise AssertionError(f"Response-Body is not of type {path_type}!")
+
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
     res = eval_path(response.body, path)
