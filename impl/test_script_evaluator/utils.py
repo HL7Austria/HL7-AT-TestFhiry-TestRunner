@@ -186,16 +186,18 @@ def string_type(string: str) -> ContentType:
     :param string: The raw string to inspect.
     :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
     """
+    if isinstance(string, dict):
+        return "json"
     try:
         json.loads(string)
         return "json"
-    except json.JSONDecodeError:
+    except Exception:
         pass
 
     try:
         ET.fromstring(string)
         return "xml"
-    except ET.ParseError:
+    except Exception:
         return "unknown"
 
 def map_method_type(type : OperationType) -> OperationMethod:
@@ -221,7 +223,7 @@ def detect_path_type(path: str) -> ContentType:
     """
 
     if not path or not isinstance(path, str):
-        return None
+        return "unknown"
     
     path = path.strip()
 

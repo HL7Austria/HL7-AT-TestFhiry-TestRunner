@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import os
 from fhirpathpy import evaluate
@@ -107,7 +108,7 @@ def validate_expression(fixture, expression : str, operator: operator_type, valu
     else:
         body_use = fixture.body
 
-    res = do_expression(body_use, expression)
+    res = eval_expression(body_use, expression)
 
     if isinstance(res, list):
         if len(res) == 1:
@@ -276,12 +277,12 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
         else:
             body_use = fixture.body
 
-        return do_expression(body_use, assertion.get("compareToSourceExpression"))
+        return eval_expression(body_use, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
-        return doPath(fixture.body, assertion.get("compareToSourcePath"))
+        return eval_path(fixture.body, assertion.get("compareToSourcePath"))
 
 
-def do_expression(body : dict[str, Any], expression : str):
+def eval_expression(body : dict[str, Any], expression : str):
     """Evaluates a FHIRPath expression against a resource body.
 
     :param body: The FHIR resource (dict or JSON string) to evaluate against.
@@ -291,7 +292,7 @@ def do_expression(body : dict[str, Any], expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
-def validatePath(response: Interaction, path:str, expected, operator: operator_type) -> None:
+def validate_path(response: Interaction, path:str, expected, operator: operator_type) -> None:
     
     """Validates the Path from an Assertion.
     The Content-Type of the response-body is expected to math with the needed type for the path.
@@ -305,7 +306,7 @@ def validatePath(response: Interaction, path:str, expected, operator: operator_t
 
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
-    res = doPath(response.body, path)
+    res = eval_path(response.body, path)
     utils.log_to_file(f"Asserting Path: {path}, {res} {operator} {expected}.")
     validate_operator(operator, res, expected)
 
@@ -314,7 +315,7 @@ def validate_headerfield(response: Interaction, field:str, expected: Any, operat
         raise AssertionError("Response has no saved Headers!")
     validate_operator(operator, response.header.get(field), expected)
 
-def doPath(body, path:str):
+def eval_path(body, path:str):
     """Evaluates an XPath or JSONPath expression against a resource body.
 
     Determines the path type (``'xml'`` or ``'json'``) and delegates to
@@ -331,22 +332,20 @@ def doPath(body, path:str):
     result = None
     path_type = utils.detect_path_type(path)
 
-    if isinstance(body, dict):
-        type = "json"
     if type != path_type:
         raise Exception("Path cannot compute with different Content-Type")
     
     #check if xml or jsonpath
     if path_type == "xml":
-        result = xmlPath(str(body), path)
+        result = eval_xpath(str(body), path)
     elif path_type == "json":
-        result = jsonPath(body, path)
+        result = eval_json_path(body, path)
     else:
         raise Exception(f"Path {path} could not be identified as XPath or JsonPath!")
 
     return result
 
-def xmlPath(body : str, path:str): #get xml as str?
+def eval_xpath(body : str, path:str):
     """
     Evaluates an XPath expression against an XML resource body.
     If a namespace exists but no prefix in path it uses that ns as prefix.
@@ -356,31 +355,21 @@ def xmlPath(body : str, path:str): #get xml as str?
     :returns: List of matching string values.
     :raises ValueError: If any match result is not a string.
     """
+    if isinstance(body, str):
+        body = re.sub(r'<\?xml[^?]*\?>', '', body, count=1).encode('utf-8')
     root = etree.fromstring(body)
-    ns = {}
-    for prefix, uri in root.nsmap.items():
-        if prefix is not None:
-            ns[prefix] = uri
-        else:
-            ns['ns'] = uri
+    for elem in root.iter():
+        elem.tag = etree.QName(elem).localname
+        for attr_name in list(elem.attrib):
+            local = etree.QName(attr_name).localname
+            if local != attr_name:
+                elem.attrib[local] = elem.attrib.pop(attr_name)
+    etree.cleanup_namespaces(root)
 
-    if 'ns' in ns and ':' not in path.replace('@', '').replace('//', '/'):
-        parts = path.split('/')
-        prefixed = []
-        for part in parts:
-            if part and not part.startswith('@') and not part.startswith('*'):
-                prefixed.append(f'ns:{part}')
-            else:
-                prefixed.append(part)
-        path = '/'.join(prefixed)
-
-    result = root.xpath(f"//{path}", namespaces=ns)
-    for res in result:
-        if not isinstance(res, str):
-            raise ValueError(f"Path {path} could not be evaluated")
+    result = root.xpath(path)
     return result
 
-def jsonPath(body : str, path:str):
+def eval_json_path(body : str, path:str):
     """Evaluates a JSONPath expression against a JSON resource body.
 
     :param body: The FHIR resource as a dict or JSON string.
