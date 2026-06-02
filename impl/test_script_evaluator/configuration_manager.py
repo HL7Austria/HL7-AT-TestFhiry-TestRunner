@@ -4,6 +4,7 @@ Handles loading and accessing configuration settings.
 """
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 import impl.test_script_evaluator.utils as utils
 
@@ -31,6 +32,8 @@ class ConfigManager:
             self.config_path = Path(config_path)
 
         self.config = self._load_config()
+        self._results_dir = None
+        self._log_file_path = None
 
     def _load_config(self):
         """
@@ -103,6 +106,37 @@ class ConfigManager:
         :return: The configuration value or default.
         """
         return self.config.get(key, default)
+
+    @property
+    def results_dir(self):
+        """
+        Gets the Results directory path (parent of config path).
+
+        :return: Path to the Results directory.
+        """
+        return self._results_dir
+
+    @property
+    def log_file_path(self):
+        """
+        Gets the log file path inside the Results directory.
+
+        :return: Absolute path string to the log file.
+        """
+        return self._log_file_path
+
+    def init_logging(self):
+        """
+        Initializes the Results directory and log file based on config path.
+        Creates the directory and an initial log file.
+        """
+        self._results_dir = Path(self.path) / "Results"
+        self._results_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_filename = f"test_results_{timestamp}.txt"
+        self._log_file_path = os.path.abspath(self._results_dir / log_filename)
+        with open(self._log_file_path, "w", encoding="utf-8") as f:
+            f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
     def has_fhir_server(self):
         """
@@ -180,19 +214,17 @@ class ConfigManager:
 _config_manager = None
 
 
-def get_config_manager(config_path=None):
+def get_config_manager():
     """
-    Gets or creates the global ConfigManager instance.
-
-    :param config_path: Optional custom path to config.json.
+    Gets global ConfigManager instance.
     :return: ConfigManager instance.
     """
-    global _config_manager
-
-    if _config_manager is None:
-        _config_manager = ConfigManager(config_path)
-
     return _config_manager
+
+def init_config_manager(config_path=None):
+    """Initializes the global ConfigManager instance."""
+    global _config_manager
+    _config_manager = ConfigManager(config_path)
 
 
 # Convenience functions for direct access

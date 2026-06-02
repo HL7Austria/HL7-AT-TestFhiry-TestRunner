@@ -11,19 +11,10 @@ everything that is small and modular that is not assertions and is not needed an
 """
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-RESULTS_DIR = BASE_DIR / "Results"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_filename = f"test_results_{timestamp}.txt"
-LOG_FILE_PATH = os.path.abspath(RESULTS_DIR / log_filename)
 
 ContentType = Literal['json', 'xml', 'unknown']
 OperationType = Literal['read', 'vread', 'update', 'patch', 'delete', 'history', 'create', 'search', 'capabilities', 'transaction', 'batch', 'operation']
 OperationMethod = Literal['get', 'put', 'post', 'patch', 'head', 'delete']
-
-with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
-    f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
 def get_full_path(path:str) -> Path:
     p = Path(path)
@@ -32,8 +23,10 @@ def get_full_path(path:str) -> Path:
     return BASE_DIR / path
 
 def log_to_file(message: str):
+    import impl.test_script_evaluator.configuration_manager as conf_man
     print(message)
-    with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
+    log_path = conf_man.get_config_manager().log_file_path
+    with open(log_path, "a", encoding="utf-8") as f:
         f.write(message + "\n")
 
 def get_fixture(testscript):
