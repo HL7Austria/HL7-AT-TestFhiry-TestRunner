@@ -32,7 +32,9 @@ class ConfigManager:
         """
         Loads configuration from config.json file.
 
-        :return: Configuration dictionary or empty dict if not found/invalid.
+        :return: Configuration dictionary.
+        :raises: json.decoder.JSONDecodeError if config.json is malformed.
+        :raises: FileNotFoundError if config.json does not exist.
         """
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -44,14 +46,11 @@ class ConfigManager:
                 f"File: {self.config_path}\n"
                 f"Error: {e.msg}\n"
                 f"Line: {e.lineno}, Column: {e.colno}\n"
-
             )
-
-            utils.log_to_file(message)
-            return {}
-        except (FileNotFoundError) as er:
-            utils.log_to_file(f"Warning: Could not load config from {self.config_path}: {er}")
-            return {}
+            raise Exception(message)
+        except FileNotFoundError as er:
+            message = f"Config file not found: {self.config_path}"
+            raise Exception(message)
         
 
     @property
