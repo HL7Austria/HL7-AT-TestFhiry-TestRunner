@@ -129,14 +129,16 @@ def execute_operation(operation: dict[str, Any]):
                     else:
                         response = requests.post(url, headers=headers)
                 else:
-                    body_data = json.dumps(fixture.body) if isinstance(fixture.body, dict) else fixture.body
+                    body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
                     response = requests.post(url, headers=headers, data=body_data)
             case "put":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PUT!")
                 
                 update_id = url.rstrip("/").split("/")[-1] #update url is [base]/[type]/[id]
-                if isinstance(fixture.body, dict):
+                if utils.string_type(fixture.body) == "json":
+                    if isinstance(fixture.body, str):
+                        fixture.body = json.loads(fixture.body)
                     fixture.body["id"] = update_id
                     body_data = json.dumps(fixture.body)
                 else:
@@ -150,26 +152,30 @@ def execute_operation(operation: dict[str, Any]):
             case "patch":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PATCH!")
-                body_data = json.dumps(fixture.body) if isinstance(fixture.body, dict) else fixture.body
+                body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
                 response = requests.patch(url, headers=headers, data=body_data)
             case _:
                 raise error.TestScriptError(f"Method {method} not supported.")
 
         if operation_type == "create":
             saved_resource_id = ""
-            try:
-                saved_resource_id = response.json().get("id")
-            except ValueError:
-                location = response.headers.get("Location", "")
-                if location:
-                    saved_resource_id = location.rstrip("/").split("/")[-3]
-                    utils.log_to_file(f"ID from Location header: {saved_resource_id}")
-                else:
+            location = response.headers.get("Location", "")
+            if location:
+                saved_resource_id = location.rstrip("/").split("/")[-3]
+                utils.log_to_file(f"ID from Location header: {saved_resource_id}")
+            else:
+                try:
+                    saved_resource_id = response.json().get("id")
+                except ValueError:
+                    root = ET.fromstring(response.text)
+                    ns = {'fhir': 'http://hl7.org/fhir'}
+                    id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
+                    saved_resource_id = id_el.get('value', '') if id_el is not None else ''
+                if not saved_resource_id:
                     raise ValueError("No ID found in response or Location header")
-            finally:
-                utils.log_to_file(f"Accessible at: {url}/{saved_resource_id}")
-                if isinstance(fixture, Fixture):
-                    fixture.server_id = saved_resource_id
+            utils.log_to_file(f"Accessible at: {url}/{saved_resource_id}")
+            if isinstance(fixture, Fixture):
+                fixture.server_id = saved_resource_id
 
         utils.log_to_file(f"Response: {response.status_code}")
     except Exception as e:
@@ -268,13 +274,11 @@ def build_url(operation :dict [str, Any]) -> str:
                     else:
                         res_id = location.rstrip("/").split("/")[-1]
                 else:
-                    if isinstance(Tfixture.body, dict):
-                        res_id = Tfixture.body.get("id")
-                        vid = Tfixture.body.get("meta").get("versionId")
-                    elif utils.string_type(Tfixture.body) == "json":
-                        body = json.loads(Tfixture.body)
+                    if utils.string_type(Tfixture.body) == "json":
+                        body = json.loads(Tfixture.body) if isinstance(Tfixture.body, str) else Tfixture.body
                         res_id = body.get("id")
-                        vid = body.get("meta").get("versionId")
+                        meta = body.get("meta")
+                        vid = meta.get("versionId") if meta else ""
                     else:
                         root = ET.fromstring(Tfixture.body)
                         ns_match = root.tag.split('}')[0] + '}' if '{' in root.tag else ''
@@ -294,10 +298,8 @@ def build_url(operation :dict [str, Any]) -> str:
             
             if isinstance(Tfixture, Fixture):
                 url_type = Tfixture.type
-            elif isinstance(Tfixture.body, dict):
-                url_type = Tfixture.body.get("resourceType")
             elif utils.string_type(Tfixture.body) == "json":
-                body = json.loads(Tfixture.body)
+                body = json.loads(Tfixture.body) if isinstance(Tfixture.body, str) else Tfixture.body
                 url_type = body.get("resourceType")
             else:
                 root = ET.fromstring(Tfixture.body)
@@ -624,14 +626,10 @@ def eval_variable(var : Variable):
                 raise error.TestScriptError(f"HeaderField {var.headerField} could not be evaluated.")
 
         elif var.expression:
-            if isinstance(fix.body, dict):
-                body_use = fix.body
-            elif isinstance(fix.body, str) and utils.string_type(fix.body) == "json":
-                body_use = json.loads(fix.body)
-            elif isinstance(fix.body, str):
-                raise error.TestScriptError("FHIRPath expression cannot be evaluated on XML body. Use 'path' instead.")
+            if utils.string_type(fix.body) == "json":
+                body_use = json.loads(fix.body) if isinstance(fix.body, str) else fix.body
             else:
-                body_use = fix.body
+                raise error.TestScriptError("FHIRPath expression cannot be evaluated on XML body. Use 'path' instead.")
             result = validate.do_expression(body_use, expr)
             if isinstance(result, list):
                 if len(result) == 1:
@@ -811,7 +809,7 @@ def SETUP(setup_data, fixture_list : list, resources):
         if FIXTURES:
             for fix1 in FIXTURES:
                 for fix2 in FIXTURES:
-                    if isinstance(fix1.body, dict):
+                    if utils.string_type(fix1.body) == "json":
                         json_string = json.dumps(fix1.body)
                         my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
                         fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
@@ -820,7 +818,7 @@ def SETUP(setup_data, fixture_list : list, resources):
                         fix1.body = re.sub(xml_regex, r"\g<1>" + fix2.type + "/" + fix2.server_id + r"\g<2>", fix1.body)
 
                 for fix_check in FIXTURES:
-                    if isinstance(fix1.body, dict):
+                    if utils.string_type(fix1.body) == "json":
                         check_str = json.dumps(fix1.body)
                         if re.search("\"reference\" *: *\"[a-zA-Z:]*" + fix_check.type + "/" + fix_check.fixture_id + "\"", check_str) != None:
                             raise error.TestScriptError(f"Unreplaced reference to {fix_check.type}/{fix_check.fixture_id} remaining.")

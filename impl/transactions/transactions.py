@@ -86,7 +86,7 @@ def prefix_references_with_urn_uuid_xml(xml_str):
         if not ref_value.startswith("urn:uuid:"):
             ref_value = f"urn:uuid:{ref_value}"
         return match.group(1) + ref_value + match.group(3)
-    return re.sub(r'(<reference[^>]*value=")([^"]*)("/>)', _prefix_ref, xml_str)
+    return re.sub(r'(<reference[^>]*value=")([^"]*)(")', _prefix_ref, xml_str)
 
 def build_whole_transaction_bundle_xml(xml_resources: list[str]) -> str:
     """
