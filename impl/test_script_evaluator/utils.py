@@ -212,12 +212,14 @@ def extract_fhir_meta(resource):
         res_id = id_el.get('value', '') if id_el is not None else ''
         return res_id, tag
 
-def string_type(string: str) -> ContentType:
+def string_type(string: (str | dict)) -> ContentType:
     """Detects whether a string contains JSON, XML, or an unknown format.
 
     :param string: The raw string to inspect.
     :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
     """
+    if isinstance(string, dict):
+        return "json"
     try:
         json.loads(string)
         return "json"

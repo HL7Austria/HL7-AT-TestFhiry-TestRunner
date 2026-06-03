@@ -9,3 +9,15 @@ class TestScriptError(Exception):
 class OperationError(Exception):
     """Custom exception if operation itself had a problem"""
     pass
+
+class CircularDependencyError(Exception):
+    """Raised when fixtures reference each other in a cycle"""
+    pass
+
+class UnresolvedReferenceError(Exception):
+    """Raised when autocreate fixture has unsolved references after creation"""
+    pass
+
+class ReferenceResolutionError(Exception):
+    """General reference parsing/resolution errors"""
+    pass

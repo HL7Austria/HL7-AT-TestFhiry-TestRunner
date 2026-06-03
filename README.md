@@ -131,6 +131,84 @@ flowchart TD
 
 ---
 
+## Autocreate Reference Resolution
+
+Das Tool verfügt über ein automatisches Reference Resolution System für Fixtures mit `autocreate=true`. Dieses System stellt sicher, dass Fixtures in der korrekten Reihenfolge erstellt werden, damit Referenzen zwischen Fixtures korrekt aufgelöst werden können.
+
+### Funktionsweise
+
+1. **Referenz-Parsing**: Alle Fixtures werden nach Referenzen auf andere Fixtures gescannt (sowohl JSON als auch XML)
+2. **Dependency Resolution**: Die Fixtures werden topologisch sortiert, um die korrekte Erstellungsreihenfolge zu bestimmen
+3. **Sequentielle Erstellung**: Fixtures werden nacheinander erstellt, beginnend mit denen ohne Abhängigkeiten
+4. **Referenz-Ersetzung**: Während der Erstellung werden lokale Fixture-Referenzen durch die tatsächlichen Server-IDs ersetzt
+
+### Vorteile
+
+- Keine zirkulären Abhängigkeiten werden toleriert (werden mit Fehler abgebrochen)
+- Referenzen werden automatisch mit server-seitigen IDs aktualisiert
+- Keine manuelle Anpassung von Referenzen erforderlich
+
+### Voraussetzungen für TestScripts
+
+Damit das Autocreate Reference Resolution System korrekt funktioniert, müssen TestScripts folgende Anforderungen erfüllen:
+
+**WICHTIG**: Wenn ein Fixture mit `autocreate=true` auf eine Referenz verweist, muss diese Referenz ebenfalls als Fixture im TestScript definiert sein und `autocreate=true` haben.
+
+**Beispiel:**
+```json
+{
+  "fixture": [
+    {
+      "id": "patient-a",
+      "autocreate": true,
+      "resource": {
+        "reference": "Patient/PatientExample"
+      }
+    },
+    {
+      "id": "patient-b",
+      "autocreate": true,
+      "resource": {
+        "reference": "Patient/PatientWithReference"
+      }
+    }
+  ]
+}
+```
+
+Wenn `PatientWithReference` auf `PatientExample` verweist, muss `PatientExample` ebenfalls als Fixture mit `autocreate=true` definiert sein. Andernfalls schlägt die Erstellung fehl.
+
+**Referenztypen:**
+- `reference` Felder
+- `contained` Ressourcen
+- Verschachtelte Referenzen in beliebigen Pfaden (z.B. `Patient.link.other`)
+
+**Fixtures in XML und JSON**
+Die Verbindung zwischen einer Fixture-Referenz im TestScript und der entsprechenden Datei erfolgt über den **Basisnamen** (Dateiname ohne Extension).
+
+**Beispiel:**
+```json
+{
+  "fixture": [
+    {
+      "id": "patient-a",
+      "resource": {
+        "reference": "Patient-HL7ATCorePatientExample.html"
+      }
+    }
+  ]
+}
+```
+
+Das Tool sucht nach einer Datei mit dem Basisnamen `Patient-HL7ATCorePatientExample` im `Example_Instances/` Ordner
+
+Wenn eine Fixture sowohl als XML- als auch als JSON-Datei existiert, müssen sie unterschiedliche Basisnamen haben, damit klar ist, welche verwendet wird. Die richtige Benutzung und Referenzierung innerhalb des TestScripts ist somit alleinige Verantwortung des Benutzers.
+
+**Gleichnamige SourceIds**
+Wenn zwei interne Ids (responseId, fixtureId) gleich benannt sind, wird der Ablauf des Programms gestoppt und das TestScript wird geskippt.
+
+---
+
 ## Funktionsweise
 
 1. Konfiguration aus `config.json` wird geladen.

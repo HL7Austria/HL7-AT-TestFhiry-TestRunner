@@ -13,6 +13,8 @@ from impl.model.variable import Variable
 import impl.test_script_evaluator.validate as validate
 from impl.transactions.transactions import build_whole_transaction_bundle, build_whole_transaction_bundle_xml
 import impl.test_script_evaluator.utils as utils
+import impl.test_script_evaluator.reference_parser as reference_parser
+import impl.test_script_evaluator.dependency_resolver as dependency_resolver
 
 last_interaction = None
 log_filename = f"test_results_{utils.timestamp}.txt"
@@ -117,6 +119,13 @@ def execute_operation(operation: dict[str, Any]):
                 fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} nowhere found!")
+            
+            # Validate that fixture has all references resolved before using as sourceId
+            if isinstance(fixture, Fixture) and not fixture.references_resolved:
+                raise error.TestScriptError(
+                    f"Fixture {sourceId} has unresolved references and cannot be used as sourceId. "
+                    f"Unresolved references: {fixture.references}"
+                )
 
         utils.log_to_file(f"Executing: {operation_type.upper()} {url}")
         match (method):
@@ -653,87 +662,136 @@ def eval_variable(var : Variable):
 def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     """
     Registers FHIR TestScript fixtures locally and, for those marked with
-    ``autocreate``, uploads them to the FHIR server as a transaction bundle.
+    ``autocreate``, uploads them to the FHIR server sequentially based on
+    dependency order.
 
     Each fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
-    ``autocreate`` flag is true are bundled into a single FHIR transaction
-    POST.  After a successful upload the server-assigned IDs are written back
-    into the corresponding ``Fixture`` objects so that later operations and
-    assertions can reference them.
+    ``autocreate`` flag is true are parsed for references, ordered by dependency,
+    and created sequentially. References are replaced with server IDs as fixtures
+    are created.
 
     :param resources: List of parsed JSON dicts or raw XML strings of the
         Example Instance files (one per fixture).
     :param fix_list: List of raw fixture definition dictionaries from the
         TestScript JSON (parallel to ``resources``).
-    :raises Exception: If the transaction bundle POST fails, with the
-        diagnostic messages extracted from the server's OperationOutcome.
-    :raises error.TestScriptError: If autocreate fixtures have mixed types
-        (some JSON, some XML).
+    :raises Exception: If fixture creation fails.
+    :raises error.CircularDependencyError: If fixtures have circular dependencies.
+    :raises error.UnresolvedReferenceError: If autocreate fixtures have unresolved references.
     """
-    bundle_resources = [] #die zu erstellenden Fixtures
+    global FIXTURES
+
+    # Step 1: Create all fixture objects and parse references
+    all_fixtures = []
+    fixture_ids = []
+
     for res, fixture in zip(resources, fix_list):
         fix_id, fix_type = utils.extract_fhir_meta(res)
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
         autodelete = fixture.get("autodelete", False)
-        if autocreate:
-            bundle_resources.append(res)
-        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, res)) #erstes Anlegen vor bundle
 
-    if bundle_resources:
-        # Check that all autocreate fixtures are the same type
-        types = set(type(r) for r in bundle_resources)
-        if len(types) > 1:
-            raise error.TestScriptError("Cannot mix JSON and XML fixtures in autocreate!")
+        fixture_obj = Fixture(fix_id, fix_source_id,autocreate, autodelete, fix_type, res)
+        all_fixtures.append(fixture_obj)
+        fixture_ids.append(fix_id)
+        FIXTURES.append(fixture_obj)
 
-        is_xml = isinstance(bundle_resources[0], str)
+    # Step 2: Parse references for each fixture
+    for fixture in all_fixtures:
+        fixture.references = reference_parser.parse_references(fixture.body, fixture_ids)
 
-        if is_xml:
-            bundle = build_whole_transaction_bundle_xml(bundle_resources)
-            headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
-            response = requests.post(FHIR_SERVER_BASE, headers=headers, data=bundle)
-        else:
-            bundle = build_whole_transaction_bundle(bundle_resources)
-            headers = {"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"}
-            response = requests.post(FHIR_SERVER_BASE, headers=headers, data=bundle)
+    # Step 3: Separate autocreate and non-autocreate fixtures
+    autocreate_fixtures = [f for f in all_fixtures if f.autocreate]
+    non_autocreate_fixtures = [f for f in all_fixtures if not f.autocreate]
 
+    # Step 4: If there are autocreate fixtures, resolve creation order and create them
+    if autocreate_fixtures:
         try:
-            if is_xml:
-                root = ET.fromstring(response.text)
-                ns = {'fhir': 'http://hl7.org/fhir'}
-                entries = root.findall('fhir:entry', ns)
+            # Resolve creation order
+            ordered_fixtures = dependency_resolver.resolve_creation_order(autocreate_fixtures)
 
-                for res_content, entry in zip(bundle_resources, entries):
-                    resp_el = entry.find('fhir:response', ns)
-                    loc_el = resp_el.find('fhir:location', ns) if resp_el is not None else None
-                    res_loc = loc_el.get('value', '') if loc_el is not None else ''
-                    res_id = res_loc.split("/")[1] if "/" in res_loc else ''
-                    fix_id, _ = utils.extract_fhir_meta(res_content)
+            # Build mapping of fixture_id to server_id as we create fixtures
+            fixture_id_to_server_id = {}
 
-                    for fix in FIXTURES:
-                        if fix_id == fix.fixture_id:
-                            fix.server_id = res_id
-            else:
-                results = response.json().get("entry")
+            # Create fixtures sequentially
+            for fixture in ordered_fixtures:
+                # Replace references with already-resolved server IDs
+                resolved_body = dependency_resolver.replace_references(
+                    fixture.body, fixture_id_to_server_id
+                )
+                fixture.body = resolved_body
 
-                for fix_cont, res in zip(bundle_resources, results):
-                    resp = res.get("response", {})
-                    res_loc = resp.get("location", "")
-                    res_id = res_loc.split("/")[1]  # server id
-                    fix_id = fix_cont.get("id")  # id inside the Example Instance
+                # Determine content type
+                if isinstance(resolved_body, dict):
+                    is_xml = False
+                else:
+                    is_xml = utils.string_type(resolved_body) == "xml"
 
-                    for fix in FIXTURES:
-                        if fix_id == fix.fixture_id:
-                            fix.server_id = res_id  # saves der Server id
+                # Create the fixture on the server
+                resource_type = fixture.type
+                url = f"{FHIR_SERVER_BASE}/{resource_type}"
+
+                if is_xml:
+                    headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
+                    response = requests.post(url, headers=headers, data=resolved_body)
+                else:
+                    # Ensure body is properly serialized
+                    if isinstance(resolved_body, dict):
+                        body_data = json.dumps(resolved_body, ensure_ascii=False)
+                    elif isinstance(resolved_body, str):
+                        body_data = resolved_body
+                    else:
+                        body_data = str(resolved_body)
+                    headers = {"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"}
+                    response = requests.post(url, headers=headers, data=body_data)
+
+                # Extract server ID from response
+                if response.status_code >= 200 and response.status_code < 300:
+                    location = response.headers.get("Location", "")
+                    if location:
+                        # Location format is typically: resource/id/vid
+                        # We need the id, not the vid
+                        parts = location.rstrip("/").split("/")
+                        if len(parts) >= 2:
+                            server_id = parts[-3]  # Get the third-to-last part (id)
+                        else:
+                            server_id = parts[-1]  # Fallback to last part
+                    else:
+                        try:
+                            if is_xml:
+                                root = ET.fromstring(response.text)
+                                ns = {'fhir': 'http://hl7.org/fhir'}
+                                id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
+                                server_id = id_el.get('value', '') if id_el is not None else ''
+                            else:
+                                response_json = response.json()
+                                server_id = response_json.get("id")
+                        except Exception:
+                            server_id = ""
+
+                    if not server_id:
+                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id}")
+
+                    # Update fixture with server ID
+                    fixture.server_id = server_id
+                    fixture_id_to_server_id[fixture.fixture_id] = server_id
+                    fixture.references_resolved = True
+                else:
+                    raise Exception(f"Failed to create fixture {fixture.fixture_id}: {response.status_code} - {response.text[:500]}")
+
+            # Validate all references are resolved
+            dependency_resolver.validate_all_references_resolved(autocreate_fixtures)
+
+        except error.CircularDependencyError as e:
+            raise
+        except error.UnresolvedReferenceError as e:
+            raise
         except Exception as e:
-            msg = ""
-            if is_xml:
-                msg = f"Transaction bundle failed: {response.text[:500]}"
-            else:
-                json_data = json.loads(response.text)
-                for item in json_data.get("issue", []):
-                    msg += item.get("diagnostics", "")
-            raise Exception(msg)
+            raise
+
+    # Mark non-autocreate fixtures as having no references to resolve (they're not created)
+    for fixture in non_autocreate_fixtures:
+        if not fixture.references:
+            fixture.references_resolved = True
     
 def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
     """
@@ -928,12 +986,16 @@ def test_fhir_operations(testscript_data):
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         return
-    
+
     testscript, resources = testscript_data
 
-    
-        
+
+
     try:
+
+        # Check for duplicate source IDs
+        fixture_list = utils.get_fixture(testscript)
+        validate.check_duplicate_source_ids(testscript, fixture_list)
 
         #validateTS(testscript) #see if the TestScript is valid
         #print("testScript is valid!") #debug message
@@ -941,8 +1003,6 @@ def test_fhir_operations(testscript_data):
 
         #test capability
         #--> find out how important origin and destnation are
-
-        fixture_list = utils.get_fixture(testscript)
 
         variable_list = utils.get_variables(testscript)
         

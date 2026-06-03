@@ -352,5 +352,68 @@ def jsonPath(body : str, path:str):
 
     jsonpath_expr = parse(path)
     return ([match.value for match in jsonpath_expr.find(body)])
+
+def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[dict]) -> None:
+    """Checks for duplicate source IDs in a TestScript.
+
+    Collects all fixture IDs, response IDs, and request IDs from operations
+    and raises an error if any duplicates are found.
+
+    :param testscript: Parsed TestScript JSON dictionary.
+    :param fixture_list: List of raw fixture definition dictionaries from the TestScript.
+    :raises Exception: If duplicate source IDs are found.
+    """
+    source_ids = []
+
+    # Collect fixture IDs
+    for fixture in fixture_list:
+        fixture_id = fixture.get("id")
+        if fixture_id:
+            source_ids.append(("fixture", fixture_id))
+
+    # Collect responseId and requestId from operations in setup, test, and teardown
+    phases = ["setup", "test", "teardown"]
+    for phase in phases:
+        if phase == "test":
+            phase_data = testscript.get(phase, [])
+            if not isinstance(phase_data, list):
+                phase_data = [phase_data] if phase_data else []
+        else:
+            phase_data = testscript.get(phase, {})
+            if not isinstance(phase_data, dict):
+                phase_data = {}
+
+        # Handle test phase (list of test objects)
+        if phase == "test":
+            for test_obj in phase_data:
+                actions = test_obj.get("action", []) if isinstance(test_obj, dict) else []
+                for action in actions:
+                    if "operation" in action:
+                        op = action["operation"]
+                        response_id = op.get("responseId")
+                        request_id = op.get("requestId")
+                        if response_id:
+                            source_ids.append(("responseId", response_id))
+                        if request_id:
+                            source_ids.append(("requestId", request_id))
+        else:
+            # Handle setup and teardown phases (single object with actions)
+            actions = phase_data.get("action", []) if isinstance(phase_data, dict) else []
+            for action in actions:
+                if "operation" in action:
+                    op = action["operation"]
+                    response_id = op.get("responseId")
+                    request_id = op.get("requestId")
+                    if response_id:
+                        source_ids.append(("responseId", response_id))
+                    if request_id:
+                        source_ids.append(("requestId", request_id))
+
+    # Check for duplicates
+    seen_ids = {}
+    for id_type, id_value in source_ids:
+        if id_value in seen_ids:
+            raise Exception(f"Duplicate source ID found: '{id_value}' used in both {seen_ids[id_value]} and {id_type}. TestScript will be skipped.")
+        seen_ids[id_value] = id_type
     
 
