@@ -215,7 +215,7 @@ lxml~=5.4.0
 * **Python >= 3.10**
 * Internetverbindung (für `load_ig_from_internet.py`)
 * Zugriff auf einen **FHIR®-kompatiblen Server**
-* **Java Runtime** (für `validator.jar`, falls Validierung verwendet wird)
+* **Java Runtime** (für `validator_cli.jar`, falls Validierung verwendet wird)
 
 ### Installation
 

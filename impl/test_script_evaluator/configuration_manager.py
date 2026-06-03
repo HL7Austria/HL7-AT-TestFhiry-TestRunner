@@ -47,12 +47,12 @@ class ConfigManager:
 
             )
 
-            # in dein Log schreiben
-
             utils.log_to_file(message)
+            return {}
         except (FileNotFoundError) as er:
             utils.log_to_file(f"Warning: Could not load config from {self.config_path}: {er}")
             return {}
+        
 
     @property
     def fhir_server(self):
@@ -181,7 +181,20 @@ class ConfigManager:
                 with open(ts_path, "r", encoding="utf-8") as ts_file:
                     testscript = json.load(ts_file)
 
+                fixtures_raw = utils.get_fixture(testscript)
+                fixture_list = []
 
+                for fixture in fixtures_raw:
+                    fixture_ref = fixture.get("resource", {}).get("reference")
+                    if fixture_ref:
+                        filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
+                        fixture_path = str(Path(self.path) / "Example_Instances" / filename).replace("\\", "/")
+                        fixture_list.append(fixture_path)
+
+                result.append((ts_path, fixture_list))
+
+            except FileNotFoundError:
+                utils.log_to_file(f"TestScript not found: {ts_path}")
             except json.decoder.JSONDecodeError as e:
 
                 message = (
@@ -191,21 +204,10 @@ class ConfigManager:
                     f"Line: {e.lineno}, Column: {e.colno}\n"
                 )
 
-                # in dein Log schreiben
-
                 utils.log_to_file(message)
 
-            fixtures_raw = utils.get_fixture(testscript)
-            fixture_list = []
-
-            for fixture in fixtures_raw:
-                fixture_ref = fixture.get("resource", {}).get("reference")
-                if fixture_ref:
-                    filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
-                    fixture_path = str(Path(self.path) / "Example_Instances" / filename).replace("\\", "/")
-                    fixture_list.append(fixture_path)
-
-            result.append((ts_path, fixture_list))
+        if not result:
+            utils.log_to_file("No valid TestScripts found")
 
         return result
 
@@ -214,7 +216,7 @@ class ConfigManager:
 _config_manager = None
 
 
-def get_config_manager():
+def get_config_manager() -> ConfigManager:
     """
     Gets global ConfigManager instance.
     :return: ConfigManager instance.

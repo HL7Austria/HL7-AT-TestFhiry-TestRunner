@@ -1,9 +1,6 @@
-import argparse
 import json
 import requests
-from datetime import datetime
 import re
-import urllib
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
