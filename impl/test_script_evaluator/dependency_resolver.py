@@ -1,7 +1,3 @@
-"""
-Dependency resolver for FHIR fixtures.
-Resolves creation order based on fixture references and replaces placeholder references with server IDs.
-"""
 import json
 import re
 from collections import deque

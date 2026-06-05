@@ -1,7 +1,3 @@
-"""
-Reference parser for FHIR fixtures.
-Parses references within fixture bodies to identify dependencies between fixtures.
-"""
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -100,7 +96,7 @@ def _extract_fixture_id_from_reference(reference: str, fixture_ids: List[str]) -
     :param fixture_ids: List of known fixture IDs
     :return: The fixture ID if it's a local reference, None otherwise
     """
-    # Skip absolute URLs (http://, https://, urn:uuid:, etc.)
+    # Skip absolute URLs (http://, https://, urn:uuid:)
     if reference.startswith(("http://", "https://", "urn:")):
         return None
 

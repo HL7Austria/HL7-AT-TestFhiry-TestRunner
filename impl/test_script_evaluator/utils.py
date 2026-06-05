@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 import json
+import re
 import xml.etree.ElementTree as ET
 from typing import Literal
 
@@ -205,11 +206,15 @@ def extract_fhir_meta(resource):
         parsed = json.loads(resource)
         return parsed.get("id"), parsed.get("resourceType")
     else:
+        # ET für den Resource-Typ (Root-Tag) verwenden
         root = ET.fromstring(resource)
-        ns = {'fhir': 'http://hl7.org/fhir'}
         tag = root.tag.split('}')[-1] if '}' in root.tag else root.tag
-        id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
-        res_id = id_el.get('value', '') if id_el is not None else ''
+        
+        # Robuste Regex für ID - funktioniert unabhängig von Attribut-Reihenfolge
+        # Sucht nach <id> Element mit value-Attribut
+        id_match = re.search(r'<id[^>]*\bvalue\s*=\s*["\']([^"\']*)["\']', resource)
+        res_id = id_match.group(1) if id_match else ''
+        
         return res_id, tag
 
 def string_type(string: (str | dict)) -> ContentType:

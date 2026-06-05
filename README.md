@@ -207,6 +207,17 @@ Wenn eine Fixture sowohl als XML- als auch als JSON-Datei existiert, müssen sie
 **Gleichnamige SourceIds**
 Wenn zwei interne Ids (responseId, fixtureId) gleich benannt sind, wird der Ablauf des Programms gestoppt und das TestScript wird geskippt.
 
+**Referenzen in Example Instances**
+Die Referenzen innerhalb der Example Instances (z.B. in `link`-Feldern oder anderen `reference`-Feldern) funktionieren mit den IDs der Example Instances. 
+
+**WICHTIG**: Damit das Autocreate Reference Resolution System korrekt erkennen kann, auf welche Fixture verwiesen wird, müssen die IDs innerhalb der heruntergeladenen Example Instances unterschiedlich sein. Jede Example Instance sollte eine eindeutige ID haben, um Konflikte bei der Dependency-Resolution zu vermeiden.
+
+**Beispiel:**
+- `Patient-HL7ATCorePatientExample01.json` hat `id: "HL7ATCorePatientExample01"`
+- `Patient-HL7ATCorePatientExample02.json` hat `id: "HL7ATCorePatientExample02"`
+
+Wenn zwei Example Instances die gleiche ID haben, kann das System nicht unterscheiden, auf welche verwiesen wird, was zu Fehlern bei der Dependency-Resolution führen kann.
+
 ---
 
 ## Funktionsweise

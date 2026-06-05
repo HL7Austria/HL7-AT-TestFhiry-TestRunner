@@ -11,7 +11,6 @@ from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
 from impl.model.variable import Variable
 import impl.test_script_evaluator.validate as validate
-from impl.transactions.transactions import build_whole_transaction_bundle, build_whole_transaction_bundle_xml
 import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.reference_parser as reference_parser
 import impl.test_script_evaluator.dependency_resolver as dependency_resolver
@@ -694,6 +693,17 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
         all_fixtures.append(fixture_obj)
         fixture_ids.append(fix_id)
         FIXTURES.append(fixture_obj)
+
+    # Check for duplicate fixture IDs (from resource files)
+    seen_ids = {}
+    for fixture in all_fixtures:
+        if fixture.fixture_id in seen_ids:
+            raise Exception(
+                f"Fixture Ids need to be unique to correctly resolve references. "
+                f"Duplicate ID '{fixture.fixture_id}' found in fixtures: "
+                f"'{seen_ids[fixture.fixture_id].source_id}' and '{fixture.source_id}'"
+            )
+        seen_ids[fixture.fixture_id] = fixture
 
     # Step 2: Parse references for each fixture
     for fixture in all_fixtures:
