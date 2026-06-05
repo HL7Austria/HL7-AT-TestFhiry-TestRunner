@@ -7,8 +7,29 @@ from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
+import importlib
+import xml.etree.ElementTree as ET
+import xmltodict
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
+
+
+def convert_xml_to_json(xml_string: str) -> dict:
+    """Konvertiert FHIR XML zu JSON Dictionary - funktioniert für jeden Resource-Typ"""
+    # Resource-Typ aus XML extrahieren
+    root = ET.fromstring(xml_string)
+    resource_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
+    
+    # Dynamisch die entsprechenden Resource-Klasse importieren
+    try:
+        module = importlib.import_module(f"fhir.resources.{resource_type.lower()}")
+        resource_class = getattr(module, resource_type)
+        # XML parsen und zu JSON konvertieren (bytes für XML-Deklaration)
+        model = resource_class.model_validate_xml(xml_string.encode('utf-8'))
+        return model.model_dump()
+    except (ImportError, AttributeError):
+        # Fallback: xmltodict für robuste XML-zu-JSON-Konvertierung
+        return xmltodict.parse(xml_string)
 
 
 def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
@@ -100,9 +121,13 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
 def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
     
     if isinstance(fixture.body, str):
-        if utils.string_type(fixture.body) != "json":
-            raise Exception ("fhirpath does not function if response is not json")
-        body_use = json.loads(fixture.body)
+        if utils.string_type(fixture.body) == "json":
+            body_use = json.loads(fixture.body)
+        elif utils.string_type(fixture.body) == "xml":
+            # XML zu JSON konvertieren für FHIRPath
+            body_use = convert_xml_to_json(fixture.body)
+        else:
+            raise Exception ("fhirpath does not function if response is not json or xml")
     else:
         body_use = fixture.body
 
@@ -276,9 +301,13 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
     """
     if "compareToSourceExpression" in assertion:
         if isinstance(fixture.body, str):
-            if utils.string_type(fixture.body) != "json":
-                raise Exception ("fhirpath does not function if response is not json")
-            body_use = json.loads(fixture.body)
+            if utils.string_type(fixture.body) == "json":
+                body_use = json.loads(fixture.body)
+            elif utils.string_type(fixture.body) == "xml":
+                # XML zu JSON konvertieren für FHIRPath
+                body_use = convert_xml_to_json(fixture.body)
+            else:
+                raise Exception ("fhirpath does not function if response is not json or xml")
         else:
             body_use = fixture.body
 

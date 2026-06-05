@@ -636,8 +636,11 @@ def eval_variable(var : Variable):
         elif var.expression:
             if utils.string_type(fix.body) == "json":
                 body_use = json.loads(fix.body) if isinstance(fix.body, str) else fix.body
+            elif utils.string_type(fix.body) == "xml":
+                # XML zu JSON konvertieren für FHIRPath
+                body_use = validate.convert_xml_to_json(fix.body) if isinstance(fix.body, str) else fix.body
             else:
-                raise error.TestScriptError("FHIRPath expression cannot be evaluated on XML body. Use 'path' instead.")
+                raise error.TestScriptError("FHIRPath expression cannot be evaluated on this body type.")
             result = validate.do_expression(body_use, expr)
             if isinstance(result, list):
                 if len(result) == 1:
