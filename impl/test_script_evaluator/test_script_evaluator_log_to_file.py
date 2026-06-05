@@ -535,13 +535,22 @@ def execute_actions(action: dict[str, Any]) -> None:
         elif "assert" in action:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
+            warningOnly = assertion.get("warningOnly", False)
             execute_assertion(assertion)
             utils.log_to_file("✓ Assertion passed\n")
-        
+
     except AssertionError as ae:
-        if not stopTestOnFail:
+        warningOnly = action.get("assert", {}).get("warningOnly", False)
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail")
+        
+        if warningOnly:
+            # Log warning but continue test
+            utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
+        elif not stopTestOnFail:
             handle_assertion_error(ae, stopTestOnFail)
-        raise        
+        else:
+            raise
+
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
 
