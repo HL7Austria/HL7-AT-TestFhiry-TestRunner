@@ -519,4 +519,3 @@ def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[di
             raise Exception(f"Duplicate source ID found: '{id_value}' used in both {seen_ids[id_value]} and {id_type}. TestScript will be skipped.")
         seen_ids[id_value] = id_type
     
-

@@ -259,10 +259,12 @@ def build_url(operation :dict [str, Any]) -> str:
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} could not be found")
             if isinstance(fixture, Fixture):
-                url += "/" + fixture.type
+                if fixture.type:
+                    url += "/" + fixture.type
             else:
                 _, res_type = utils.extract_fhir_meta(fixture.body)
-                url += "/" + res_type
+                if res_type:
+                    url += "/" + res_type
         
         if targetId:
             res_id = ""
@@ -534,14 +536,16 @@ def execute_actions(action: dict[str, Any]) -> None:
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
         stopTestOnFail = action.get("assert", {}).get("stopTestOnFail")
-        
+
         if warningOnly:
             # Log warning but continue test
             utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
-        elif not stopTestOnFail:
+        elif stopTestOnFail:
+            # stopTestOnFail is true - log error but continue test
             handle_assertion_error(ae, stopTestOnFail)
         else:
-            raise
+            # stopTestOnFail is false or not set - raise TestExecutionError to stop the test
+            raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
 
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
@@ -695,12 +699,15 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
 
         fixture_obj = Fixture(fix_id, fix_source_id,autocreate, autodelete, fix_type, res)
         all_fixtures.append(fixture_obj)
-        fixture_ids.append(fix_id)
+        if fix_id is not None:
+            fixture_ids.append(fix_id)
         FIXTURES.append(fixture_obj)
 
     # Check for duplicate fixture IDs (from resource files)
     seen_ids = {}
     for fixture in all_fixtures:
+        if fixture.fixture_id is None:
+            continue
         if fixture.fixture_id in seen_ids:
             raise Exception(
                 f"Fixture Ids need to be unique to correctly resolve references. "
@@ -933,6 +940,7 @@ def TEST(test_data):
 
     except error.TestExecutionError as e:
         utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+        failed = True
         #test schould get stopped, and next test needs to start
     finally:
         if failed:

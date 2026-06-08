@@ -133,6 +133,9 @@ def extract_fhir_meta(resource):
     :param resource: A parsed JSON dict, JSON string, or raw XML string.
     :returns: Tuple of (resource_id, resource_type).
     """
+    if isinstance(resource, list):
+        # JSON Patch documents are arrays, not FHIR resources - they don't have id/resourceType
+        return None, None
     if isinstance(resource, dict):
         return resource.get("id"), resource.get("resourceType")
     elif string_type(resource) == "json":
@@ -157,6 +160,8 @@ def string_type(string: (str | dict)) -> ContentType:
     :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
     """
     if isinstance(string, dict):
+        return "json"
+    if isinstance(string, list):
         return "json"
     try:
         json.loads(string)
