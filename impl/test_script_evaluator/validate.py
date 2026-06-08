@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import os
 from pathlib import Path
@@ -134,7 +135,7 @@ def validate_expression(fixture, expression : str, operator: operator_type, valu
     else:
         body_use = fixture.body
 
-    res = do_expression(body_use, expression)
+    res = eval_expression(body_use, expression)
 
     if isinstance(res, list):
         if len(res) == 1:
@@ -316,7 +317,7 @@ def check_result(output: list[str]) -> str:
     if(errors != ""):
         raise AssertionError("Profile Assertion failed!\n" + errors + "\n" + warnings + "\n" + information)
 
-    return warnings + "\n" + information #if no warnings and no error
+    return warnings + "\n" + information #if no error
 
 def eval_compareTo(fixture, assertion : dict[str,Any]):
     """Evaluates the comparison value from a ``compareToSourceId`` assertion.
@@ -342,12 +343,12 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
         else:
             body_use = fixture.body
 
-        return do_expression(body_use, assertion.get("compareToSourceExpression"))
+        return eval_expression(body_use, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
-        return doPath(fixture.body, assertion.get("compareToSourcePath"))
+        return eval_path(fixture.body, assertion.get("compareToSourcePath"))
 
 
-def do_expression(body : dict[str, Any], expression : str):
+def eval_expression(body : dict[str, Any], expression : str):
     """Evaluates a FHIRPath expression against a resource body.
 
     :param body: The FHIR resource (dict or JSON string) to evaluate against.
@@ -357,7 +358,34 @@ def do_expression(body : dict[str, Any], expression : str):
     #maybe check if something comes from this --> if not invalid ?
     return evaluate(body, expression)
 
-def doPath(body, path:str):
+def validate_path(response: Interaction, path:str, expected, operator: operator_type) -> None:
+    
+    """Validates the Path from an Assertion.
+    The Path-type is checked so it matches with the Content-Type.
+
+    :param response: The ``Interaction`` containing the server response.
+    :param path: XPath or JsonPath of the Assertion.
+    :param expected: the expected value for the comparison.
+    :param operator: The comparison operator to apply.
+    :raises AssertionError: If the path-result does not satisfy the operator check.
+    """
+    path_type = utils.detect_path_type(path)
+    if response.header.get("Content-Type"):
+        if not path_type in response.header.get("Content-Type"): #check if pathtype is the same as content-type
+            raise AssertionError(f"Response-Body is not of type {path_type}!")
+
+    if not response.body:
+        raise AssertionError("Response-Body is empty and cannot be tested with path.")
+    res = eval_path(response.body, path)
+    utils.log_to_file(f"Asserting Path: {path}, {res} {operator} {expected}.")
+    validate_operator(operator, res, expected)
+
+def validate_headerfield(response: Interaction, field:str, expected: Any, operator: operator_type) -> None:
+    if not response.header:
+        raise AssertionError("Response has no saved Headers!")
+    validate_operator(operator, response.header.get(field), expected)
+
+def eval_path(body, path:str):
     """Evaluates an XPath or JSONPath expression against a resource body.
 
     Determines the path type (``'xml'`` or ``'json'``) and delegates to
@@ -368,39 +396,54 @@ def doPath(body, path:str):
     :returns: The evaluation result, or ``None`` if the path type could not
         be determined.
     """
-    type = "xml"
-    result = None
+    body_type = ""
+    if isinstance(body, dict):
+        body_type = "json"
+    else:
+        body_type = utils.string_type(body)
 
-    print("temporary bridging until path issue is resolved")
+    result = None
+    path_type = utils.detect_path_type(path)
+    if body_type != path_type : 
+        raise Exception(f"Path {path} is not compatible with body type {body_type}!")
 
     #check if xml or jsonpath
-    if path == "xml":
-        result = xmlPath(str(body), path)
-    elif path == "json":
-        result = jsonPath(body, path)
+    if path_type == "xml":
+        result = eval_xpath(str(body), path)
+    elif path_type == "json":
+        result = eval_json_path(body, path)
+    else:
+        raise Exception(f"Path {path} could not be identified as XPath or JsonPath!")
 
     return result
 
-def xmlPath(body : str, path:str): #get xml as str?
-    """Evaluates an XPath expression against an XML resource body.
+def eval_xpath(body : str, path:str):
+    """
+    Evaluates an XPath expression against an XML resource body.
+    If a namespace exists but no prefix in path it uses that ns as prefix.
 
     :param body: The XML resource as a string.
     :param path: The XPath expression to evaluate.
     :returns: List of matching string values.
     :raises ValueError: If any match result is not a string.
     """
-    root = etree.fromstring(body)
-    ns = {'fhir': 'http://hl7.org/fhir'} #change to dynamically get namespace of xml?
+    body_cleaned = body
+    if isinstance(body, str):
+        body_cleaned = re.sub(r'<\?xml[^?]*\?>', '', body, count=1).encode('utf-8')
+        #remove so that lxml doesn't have a problem with the encoding string
+    root = etree.fromstring(body_cleaned)
+    for elem in root.iter(): #removing namespaces... do I want that?
+        elem.tag = etree.QName(elem).localname
+        for attr_name in list(elem.attrib):
+            local = etree.QName(attr_name).localname
+            if local != attr_name:
+                elem.attrib[local] = elem.attrib.pop(attr_name)
+    etree.cleanup_namespaces(root)
 
-    # Alle Family-Namen
-    result = root.xpath(f"//{path}", namespaces=ns)
-    for res in result:
-        if not isinstance(res, str):
-            raise ValueError(f"Path {path} could not be evaluated")
-    print(result)
+    result = root.xpath(path)
     return result
 
-def jsonPath(body : str, path:str):
+def eval_json_path(body : str, path:str):
     """Evaluates a JSONPath expression against a JSON resource body.
 
     :param body: The FHIR resource as a dict or JSON string.

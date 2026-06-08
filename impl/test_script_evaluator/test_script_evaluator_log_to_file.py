@@ -462,7 +462,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            #validate.validatePath(response, assertion.get("path"), compare_val, operator) --> in another branch
+            validate.validate_path(response, assertion.get("path"), compare_val, operator)
 
         
         if "minimumId" in assertion:
@@ -642,7 +642,7 @@ def eval_variable(var : Variable):
                 body_use = validate.convert_xml_to_json(fix.body) if isinstance(fix.body, str) else fix.body
             else:
                 raise error.TestScriptError("FHIRPath expression cannot be evaluated on this body type.")
-            result = validate.do_expression(body_use, expr)
+            result = validate.eval_expression(body_use, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
@@ -652,7 +652,7 @@ def eval_variable(var : Variable):
                     raise error.TestScriptError("More than one result!")
         elif var.path:
 
-            result = validate.doPath(fix.body, expr)
+            result = validate.eval_path(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
