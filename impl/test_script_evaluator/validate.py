@@ -361,9 +361,16 @@ def eval_path(body, path:str):
     :returns: The evaluation result, or ``None`` if the path type could not
         be determined.
     """
+    body_type = ""
+    if isinstance(body, dict):
+        body_type = "json"
+    else:
+        body_type = utils.string_type(body)
 
     result = None
     path_type = utils.detect_path_type(path)
+    if body_type != path_type : 
+        raise Exception(f"Path {path} is not compatible with body type {body_type}!")
 
     #check if xml or jsonpath
     if path_type == "xml":

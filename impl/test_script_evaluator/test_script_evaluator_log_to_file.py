@@ -607,7 +607,7 @@ def eval_variable(var : Variable):
                 raise error.TestScriptError(f"HeaderField {var.headerField} could not be evaluated.")
 
         elif var.expression:
-            result = validate.do_expression(fix.body, expr)
+            result = validate.eval_expression(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
@@ -617,7 +617,7 @@ def eval_variable(var : Variable):
                     raise error.TestScriptError("More than one result!")
         elif var.path:
 
-            result = validate.doPath(fix.body, expr)
+            result = validate.eval_path(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
