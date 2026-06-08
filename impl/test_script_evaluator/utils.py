@@ -1,6 +1,5 @@
 from pathlib import Path
 import os
-from datetime import datetime
 import json
 import re
 import xml.etree.ElementTree as ET

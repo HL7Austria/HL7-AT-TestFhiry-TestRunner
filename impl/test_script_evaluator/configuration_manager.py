@@ -1,7 +1,3 @@
-"""
-Configuration manager for FHIR testing tool.
-Handles loading and accessing configuration settings.
-"""
 import json
 import os
 from datetime import datetime
