@@ -342,8 +342,8 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     :raises AssertionError: If the path-result does not satisfy the operator check.
     """
     path_type = utils.detect_path_type(path)
-    if response.header.get("Content-type"):
-        if not path_type in response.header.get("Content-type"): #check if pathtype is the same as content-type
+    if response.header.get("Content-Type"):
+        if not path_type in response.header.get("Content-Type"): #check if pathtype is the same as content-type
             raise AssertionError(f"Response-Body is not of type {path_type}!")
 
     if not response.body:
