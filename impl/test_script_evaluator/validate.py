@@ -399,9 +399,11 @@ def eval_xpath(body : str, path:str):
     :returns: List of matching string values.
     :raises ValueError: If any match result is not a string.
     """
+    body_cleaned = body
     if isinstance(body, str):
-        body = re.sub(r'<\?xml[^?]*\?>', '', body, count=1).encode('utf-8')
-    root = etree.fromstring(body)
+        body_cleaned = re.sub(r'<\?xml[^?]*\?>', '', body, count=1).encode('utf-8')
+        #remove so that lxml doesn't have a problem with the encoding string
+    root = etree.fromstring(body_cleaned)
     for elem in root.iter(): #removing namespaces... do I want that?
         elem.tag = etree.QName(elem).localname
         for attr_name in list(elem.attrib):
