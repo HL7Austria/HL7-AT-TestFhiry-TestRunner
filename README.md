@@ -201,6 +201,22 @@ lxml~=5.4.0
 - `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
 - `validate.py` → Validierungen der Test-Scripts. 
 
+##### Namespace-Handling in **eval_xpath**
+
+Die Methode **eval_xpath** entfernt vor der XPath-Auswertung alle XML-Namespaces aus dem geparsten Dokument.
+Dazu wird über alle Elemente iteriert und jeder Tag sowie jedes Attribut auf seinen lokalen Namen reduziert (`etree.QName(...).localname`).
+Anschließend werden nicht mehr referenzierte Namespace-Deklarationen mittels `etree.cleanup_namespaces()` bereinigt.
+
+Dies ist notwendig, weil FHIR®-XPath-Ausdrücke in TestScripts typischerweise ohne Namespace-Präfixe formuliert sind (z. B. `Patient/name/family` statt `fhir:Patient/fhir:name/fhir:family`).
+Ohne diese Bereinigung würden solche Ausdrücke gegen ein namespace-behaftetes XML-Dokument keine Treffer liefern.
+Das bedeutet auch, dass XPath-Ausdrücke in den TestScripts **ohne Namespace-Präfixe** (z. B. `fhir:`) geschrieben sein müssen, damit sie korrekt ausgewertet werden.
+
+##### Encoding-Workaround in **eval_xpath**
+
+Vor dem Parsen wird die XML-Deklaration (`<?xml ... ?>`) per Regex entfernt und der String anschließend als UTF-8 kodiert.
+`lxml.etree.fromstring()` akzeptiert bei einem `bytes`-Objekt die Encoding-Angabe aus der Deklaration, wirft aber einen Fehler wenn ein Python-`str` (der intern bereits Unicode ist) eine Encoding-Deklaration enthält.
+Da kein zuverlässigerer Weg gefunden wurde, diesen Konflikt aufzulösen, wird die Deklaration schlicht entfernt bevor der Body als `bytes` an den Parser übergeben wird.
+
 ### transactions/
 
 **Hauptdateien:**
@@ -313,3 +329,4 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
 | Teardown–Action | operation         | Aktion beim Teardown                | mittel    | ✅             |
 
+Die dokumentierten Unterschiede zum TestFhiry-TinkerTool sind im UnterschiedeZuTinkerTool.md zu finden.

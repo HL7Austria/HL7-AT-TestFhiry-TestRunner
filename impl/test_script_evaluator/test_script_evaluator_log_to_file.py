@@ -390,9 +390,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
 
         if "validateProfileId" in assertion:
             msg = ""
-
             if PROFILES:
-                #save temporary file with response
                 msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
@@ -402,6 +400,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
+            """
+            check if xml or json
+            xml --> regex? look what resource-Type (should be root)
+            json --> resourceType aus dict
+            """
+            raise NotImplementedError
         
         elif "headerField" in assertion:
             #mit value
@@ -409,9 +413,15 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
                 raise error.TestScriptError("headerFiedld operator value not valid")
+            validate.validate_headerfield(response, assertion.get("headerField"), compare_val, operator)
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
+            """
+            check if bundle
+            check if first, last and next links
+            --> Error needs to reflect what is missing
+            """
             raise NotImplementedError
         
         elif "expression" in assertion:
@@ -426,11 +436,15 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            raise NotImplementedError
+            validate.validate_path(response, assertion.get("path"), compare_val, operator)
 
         
-        if "minimumId" in assertion: #kann mit path oder expression
+        if "minimumId" in assertion:
             #operator will be ignored
+            """
+            find a way to check if this fixture is inside the response
+            --> find out if there is a library, find out if validator has that
+            """
             raise NotImplementedError
         
         if "defaultManualCompletion" in assertion:
@@ -586,7 +600,7 @@ def eval_variable(var : Variable):
                 raise error.TestScriptError(f"HeaderField {var.headerField} could not be evaluated.")
 
         elif var.expression:
-            result = validate.do_expression(fix.body, expr)
+            result = validate.eval_expression(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
@@ -596,7 +610,7 @@ def eval_variable(var : Variable):
                     raise error.TestScriptError("More than one result!")
         elif var.path:
 
-            result = validate.doPath(fix.body, expr)
+            result = validate.eval_path(fix.body, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]

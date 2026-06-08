@@ -3,7 +3,10 @@ import os
 from datetime import datetime
 import json
 import xml.etree.ElementTree as ET
-from typing import Literal
+from typing import Literal, Optional
+import re
+from lxml import etree
+from jsonpath_ng import parse as jp_parse
 
 
 """
@@ -188,16 +191,18 @@ def string_type(string: str) -> ContentType:
     :param string: The raw string to inspect.
     :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
     """
+    if isinstance(string, dict):
+        return "json"
     try:
         json.loads(string)
         return "json"
-    except json.JSONDecodeError:
+    except Exception:
         pass
 
     try:
         ET.fromstring(string)
         return "xml"
-    except ET.ParseError:
+    except Exception:
         return "unknown"
 
 def map_method_type(type : OperationType) -> OperationMethod:
@@ -216,4 +221,43 @@ def map_method_type(type : OperationType) -> OperationMethod:
         return "post"
     else:
         return "get"
+    
+def detect_path_type(path: str) -> ContentType:
+    """
+    Checks if string is Xpath or JsonPath
+    """
+
+    if not path or not isinstance(path, str):
+        return "unknown"
+    
+    path = path.strip()
+
+    is_xpath = False
+    is_jsonpath = False
+
+    try:
+        prefixes = set(re.findall(r'([a-zA-Z_][\w]*):(?!:)', path))
+        dummy_ns = {p: f'http://dummy/{p}' for p in prefixes}
+        etree.XPath(path, namespaces=dummy_ns)
+        is_xpath = True
+    except Exception:
+        pass
+
+    try:
+        jp_parse(path)
+        is_jsonpath = True
+    except Exception:
+        pass
+
+    if is_xpath and not is_jsonpath:
+        return "xml"
+    if is_jsonpath and not is_xpath:
+        return "json"
+    if is_xpath and is_jsonpath: #only if both libraries can parse the path
+        if "$" in path or path.startswith("@"):
+            return "json"
+        elif "/" in path:
+            return "xml"
+    
+    return "unknown"
     
