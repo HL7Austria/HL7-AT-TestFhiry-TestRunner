@@ -55,60 +55,6 @@ def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     
     return profiles, profile_ids
 
-def get_all_profiles(base_path=None):
-        """Scans the Profiles folder and returns paths to all JSON profile files.
-
-        :param base_path: Parent folder containing the Profiles subfolder.
-                          If None, falls back to BASE_DIR.
-        :returns: List of file path strings for every ``.json`` file in the Profiles folder.
-        """
-        if base_path:
-            PROFILE_FOLDER = str(Path(base_path) / "Profiles")
-        else:
-            import impl.test_script_evaluator.configuration_manager as conf_man
-            config_path = conf_man.get_config_manager().path
-            if config_path:
-                PROFILE_FOLDER = str(Path(config_path) / "Profiles")
-            else:
-                PROFILE_FOLDER = str(BASE_DIR / "Profiles")
-
-        profiles = [
-            os.path.join(PROFILE_FOLDER, name).replace("\\", "/")
-            for name in os.listdir(PROFILE_FOLDER)
-            if name.endswith(".json")
-                    ]
-        return profiles
-
-def get_profile_json(profile_list : list[str], base_path=None):
-    """Loads profile JSON files whose ``url`` matches one of the given references.
-
-    Reads every JSON file from the Profiles folder and returns the
-    JSON-serialised string of the last matching profile.
-
-    :param profile_list: List of profile canonical URL strings to match against.
-    :param base_path: Parent folder containing the Profiles subfolder.
-                      If None, falls back to BASE_DIR.
-    :returns: JSON string of the matching profile, or an empty list if none matched.
-    """
-
-    result = []
-    profFiles = []
-    temp = []
-
-    profFiles = get_all_profiles(base_path)
-    for file in profFiles:
-        with open(file, "r", encoding="utf-8") as f:
-            temp.append(json.load(f))
-    
-    for json_f in temp:
-        for p in profile_list:
-            if json_f["url"] == p:
-                result = json.dumps(json_f)
-    
-    temp.clear()
-    profFiles.clear()
-    return result
-
 def get_variables(testscript):
     """Extracts the list of variable definitions from a TestScript.
 
@@ -132,26 +78,6 @@ def load_json(path : str):
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
     
-def load_json_list(paths : list[str]):
-    """Loads multiple JSON files from the given paths.
-
-    :param paths: List of relative path strings to JSON files.
-    :returns: List of parsed JSON dictionaries, or ``None`` if ``paths`` is empty.
-    """
-    json_list = []
-
-    if not paths:
-        return None
-
-    for path in paths:
-        full_path = get_full_path(path)
-        printInfoJson(path)
-
-        with open(full_path, "r", encoding="utf-8") as f:
-            json_list.append(json.load(f))
-
-    return json_list
-
 def printInfoJson(path : str):
     """
     Logs information about loaded JSON files based on their path.

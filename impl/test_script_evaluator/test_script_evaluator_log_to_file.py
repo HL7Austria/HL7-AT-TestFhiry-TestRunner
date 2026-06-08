@@ -23,18 +23,6 @@ PROFILES = {} #saving profilesIDs with the references
 
 FHIR_SERVER_BASE = None
 
-def extract_test_source_id(container): #do i even need this anymore?
-    """
-    Returns the sourceID
-    """
-    for action in container.get("action", []):
-        op = action.get("operation")
-        if op and "sourceId" in op:
-            return op["sourceId"]
-
-    return None
-
-
 def replacer(match):
     """
     Regex substitution callback that resolves a FHIR TestScript variable placeholder
@@ -57,7 +45,6 @@ def replacer(match):
             return eval_variable(var)
     
     raise Exception(f"Variable {var_name} could not be found")
-
 
 def execute_operation(operation: dict[str, Any]):
     """
@@ -170,7 +157,14 @@ def execute_operation(operation: dict[str, Any]):
             saved_resource_id = ""
             location = response.headers.get("Location", "")
             if location:
-                saved_resource_id = location.rstrip("/").split("/")[-3]
+                parts = location.rstrip("/").split("/")
+                if "_history" in parts:
+                    # ID ist der Teil vor _history
+                    history_idx = parts.index("_history")
+                    saved_resource_id = parts[history_idx - 1]
+                else:
+                    # ID ist der letzte Teil
+                    saved_resource_id = parts[-1]
                 utils.log_to_file(f"ID from Location header: {saved_resource_id}")
             else:
                 try:
@@ -768,13 +762,14 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                 if response.status_code >= 200 and response.status_code < 300:
                     location = response.headers.get("Location", "")
                     if location:
-                        # Location format is typically: resource/id/vid
-                        # We need the id, not the vid
                         parts = location.rstrip("/").split("/")
-                        if len(parts) >= 2:
-                            server_id = parts[-3]  # Get the third-to-last part (id)
+                        if "_history" in parts:
+                            # ID ist der Teil vor _history
+                            history_idx = parts.index("_history")
+                            server_id = parts[history_idx - 1]
                         else:
-                            server_id = parts[-1]  # Fallback to last part
+                            # ID ist der letzte Teil
+                            server_id = parts[-1]
                     else:
                         try:
                             if is_xml:
@@ -883,26 +878,6 @@ def SETUP(setup_data, fixture_list : list, resources):
         if fixture_list: #if there are fixtures to save
             save_fixtures(resources, fixture_list)
 
-
-        if FIXTURES:
-            for fix1 in FIXTURES:
-                for fix2 in FIXTURES:
-                    if utils.string_type(fix1.body) == "json":
-                        json_string = json.dumps(fix1.body)
-                        my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "\""
-                        fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + fix2.type+"/"+fix2.server_id + "\"", json_string))
-                    else:
-                        xml_regex = "(<reference[^>]*value=\")[a-zA-Z:]*" + fix2.type + "/" + fix2.fixture_id + "(\")"
-                        fix1.body = re.sub(xml_regex, r"\g<1>" + fix2.type + "/" + fix2.server_id + r"\g<2>", fix1.body)
-
-                for fix_check in FIXTURES:
-                    if utils.string_type(fix1.body) == "json":
-                        check_str = json.dumps(fix1.body)
-                        if re.search("\"reference\" *: *\"[a-zA-Z:]*" + fix_check.type + "/" + fix_check.fixture_id + "\"", check_str) != None:
-                            raise error.TestScriptError(f"Unreplaced reference to {fix_check.type}/{fix_check.fixture_id} remaining.")
-                    else:
-                        if re.search(r'<reference[^>]*value="[a-zA-Z:]*' + fix_check.type + "/" + fix_check.fixture_id + r'"', fix1.body) != None:
-                            raise error.TestScriptError(f"Unreplaced reference to {fix_check.type}/{fix_check.fixture_id} remaining.")
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
