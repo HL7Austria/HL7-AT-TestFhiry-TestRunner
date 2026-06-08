@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import re
 import xml.etree.ElementTree as ET
+import urllib
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -94,14 +95,17 @@ def execute_operation(operation: dict[str, Any]):
         url = operation.get("url")
         sourceId = operation.get("sourceId")
 
-
-        #kümmere dich um die headers
         headers = {}
+        reqHeader = operation.get("requestHeader")
+
         if operation.get("contentType"):
-            headers["Content-Type"] = operation.get("contentType")
+            headers["Content-Type"]= operation.get("contentType")
         if operation.get("accept"):
             headers["Accept"] = operation.get("accept")
-
+        if reqHeader:
+            for head in reqHeader:
+                headers[head.get("field")] = head.get("value")
+        
         fixture = None
 
         if not method and operation_type:
@@ -111,6 +115,10 @@ def execute_operation(operation: dict[str, Any]):
         
         if not url:
             url = build_url(operation)
+
+        if operation.get("encodeRequestUrl") == True:
+            url = requests.utils.quote(url, safe=":/?=")
+
 
         if sourceId:
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -416,11 +424,8 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("responseCode operator value not valid")
             
-            if response.reason != "":
-                expected_resp = assertion.get("response")
-                validate.validate_response(response.reason, expected_resp, operator)
-            else:
-                raise AssertionError("No Response-display has been sent")
+            expected_resp = assertion.get("response")
+            validate.validate_response(response, expected_resp, operator)
 
         if "validateProfileId" in assertion:
             msg = ""
