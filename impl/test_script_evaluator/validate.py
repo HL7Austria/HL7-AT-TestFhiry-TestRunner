@@ -1,12 +1,14 @@
 import json
 import subprocess
 import os
+from pathlib import Path
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
 from impl.model.interaction import Interaction
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
+import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
@@ -201,18 +203,20 @@ def validateTS(testScript: dict[str, Any]) -> None:
     :raises Exception: If the validator reports errors (wraps the
         ``AssertionError`` from ``check_result``).
     """
-    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
-    path = utils.get_full_path("temp/temp.json")
+    base_path = Path(conf_man.get_config_manager().path)
+    validator = base_path / "validator_cli.jar"
+    temp_dir = base_path / "temp"
+    path = temp_dir / "temp.json"
     ts_string = json.dumps(testScript)
 
-    os.makedirs(utils.get_full_path("temp"), exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True)
     with open(path, "w") as f:
         f.write(ts_string)
 
     cmd = f"java -jar {validator} {path} -tx n/a"
     output = execute_validator(cmd)
     os.remove(path)
-    os.rmdir(utils.get_full_path("temp"))
+    os.rmdir(temp_dir)
 
     try: 
         check_result(output)
@@ -234,26 +238,28 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     """
     utils.log_to_file(f"Asserting profile {profileRef}")
 
-    pathF = "temp/temp"
+    base_path = Path(conf_man.get_config_manager().path)
+    temp_dir = base_path / "temp"
+    pathF = temp_dir / "temp"
     if utils.string_type(response.body) == "json":
-        pathF += ".json"
+        pathF = Path(str(pathF) + ".json")
     elif utils.string_type(response.body) == "xml":
-        pathF += ".xml"
+        pathF = Path(str(pathF) + ".xml")
     else:
         raise TypeError("Response body in unexpected format!")
 
-    prof_folder = utils.get_full_path("Profiles")
-    resource = utils.get_full_path(pathF)
-    validator = utils.get_full_path("test_script_evaluator/validator_cli.jar")
+    prof_folder = base_path / "Profiles"
+    resource = pathF
+    validator = base_path / "validator_cli.jar"
 
-    os.makedirs(utils.get_full_path("temp"), exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True)
     with open(resource, "w") as f:
         f.write(response.body)
 
     cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
     output = execute_validator(cmd)
     os.remove(resource)
-    os.rmdir(utils.get_full_path("temp"))
+    os.rmdir(temp_dir)
 
     return check_result(output)
 

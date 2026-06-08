@@ -1,8 +1,6 @@
 import json
 import requests
-from datetime import datetime
 import re
-import urllib
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -15,18 +13,13 @@ from impl.transactions.transactions import build_whole_transaction_bundle
 import impl.test_script_evaluator.utils as utils
 
 last_interaction = None
-log_filename = f"test_results_{utils.timestamp}.txt"
 
 FIXTURES = []
 REQ_RESP = []
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
 
-# Init logfile
-with open(utils.LOG_FILE_PATH, "w", encoding="utf-8") as f:
-    f.write(f"FHIR Test Log - {datetime.now()}\n\n")
-
-FHIR_SERVER_BASE = conf_man.get_fhir_server()
+FHIR_SERVER_BASE = None
 
 def extract_test_source_id(container): #do i even need this anymore?
     """
@@ -849,6 +842,9 @@ def test_fhir_operations(testscript_data):
         as provided by ``load_testscript_data``.
     """
 
+    global FHIR_SERVER_BASE
+    FHIR_SERVER_BASE = conf_man.get_fhir_server()
+
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         return
@@ -905,8 +901,3 @@ def test_fhir_operations(testscript_data):
     REQ_RESP.clear()
     PROFILES.clear()
     VARIABLES.clear()
-
-if __name__ == "__main__":
-    for testscript_path, resource_path in conf_man.get_testscript_pairs():
-        testscript_data = load_testscript_data(testscript_path, resource_path)
-        test_fhir_operations(testscript_data)
