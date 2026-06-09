@@ -21,19 +21,19 @@ operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'le
 
 def convert_xml_to_json(xml_string: str) -> dict:
     """Konvertiert FHIR XML zu JSON Dictionary - funktioniert für jeden Resource-Typ"""
-    # Resource-Typ aus XML extrahieren
+    # extract Resource-Type from XML
     root = ET.fromstring(xml_string)
     resource_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
     
-    # Dynamisch die entsprechenden Resource-Klasse importieren
+    # dynamic import
     try:
         module = importlib.import_module(f"fhir.resources.{resource_type.lower()}")
         resource_class = getattr(module, resource_type)
-        # XML parsen und zu JSON konvertieren (bytes für XML-Deklaration)
+        # parse XML and dump to dictionary
         model = resource_class.model_validate_xml(xml_string.encode('utf-8'))
         return model.model_dump()
     except (ImportError, AttributeError):
-        # Fallback: xmltodict für robuste XML-zu-JSON-Konvertierung
+        # Fallback: xmltodict
         return xmltodict.parse(xml_string)
 
 
