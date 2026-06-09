@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Patient xmlns="http://hl7.org/fhir">
+  <id value="HL7ATCorePatientExample02-deceasedTimeXML"/>
+  <meta>
+    <profile value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"/>
+  </meta>
+  <text>
+    <status value="generated"/><div xmlns="http://www.w3.org/1999/xhtml"><p style="border: 1px #661aff solid; background-color: #e6e6ff; padding: 10px;"><b>Muster Andreas Bauer </b> male, DoB: 1990-12-24 ( Social Security Number/1111241261 (use: OFFICIAL))</p><hr/><table class="grid"><tr><td style="background-color: #f3f5da" title="Known status of Patient">Deceased:</td><td>2019-01-14 17:22:00+1000</td><td style="background-color: #f3f5da" title="Known Marital status of Patient">Marital Status:</td><td colspan="3"><span title="Codes: {http://terminology.hl7.org/CodeSystem/v3-MaritalStatus M}">Married</span></td></tr><tr><td style="background-color: #f3f5da" title="Other Ids (see the one above)">Other Ids:</td><td colspan="3"><ul><li>National unique individual identifier/GH:oeLdSEb0l+8kSdJWjOYyYmnYki0 (use: OFFICIAL)</li><li>Patient internal identifier/0815 (use: OFFICIAL)</li></ul></td></tr><tr><td style="background-color: #f3f5da" title="Ways to contact the Patient">Contact Details:</td><td colspan="3"><ul><li><a href="tel:+43.2682.40400">+43.2682.40400</a></li><li>Berggasse 13a Eisenstadt Burgenland 7000 AUT (HOME)</li></ul></td></tr><tr><td style="background-color: #f3f5da" title="Languages spoken">Language:</td><td colspan="3"><span title="Codes: {urn:ietf:bcp:47 de}">German</span> (preferred)</td></tr></table></div>
+  </text>
+  <identifier>
+    <use value="official"/>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="SS"/>
+        <display value="Social Security Number"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.40.0.10.1.4.3.1"/>
+    <value value="1111241261"/>
+    <assigner>
+      <display value="Dachverband der österreichischen Sozialversicherungsträger"/>
+    </assigner>
+  </identifier>
+  <identifier>
+    <use value="official"/>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="NI"/>
+        <display value="National unique individual identifier"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.40.0.10.2.1.1.149"/>
+    <value value="GH:oeLdSEb0l+8kSdJWjOYyYmnYki0"/>
+    <assigner>
+      <display value="Bundesministerium für Inneres"/>
+    </assigner>
+  </identifier>
+  <identifier>
+    <use value="official"/>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="PI"/>
+        <display value="Patient internal identifier"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.3.4.5"/>
+    <value value="0815"/>
+    <assigner>
+      <display value="Ein GDA in Österreich"/>
+    </assigner>
+  </identifier>
+  <name>
+    <family value="Bauer"/>
+    <given value="Muster"/>
+    <given value="Andreas"/>
+    <prefix value="Dipl.Ing."/>
+    <prefix value="Dr."/>
+  </name>
+  <telecom>
+    <system value="phone"/>
+    <value value="+43.2682.40400"/>
+    <use value="home"/>
+  </telecom>
+  <gender value="male"/>
+  <birthDate value="1990-12-24"/>
+  <deceasedDateTime value="2019-01-14T17:22:00+10:00"/>
+  <address>
+    <use value="home"/>
+    <line value="Berggasse 13a"/>
+    <city value="Eisenstadt"/>
+    <state value="Burgenland"/>
+    <postalCode value="7000"/>
+    <country value="AUT"/>
+  </address>
+  <maritalStatus>
+    <coding>
+      <system value="http://terminology.hl7.org/CodeSystem/v3-MaritalStatus"/>
+      <code value="M"/>
+      <display value="Married"/>
+    </coding>
+  </maritalStatus>
+  <communication>
+    <language>
+      <coding>
+        <system value="urn:ietf:bcp:47"/>
+        <code value="de"/>
+      </coding>
+    </language>
+    <preferred value="true"/>
+  </communication>
+</Patient>

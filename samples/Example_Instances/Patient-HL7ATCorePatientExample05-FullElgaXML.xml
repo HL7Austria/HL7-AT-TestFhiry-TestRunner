@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Patient xmlns="http://hl7.org/fhir">
+  <id value="HL7ATCorePatientExample05-FullElgaXML"/>
+  <meta>
+    <profile value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"/>
+  </meta>
+  <text>
+    <status value="generated"/><div xmlns="http://www.w3.org/1999/xhtml"><p style="border: 1px #661aff solid; background-color: #e6e6ff; padding: 10px;"><b>Alexander Robert Wolfesberger </b> male, DoB: 1961-12-24 ( Social Security Number/1111241261 (use: OFFICIAL))</p><hr/><table class="grid"><tr><td style="background-color: #f3f5da" title="Known Marital status of Patient">Marital Status:</td><td colspan="3"><span title="Codes: {http://terminology.hl7.org/CodeSystem/v3-MaritalStatus M}">Married</span></td></tr><tr><td style="background-color: #f3f5da" title="Ways to contact the Patient">Contact Details:</td><td colspan="3"><ul><li><a href="tel:+43.2682.40400">+43.2682.40400</a></li><li><a href="tel:+43.664.1234567">+43.664.1234567</a></li><li><a href="mailto:herberthannes.mustermann@provider.at">herberthannes.mustermann@provider.at</a></li><li>Beheimgasse 7 Stock 2 Tür 1 Wien Wien 1170 AUT (HOME)</li></ul></td></tr><tr><td style="background-color: #f3f5da" title="Languages spoken">Language:</td><td colspan="3"><span title="Codes: {urn:ietf:bcp:47 de}">German</span> (preferred)</td></tr><tr><td style="background-color: #f3f5da" title="Nominated Contact: natural daughter">natural daughter:</td><td colspan="3"><ul><li>Julia Tochter </li><li>Heimstrasse 1 Wien 1220 AUT </li><li><a href="tel:+43.664.12345678">+43.664.12345678</a></li></ul></td></tr><tr><td style="background-color: #f3f5da" title="HL7® Austria FHIR® Core Extension for the religion (registered in Austria) of a patient.
+The extension is used to encode the religious confession of a patient (only confessions registered in Austria). Furthermore, it uses the official [HL7 AT CodeSystem](https://termpub.gesundheit.gv.at:443/TermBrowser/gui/main/main.zul?loadType=CodeSystem&amp;loadName=HL7 AT ReligionAustria) for religion and is therefore aligned with the ELGA ValueSet, respectively.">Patient Religion:</td><td colspan="3"><ul><li>code: <span title="Codes: {http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-religion 101}">Römisch-Katholisch</span></li></ul></td></tr></table></div>
+  </text>
+  <extension url="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-patient-religion">
+    <extension url="code">
+      <valueCodeableConcept>
+        <coding>
+          <system value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-religion"/>
+          <code value="101"/>
+          <display value="Römisch-Katholisch"/>
+        </coding>
+      </valueCodeableConcept>
+    </extension>
+  </extension>
+  <identifier>
+    <use value="official"/>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="SS"/>
+        <display value="Social Security Number"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.40.0.10.1.4.3.1"/>
+    <value value="1111241261"/>
+    <assigner>
+      <display value="Dachverband der österreichischen Sozialversicherungsträger"/>
+    </assigner>
+  </identifier>
+  <name>
+    <family value="Wolfesberger"/>
+    <given value="Alexander"/>
+    <given value="Robert"/>
+    <prefix value="Dipl.Ing."/>
+    <prefix value="Dr."/>
+  </name>
+  <telecom>
+    <system value="phone"/>
+    <value value="+43.2682.40400"/>
+    <use value="home"/>
+  </telecom>
+  <telecom>
+    <system value="phone"/>
+    <value value="+43.664.1234567"/>
+    <use value="mobile"/>
+  </telecom>
+  <telecom>
+    <system value="email"/>
+    <value value="herberthannes.mustermann@provider.at"/>
+  </telecom>
+  <gender value="male"/>
+  <birthDate value="1961-12-24"/>
+  <address>
+    <use value="home"/>
+    <type value="both"/>
+    <line value="Beheimgasse 7 Stock 2 Tür 1">
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName">
+        <valueString value="Beheimgasse"/>
+      </extension>
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber">
+        <valueString value="7"/>
+      </extension>
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-additionalLocator">
+        <valueString value="Stock 2 Tür 1"/>
+      </extension>
+      <extension url="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-address-additionalInformation">
+        <valueString value="Lift vorhanden"/>
+      </extension>
+    </line>
+    <city value="Wien"/>
+    <state value="Wien"/>
+    <postalCode value="1170"/>
+    <country value="AUT"/>
+  </address>
+  <maritalStatus>
+    <coding>
+      <system value="http://terminology.hl7.org/CodeSystem/v3-MaritalStatus"/>
+      <code value="M"/>
+      <display value="Married"/>
+    </coding>
+  </maritalStatus>
+  <contact>
+    <relationship>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v3-RoleCode"/>
+        <code value="DAU"/>
+        <display value="natural daughter"/>
+      </coding>
+    </relationship>
+    <name>
+      <family value="Tochter"/>
+      <given value="Julia"/>
+    </name>
+    <telecom>
+      <system value="phone"/>
+      <value value="+43.664.12345678"/>
+      <use value="mobile"/>
+    </telecom>
+    <address>
+      <line value="Heimstrasse 1"/>
+      <city value="Wien"/>
+      <postalCode value="1220"/>
+      <country value="AUT"/>
+    </address>
+  </contact>
+  <communication>
+    <language>
+      <coding>
+        <system value="urn:ietf:bcp:47"/>
+        <code value="de"/>
+      </coding>
+    </language>
+    <preferred value="true"/>
+  </communication>
+</Patient>

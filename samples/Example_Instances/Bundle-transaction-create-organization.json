@@ -1,0 +1,42 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:61ebe359-bfdc-4613-8bf2-c5e300945f0a",
+      "resource": {
+        "resourceType": "Organization",
+        "identifier": [
+          {
+            "use": "official",
+            "system": "urn:oid:2.16.528.1",
+            "value": "91654"
+          }
+        ],
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "Healthcare Provider"
+              }
+            ]
+          }
+        ],
+        "name": "Burgers University Medical Center",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "022-655 2300",
+            "use": "work"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization"
+      }
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Patient xmlns="http://hl7.org/fhir">
+  <id value="HL7ATCorePatientExample06-GenderExtensionXML"/>
+  <meta>
+    <profile value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"/>
+  </meta>
+  <text>
+    <status value="generated"/><div xmlns="http://www.w3.org/1999/xhtml"><p style="border: 1px #661aff solid; background-color: #e6e6ff; padding: 10px;"><b>Max Musterperson </b> other, DoB: 1960-01-01 ( Social Security Number/6789010160)</p><hr/><table class="grid"><tr><td style="background-color: #f3f5da" title="Other Ids (see the one above)">Other Ids:</td><td colspan="3"><ul><li>National unique individual identifier/GH:oeLdSEb0l+8kSdJWjOYyYmnYki0=</li><li>Patient internal identifier/4711</li></ul></td></tr><tr><td style="background-color: #f3f5da" title="Ways to contact the Patient">Contact Details:</td><td colspan="3"><ul><li><a href="mailto:office@hl7.at">office@hl7.at</a></li><li><a href="tel:+436500987654321">+436500987654321</a></li><li>Eine Strasse 15 Tür 42 Linz Oberösterreich 4020 AUT (HOME)</li></ul></td></tr><tr><td style="background-color: #f3f5da" title="HL7® Austria FHIR® Core Extension for the religion (registered in Austria) of a patient.
+The extension is used to encode the religious confession of a patient (only confessions registered in Austria). Furthermore, it uses the official [HL7 AT CodeSystem](https://termpub.gesundheit.gv.at:443/TermBrowser/gui/main/main.zul?loadType=CodeSystem&amp;loadName=HL7 AT ReligionAustria) for religion and is therefore aligned with the ELGA ValueSet, respectively.">Patient Religion:</td><td colspan="3"><ul><li>code: <span title="Codes: {http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-religion 160}">Konfessionslos</span></li></ul></td></tr><tr><td style="background-color: #f3f5da" title="The patient's legal status as citizen of a country.">citizenship:</td><td colspan="3"><ul><li>code: <span title="Codes: {http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-iso-3166-1-alpha-3 AUT}">Österreich</span></li></ul></td></tr></table></div>
+  </text>
+  <extension url="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-patient-religion">
+    <extension url="code">
+      <valueCodeableConcept>
+        <coding>
+          <system value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-religion"/>
+          <code value="160"/>
+          <display value="Konfessionslos"/>
+        </coding>
+      </valueCodeableConcept>
+    </extension>
+  </extension>
+  <extension url="http://hl7.org/fhir/StructureDefinition/patient-citizenship">
+    <extension url="code">
+      <valueCodeableConcept>
+        <coding>
+          <system value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/CodeSystem/at-core-cs-iso-3166-1-alpha-3"/>
+          <code value="AUT"/>
+          <display value="Österreich"/>
+        </coding>
+      </valueCodeableConcept>
+    </extension>
+  </extension>
+  <identifier>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="SS"/>
+        <display value="Social Security Number"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.40.0.10.1.4.3.1"/>
+    <value value="6789010160"/>
+    <assigner>
+      <display value="Dachverband der österreichischen Sozialversicherungsträger"/>
+    </assigner>
+  </identifier>
+  <identifier>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="NI"/>
+        <display value="National unique individual identifier"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.40.0.10.2.1.1.149"/>
+    <value value="GH:oeLdSEb0l+8kSdJWjOYyYmnYki0="/>
+    <assigner>
+      <display value="Bundesministerium für Inneres"/>
+    </assigner>
+  </identifier>
+  <identifier>
+    <type>
+      <coding>
+        <system value="http://terminology.hl7.org/CodeSystem/v2-0203"/>
+        <code value="PI"/>
+        <display value="Patient internal identifier"/>
+      </coding>
+    </type>
+    <system value="urn:oid:1.2.3.4.5"/>
+    <value value="4711"/>
+    <assigner>
+      <display value="Ein GDA in Österreich"/>
+    </assigner>
+  </identifier>
+  <name>
+    <family value="Musterperson"/>
+    <given value="Max"/>
+    <prefix value="Mag."/>
+  </name>
+  <telecom>
+    <system value="email"/>
+    <value value="office@hl7.at"/>
+    <use value="work"/>
+  </telecom>
+  <telecom>
+    <system value="phone"/>
+    <value value="+436500987654321"/>
+    <use value="home"/>
+  </telecom>
+  <gender value="other">
+    <extension url="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-gender-administrativeGenderAddition">
+      <valueCoding>
+        <system value="https://termgit.elga.gv.at/CodeSystem/hl7-at-administrativegender-ergaenzung"/>
+        <code value="D"/>
+        <display value="Divers"/>
+      </valueCoding>
+    </extension>
+  </gender>
+  <birthDate value="1960-01-01"/>
+  <address>
+    <use value="home"/>
+    <type value="both"/>
+    <line value="Eine Strasse 15 Tür 42">
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName">
+        <valueString value="Eine Strasse"/>
+      </extension>
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber">
+        <valueString value="15"/>
+      </extension>
+      <extension url="http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-additionalLocator">
+        <valueString value="Stock 9 Tür 42"/>
+      </extension>
+      <extension url="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-ext-address-additionalInformation">
+        <valueString value="Kein Lift vorhanden"/>
+      </extension>
+    </line>
+    <city value="Linz"/>
+    <state value="Oberösterreich"/>
+    <postalCode value="4020"/>
+    <country value="AUT"/>
+  </address>
+</Patient>

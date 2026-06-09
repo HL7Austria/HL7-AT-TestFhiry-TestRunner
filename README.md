@@ -35,9 +35,8 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
 ---
 ## Einleitung
 ### Zielsetzung
-
-Das PythonTool soll eine **einheitliche, automatisierte Testumgebung** für FHIR®-Ressourcen bieten.
-Konkret ermöglicht es:
+Der TestRunner soll eine **einheitliche, automatisierte Testumgebung** für FHIR®-Ressourcen bieten.
+Konkret ermöglicht er:
 
 * Automatisiertes Testen von FHIR®-Ressourcen
 * Analyse und Export der Testergebnisse
@@ -47,11 +46,11 @@ Konkret ermöglicht es:
 ### Aktuelle Funktionalität
 
 - Fixtures werden automatisch erstellt
-- Test-Action führt die definierte Operation aus
-- Test-Assert validiert das Zielobjekt der Assertion
+- Setup-/ Test-/ Teardown-Action führt die definierte Operation aus
+- Setup-/ Test-Assert validiert das Zielobjekt der Assertion
 - Optionaler Testabbruch bei fehlgeschlagener Assertion
 - Validierung anhand einer definierten Profil-ID
-- Prüfung des erwarteten HTTP-Response-Codes
+- Fixtures werden automatisch gelöscht
 
 #### Speicherung der TestScripts
 
@@ -70,7 +69,6 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und k�
 │  ├─ ig_loader/               # Lädt IGs, Example Instances und Profile aus dem Internet
 │  ├─ model/                   # Modelle für config.json und Fixtures
 │  ├─ test_script_evaluator/   # Dateien zur Evaluierung der Test-Scripts
-│  ├─ transactions/            # Dateien für FHIR® Transaction Bundles
 │  ├─ config.json              # Konfiguration für die Ausführung
 │  └─ __main__.py              # Einstiegspunkt der Anwendung
 ├─ requirements.txt            # Python-Abhängigkeiten
@@ -117,10 +115,10 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und k�
 
 ```mermaid
 flowchart TD
-    A[configuration_manager.py<br/><i>liest Konfiguration</i>] --> B[load_ig_from_internet.py<br/><i>lädt IGs & TestScripts</i>]
-    B --> C[transactions.py<br/><i>erstellt Bundle</i>]
-    C --> D[test_script_evaluator_log_to_file.py<br/><i>führt Tests aus & loggt</i>]
-    D --> E((FHIR® Server<br/><i>externer Testserver</i>))
+    A[configuration_manager.py<br/><i>liest Konfiguration</i>] 
+    A--> B[load_ig_from_internet.py<br/><i>lädt IGs & TestScripts</i>]
+    B --> C[test_script_evaluator_log_to_file.py<br/><i>führt Tests aus & loggt</i>]
+    C --> D((FHIR® Server<br/><i>externer Testserver</i>))
 ```
 
 ---
@@ -218,23 +216,23 @@ Wenn zwei Example Instances die gleiche ID haben, kann das System nicht untersch
 
 1. Konfiguration aus `config.json` wird geladen.
 2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
-3. Alle JSON-Ressourcen werden zu einem FHIR®-Bundle kombiniert.
+3. Alle Referenzen der autocreate Fixtures werden aufgelöst.
 4. Tests werden ausgeführt (POST, GET, PUT).
-5. Ergebnisse werden analysiert und als Logdatei exportiert.
+5. Ergebnisse werden als Logdatei exportiert.
 
 ```mermaid
 sequenceDiagram
     participant Config as configuration_manager.py
     participant Loader as load_ig_from_internet.py
-    participant Builder as transactions.py
+    participant Builder as dependency_resolver.py
     participant Evaluator as test_script_evaluator_log_to_file.py
     participant Server as FHIR® Server
 
     Config->>Loader: Lade Einstellungen
     Loader->>Builder: Übergibt Ressourcen
-    Builder->>Evaluator: Erzeugt Bundle
+    Builder->>Evaluator: Löst Referenzen auf
     Evaluator->>Server: Führt HTTP Requests aus
-    Server-->>Evaluator: Sendet Statuscodes
+    Server-->>Evaluator: Sendet Antworten
     Evaluator->>Evaluator: Speichert Ergebnisse
 ```
 ---
@@ -248,6 +246,7 @@ sequenceDiagram
 | `fhirpathpy`            | Auswertung von FHIRPath-Ausdrücken           |
 | `jsonpath_ng`           | Auswertung von JSONPath-Ausdrücken           |
 | `lxml`                  | XML-Parsing und Validierung                  |
+| `fhir.resources`, `xmltodict`| XML - Dictionary Übersetzung für fhirpath|
 | `json`, `os`, `pathlib` | Dateiverwaltung und Strukturierung (stdlib)  |
 
 Alle Abhängigkeiten sind in der `requirements.txt` definiert:
@@ -258,6 +257,8 @@ beautifulsoup4~=4.14.2
 fhirpathpy~=0.2.3
 jsonpath_ng~=1.7.0
 lxml~=5.4.0
+fhir.resources~=8.2.0
+xmltodict~=0.13.0 
 ```
 
 ---
@@ -266,7 +267,7 @@ lxml~=5.4.0
 ### exception/
 
 **Hauptdateien:**
-- `Error.py` → Benutzerdefinierte Exceptions (`TestExecutionError`, `TestScriptError`, `OperationError`). 
+- `Error.py` → Benutzerdefinierte Exceptions (`TestExecutionError`, `TestScriptError`, `OperationError`, `CircularDependencyError`, `UnresolvedReferenceError`, `ReferenceResolutionError`). 
 
 ### ig_loader/
 
@@ -286,6 +287,8 @@ lxml~=5.4.0
 
 **Hauptdateien:**
 - `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
+- `dependency_resolver.py` → Bestimmt Erstellungsreihenfolge und löst Referenzen auf.
+- `reference_parser.py` → Durchsucht Fhir-Ressourcen auf Referenzen.
 - `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
 - `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
 - `validate.py` → Validierungen der Test-Scripts. 
@@ -305,13 +308,6 @@ Das bedeutet auch, dass XPath-Ausdrücke in den TestScripts **ohne Namespace-Pr�
 Vor dem Parsen wird die XML-Deklaration (`<?xml ... ?>`) per Regex entfernt und der String anschließend als UTF-8 kodiert.
 `lxml.etree.fromstring()` akzeptiert bei einem `bytes`-Objekt die Encoding-Angabe aus der Deklaration, wirft aber einen Fehler wenn ein Python-`str` (der intern bereits Unicode ist) eine Encoding-Deklaration enthält.
 Da kein zuverlässigerer Weg gefunden wurde, diesen Konflikt aufzulösen, wird die Deklaration schlicht entfernt bevor der Body als `bytes` an den Parser übergeben wird.
-
-### transactions/
-
-**Hauptdateien:**
-- `transactions.py` → Erstellt FHIR® Transaction Bundles zum Speichern von Fixtures. 
-
-
 
 ## Installation & Setup
 
@@ -349,7 +345,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 | Feld            | Pflicht | Beschreibung                                                                                                                                                  |
 | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `url`           | Ja      | URL des Implementation Guide, aus dem TestScripts und Example Instances heruntergeladen werden.                                                               |
-| `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator.jar` enthält (bzw. in dem sie erstellt werden). |
+| `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
 | `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
 | `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
 | `results_path`  | Nein    | Pfad, in dem der `Results/`-Ordner erstellt wird. Wenn leer, wird `Results/` im `path`-Verzeichnis angelegt.                                                  |
@@ -360,7 +356,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 > ├── Profiles/
 > ├── Example_Instances/
 > ├── Test_Scripts/
-> └── validator.jar
+> └── validator_cli.jar
 > ```
 
 > **Results-Ordner:** Der `Results/`-Ordner mit den Log-Dateien wird standardmäßig unter `<path>/Results/` erstellt. Über das optionale Feld `results_path` kann ein alternativer Speicherort angegeben werden – in diesem Fall wird der Ordner unter `<results_path>/Results/` erstellt.
@@ -403,19 +399,21 @@ python -m impl --config impl/config.json
 ---
 ## TestScript-Mapping
 
-Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im PythonTool bereits umgesetzt sind oder noch geplant sind.
+Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im PythonTool noch nicht umgesetzt wurden:
 
 | Abschnitt       | Feld              | Beschreibung                        | Priorität | Implementiert |
 | --------------- | ----------------- | ----------------------------------- | --------- | ------------- |
-| Fixture         | autodelete        | Fixture wird beim Teardown gelöscht | hoch      | ✅             |
-| Fixture         | autocreate        | Fixture wird beim Setup erstellt    | hoch      | ✅             |
-| Setup–Action    | operation         | Aktion beim Setup      | –         | ✅             |
-| Test–Action    | operation         | Führt definierte Operation aus      | –         | ✅             |
-| Test–Assert    | destination       | Zielobjekt der Assertion            | hoch      | ✅             |
-| Test–Assert    | stopTestOnFail    | Testabbruch bei Fehlschlag          | hoch      | ✅             |
-| Test–Assert    | validateProfileId | Profil-ID zur Validierung           | hoch      | ✅             |
-| Test–Assert    | responseCode      | Erwarteter HTTP-Code                | –         | ✅             |
+| metadata    | Capability       | Programm-Abbruch bei Fehlschlag      | –         | –             |
+| Test–Operation    | destination       | Request-Ziel         | –         | –             |
+| Test–Operation    | origin       | Request-Herkunft          | –         | –             |
+| Test–Operation    | requestId       | ID für das Speichern des Requests          | –         | out of scope            |
+| Test–Assert    | defaultManualCompletion       | Pausieren des Programms         | –         | out of scope            |
+| Test–Assert    | minimumId       | Vergleichsresource         | –         | –             |
+| Test–Assert    | navigationLinks       | Validierung der Navigation-Links in einem Bundle          | –         | –             |
+| Test–Assert    | requestMethod       | Methode des zu empfangenden Requests         | –         | out of scope             |
+| Test–Assert    | requestURL       | URL des Requests          | –         | out of scope             |
+| Test–Assert    | response       | Response-Bezeichnung (okay, accepted usw.)          | –         | partiell             |
 | Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
-| Teardown–Action | operation         | Aktion beim Teardown                | mittel    | ✅             |
 
-Die dokumentierten Unterschiede zum TestFhiry-TinkerTool sind im UnterschiedeZuTinkerTool.md zu finden.
+
+---
