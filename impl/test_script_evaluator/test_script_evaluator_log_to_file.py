@@ -16,8 +16,8 @@ import impl.test_script_evaluator.dependency_resolver as dependency_resolver
 
 last_interaction = None
 
-FIXTURES = []
-REQ_RESP = []
+FIXTURES = [] # static Fixtures
+REQ_RESP = [] # responses
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
 
@@ -237,7 +237,7 @@ def build_url(operation :dict [str, Any]) -> str:
     Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
     if not Tfixture:
         Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
-    #--> suchen der Fixture wenn leer = None
+    #--> checks to see if the ourceId is in the saved static Fixtures or responses
 
     if op_type == "transaction" or op_type == "batch":
         return url
@@ -376,6 +376,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                     raise error.TestScriptError("CompareTo is only valid with expression or path!")
                 
                 fix = None
+                #check to see if the compareToSourceId is in the saved static Fixtures or responses
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("compareToSourceId"):
                         fix = int
@@ -470,7 +471,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         if "minimumId" in assertion:
             #operator will be ignored
             """
-            find a way to check if this fixture is inside the response
+            find a way to check if this static fixture or previous response is inside the response
             --> find out if there is a library, find out if validator has that
             """
             raise NotImplementedError
@@ -593,7 +594,7 @@ def eval_variable(var : Variable):
     """
     Resolves a single FHIR TestScript variable to its concrete value.
 
-    Looks up the referenced fixture or interaction via ``sourceId`` and
+    Looks up the referenced static fixture or interaction via ``sourceId`` and
     evaluates the variable's value source (``headerField``, ``expression``,
     or ``path``).  Falls back to ``defaultValue`` when no expression-based
     source is defined.
@@ -623,6 +624,7 @@ def eval_variable(var : Variable):
         fix = None
         sourceId = var.sourceId
 
+        #check if the sourceId is in the saved static Fixtures or responses
         for int in REQ_RESP:
             if int.res_id == sourceId:
                 fix = int
@@ -672,7 +674,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     ``autocreate``, uploads them to the FHIR server sequentially based on
     dependency order.
 
-    Each fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
+    Each static fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
     ``autocreate`` flag is true are parsed for references, ordered by dependency,
     and created sequentially. References are replaced with server IDs as fixtures
     are created.
@@ -687,7 +689,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     """
     global FIXTURES
 
-    # Step 1: Create all fixture objects and parse references
+    # Create all static fixture objects and parse references
     all_fixtures = []
     fixture_ids = []
 
@@ -716,24 +718,20 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
             )
         seen_ids[fixture.fixture_id] = fixture
 
-    # Step 2: Parse references for each fixture
+    # Parse references for each fixture
     for fixture in all_fixtures:
         fixture.references = reference_parser.parse_references(fixture.body, fixture_ids)
 
-    # Step 3: Separate autocreate and non-autocreate fixtures
     autocreate_fixtures = [f for f in all_fixtures if f.autocreate]
     non_autocreate_fixtures = [f for f in all_fixtures if not f.autocreate]
 
-    # Step 4: If there are autocreate fixtures, resolve creation order and create them
+    # If there are autocreate fixtures, resolve creation order and create them
     if autocreate_fixtures:
         try:
-            # Resolve creation order
             ordered_fixtures = dependency_resolver.resolve_creation_order(autocreate_fixtures)
-
-            # Build mapping of fixture_id to server_id as we create fixtures
             fixture_id_to_server_id = {}
 
-            # Create fixtures sequentially
+            # Create static fixtures sequentially
             for fixture in ordered_fixtures:
                 # Replace references with already-resolved server IDs
                 resolved_body = dependency_resolver.replace_references(
@@ -741,13 +739,11 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                 )
                 fixture.body = resolved_body
 
-                # Determine content type
                 if isinstance(resolved_body, dict):
                     is_xml = False
                 else:
                     is_xml = utils.string_type(resolved_body) == "xml"
 
-                # Create the fixture on the server
                 resource_type = fixture.type
                 url = f"{FHIR_SERVER_BASE}/{resource_type}"
 
@@ -755,7 +751,6 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                     headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
                     response = requests.post(url, headers=headers, data=resolved_body)
                 else:
-                    # Ensure body is properly serialized
                     if isinstance(resolved_body, dict):
                         body_data = json.dumps(resolved_body, ensure_ascii=False)
                     elif isinstance(resolved_body, str):
@@ -771,11 +766,9 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                     if location:
                         parts = location.rstrip("/").split("/")
                         if "_history" in parts:
-                            # ID ist der Teil vor _history
                             history_idx = parts.index("_history")
                             server_id = parts[history_idx - 1]
                         else:
-                            # ID ist der letzte Teil
                             server_id = parts[-1]
                     else:
                         try:
@@ -793,7 +786,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                     if not server_id:
                         raise Exception(f"No ID found in response for fixture {fixture.fixture_id}")
 
-                    # Update fixture with server ID
+                    # Update static fixture with server ID
                     fixture.server_id = server_id
                     fixture_id_to_server_id[fixture.fixture_id] = server_id
                     fixture.references_resolved = True
@@ -866,7 +859,7 @@ def SETUP(setup_data, fixture_list : list, resources):
     """
     Executes the **setup** phase of a FHIR TestScript.
 
-    Creates fixtures on the server (autocreate), rewrites inter-fixture
+    Creates static fixtures on the server (autocreate), rewrites inter-fixture
     references so they point to server-assigned IDs, and then runs every
     setup action in order.
 
@@ -882,7 +875,7 @@ def SETUP(setup_data, fixture_list : list, resources):
 
     try:
         
-        if fixture_list: #if there are fixtures to save
+        if fixture_list: #if there are static fixtures to save
             save_fixtures(resources, fixture_list)
 
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
@@ -953,7 +946,7 @@ def TEARDOWN(teardown_data : dict):
     Executes the **teardown** phase of a FHIR TestScript.
 
     Runs every teardown action (operations and assertions) and afterwards
-    calls ``autodelete`` to remove all fixtures whose ``autodelete`` flag
+    calls ``autodelete`` to remove all static fixtures whose ``autodelete`` flag
     is set.
 
     :param teardown_data: The ``teardown`` dictionary from the TestScript
@@ -974,7 +967,7 @@ def test_fhir_operations(testscript_data):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
-    Extracts fixtures, variables, and profiles from the TestScript, then
+    Extracts static fixtures, variables, and profiles from the TestScript, then
     drives execution through the three TestScript phases in order:
     **SETUP** → **TEST** → **TEARDOWN**.  On severe errors
     the run is aborted and ``autodelete`` is invoked to clean up

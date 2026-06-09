@@ -6,6 +6,7 @@ from pathlib import Path
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
 from impl.model.interaction import Interaction
+from impl.model.fixture import Fixture
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
@@ -122,7 +123,16 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
-def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
+def validate_expression(fixture : Interaction | Fixture, expression : str, operator: operator_type, value = None) ->None:
+    """
+    Validates a FHIRPath expression against a fixture.
+    This fixture can be a static Example Instance or a response from a previous interaction.
+    
+    :param fixture: The fixture to validate the expression against.
+    :param expression: The FHIRPath expression to evaluate.
+    :param operator: The comparison operator to apply.
+    :param value: The value to compare the expression result against.
+    """
     
     if isinstance(fixture.body, str):
         if utils.string_type(fixture.body) == "json":
@@ -319,13 +329,13 @@ def check_result(output: list[str]) -> str:
 
     return warnings + "\n" + information #if no error
 
-def eval_compareTo(fixture, assertion : dict[str,Any]):
+def eval_compareTo(fixture: Interaction| Fixture, assertion : dict[str,Any]):
     """Evaluates the comparison value from a ``compareToSourceId`` assertion.
 
     Extracts the value from the referenced fixture using either
     ``compareToSourceExpression`` or ``compareToSourcePath``.
 
-    :param fixture: The ``Fixture`` or ``Interaction`` referenced by
+    :param fixture: The static ``Fixture`` or ``Interaction`` referenced by
         ``compareToSourceId``.
     :param assertion: The assertion dictionary containing the comparison
         field (``compareToSourceExpression`` or ``compareToSourcePath``).
@@ -463,7 +473,7 @@ def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[di
     and raises an error if any duplicates are found.
 
     :param testscript: Parsed TestScript JSON dictionary.
-    :param fixture_list: List of raw fixture definition dictionaries from the TestScript.
+    :param fixture_list: List of raw static fixture definition dictionaries from the TestScript.
     :raises Exception: If duplicate source IDs are found.
     """
     source_ids = []
