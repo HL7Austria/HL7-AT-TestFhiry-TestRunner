@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  fhir-test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./impl/Test_Scripts:/data/Test_Scripts
+      - ./impl/Example_Instances:/data/Example_Instances
+      - ./impl/Profiles:/data/Profiles
+      - ./impl/config.json:/data/config/config.json
+      - ./Results:/data/Results
+      - ./validator_cli.jar:/data/validator_cli.jar
+    environment:
+      - PYTHONUNBUFFERED=1
+    network_mode: host
