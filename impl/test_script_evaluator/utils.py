@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
-from datetime import datetime
 import json
+import re
 import xml.etree.ElementTree as ET
 from typing import Literal, Optional
 import re
@@ -57,60 +57,6 @@ def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     
     return profiles, profile_ids
 
-def get_all_profiles(base_path=None):
-        """Scans the Profiles folder and returns paths to all JSON profile files.
-
-        :param base_path: Parent folder containing the Profiles subfolder.
-                          If None, falls back to BASE_DIR.
-        :returns: List of file path strings for every ``.json`` file in the Profiles folder.
-        """
-        if base_path:
-            PROFILE_FOLDER = str(Path(base_path) / "Profiles")
-        else:
-            import impl.test_script_evaluator.configuration_manager as conf_man
-            config_path = conf_man.get_config_manager().path
-            if config_path:
-                PROFILE_FOLDER = str(Path(config_path) / "Profiles")
-            else:
-                PROFILE_FOLDER = str(BASE_DIR / "Profiles")
-
-        profiles = [
-            os.path.join(PROFILE_FOLDER, name).replace("\\", "/")
-            for name in os.listdir(PROFILE_FOLDER)
-            if name.endswith(".json")
-                    ]
-        return profiles
-
-def get_profile_json(profile_list : list[str], base_path=None):
-    """Loads profile JSON files whose ``url`` matches one of the given references.
-
-    Reads every JSON file from the Profiles folder and returns the
-    JSON-serialised string of the last matching profile.
-
-    :param profile_list: List of profile canonical URL strings to match against.
-    :param base_path: Parent folder containing the Profiles subfolder.
-                      If None, falls back to BASE_DIR.
-    :returns: JSON string of the matching profile, or an empty list if none matched.
-    """
-
-    result = []
-    profFiles = []
-    temp = []
-
-    profFiles = get_all_profiles(base_path)
-    for file in profFiles:
-        with open(file, "r", encoding="utf-8") as f:
-            temp.append(json.load(f))
-    
-    for json_f in temp:
-        for p in profile_list:
-            if json_f["url"] == p:
-                result = json.dumps(json_f)
-    
-    temp.clear()
-    profFiles.clear()
-    return result
-
 def get_variables(testscript):
     """Extracts the list of variable definitions from a TestScript.
 
@@ -134,26 +80,6 @@ def load_json(path : str):
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
     
-def load_json_list(paths : list[str]):
-    """Loads multiple JSON files from the given paths.
-
-    :param paths: List of relative path strings to JSON files.
-    :returns: List of parsed JSON dictionaries, or ``None`` if ``paths`` is empty.
-    """
-    json_list = []
-
-    if not paths:
-        return None
-
-    for path in paths:
-        full_path = get_full_path(path)
-        printInfoJson(path)
-
-        with open(full_path, "r", encoding="utf-8") as f:
-            json_list.append(json.load(f))
-
-    return json_list
-
 def printInfoJson(path : str):
     """
     Logs information about loaded JSON files based on their path.
@@ -169,29 +95,73 @@ def printInfoJson(path : str):
     if "Profiles" in str(path):
         log_to_file(f"Load Profile: {path}")
 
-def parse_fhir_header(value : str):
+def load_resource(path : str):
     """
-    Maps short forms like 'json' or 'xml' to FHIR-compliant MIME types.
-
-    :param value: The header value to parse.
-    :return: Full MIME type string.
+    Loads a FHIR resource file (JSON or XML) from the given path.
+    :param path: The path to the resource file.
+    :return: Parsed JSON content as dict, or raw XML content as str.
     """
-    if not value:
-        return "application/fhir+json"
-    value = value.lower()
-    if value == "json":
-        return "application/fhir+json"
-    elif value == "xml":
-        return "application/fhir+xml"
-    return value  # fallback: use whatever it says
+    if path.startswith("impl"):
+        path = path.replace("impl/", "")
+    full_path = get_full_path(path)
+    printInfoJson(path)
+    with open(full_path, "r", encoding="utf-8") as f:
+        if str(full_path).endswith(".xml"):
+            return f.read()
+        else:
+            return json.load(f)
 
-def string_type(string: str) -> ContentType:
+def load_resource_list(paths : list[str]):
+    """Loads multiple FHIR resource files (JSON or XML) from the given paths.
+
+    :param paths: List of relative path strings to resource files.
+    :returns: List of parsed JSON dicts or raw XML strings, or ``None`` if ``paths`` is empty.
+    """
+    resource_list = []
+
+    if not paths:
+        return None
+
+    for path in paths:
+        resource_list.append(load_resource(path))
+
+    return resource_list
+
+def extract_fhir_meta(resource):
+    """Extracts id and resourceType from a FHIR resource (dict, JSON string, or XML string).
+
+    :param resource: A parsed JSON dict, JSON string, or raw XML string.
+    :returns: Tuple of (resource_id, resource_type).
+    """
+    if isinstance(resource, list):
+        # JSON Patch documents are arrays, not FHIR resources - they don't have id/resourceType
+        return None, None
+    if isinstance(resource, dict):
+        return resource.get("id"), resource.get("resourceType")
+    elif string_type(resource) == "json":
+        parsed = json.loads(resource)
+        return parsed.get("id"), parsed.get("resourceType")
+    else:
+        # ET für den Resource-Typ (Root-Tag) verwenden
+        root = ET.fromstring(resource)
+        tag = root.tag.split('}')[-1] if '}' in root.tag else root.tag
+        
+        # Robuste Regex für ID - funktioniert unabhängig von Attribut-Reihenfolge
+        # Sucht nach <id> Element mit value-Attribut
+        id_match = re.search(r'<id[^>]*\bvalue\s*=\s*["\']([^"\']*)["\']', resource)
+        res_id = id_match.group(1) if id_match else ''
+        
+        return res_id, tag
+
+def string_type(string: (str | dict)) -> ContentType:
     """Detects whether a string contains JSON, XML, or an unknown format.
 
     :param string: The raw string to inspect.
     :returns: ``'json'``, ``'xml'``, or ``'unknown'``.
     """
     if isinstance(string, dict):
+        return "json"
+    if isinstance(string, list):
         return "json"
     try:
         json.loads(string)

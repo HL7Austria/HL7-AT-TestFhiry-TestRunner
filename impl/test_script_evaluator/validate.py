@@ -6,13 +6,35 @@ from pathlib import Path
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
 from impl.model.interaction import Interaction
+from impl.model.fixture import Fixture
 from typing import Literal, Any
 from lxml import etree
 import impl.test_script_evaluator.utils as utils
+import importlib
+import xml.etree.ElementTree as ET
+import xmltodict
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
 
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
+
+
+def convert_xml_to_json(xml_string: str) -> dict:
+    """Konvertiert FHIR XML zu JSON Dictionary - funktioniert für jeden Resource-Typ"""
+    # extract Resource-Type from XML
+    root = ET.fromstring(xml_string)
+    resource_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
+    
+    # dynamic import
+    try:
+        module = importlib.import_module(f"fhir.resources.{resource_type.lower()}")
+        resource_class = getattr(module, resource_type)
+        # parse XML and dump to dictionary
+        model = resource_class.model_validate_xml(xml_string.encode('utf-8'))
+        return model.model_dump()
+    except (ImportError, AttributeError):
+        # Fallback: xmltodict
+        return xmltodict.parse(xml_string)
 
 
 def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
@@ -97,17 +119,29 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     """
 
     actual_content_type = response.header.get("Content-Type", "")
-    expected_type = utils.parse_fhir_header(expected_type)
-
+    
     utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
-def validate_expression(fixture, expression : str, operator: operator_type, value = None) ->None:
+def validate_expression(fixture : Interaction | Fixture, expression : str, operator: operator_type, value = None) ->None:
+    """
+    Validates a FHIRPath expression against a fixture.
+    This fixture can be a static Example Instance or a response from a previous interaction.
+    
+    :param fixture: The fixture to validate the expression against.
+    :param expression: The FHIRPath expression to evaluate.
+    :param operator: The comparison operator to apply.
+    :param value: The value to compare the expression result against.
+    """
     
     if isinstance(fixture.body, str):
-        if utils.string_type(fixture.body) != "json":
-            raise Exception ("XML is not yet supported")
-        body_use = json.loads(fixture.body)
+        if utils.string_type(fixture.body) == "json":
+            body_use = json.loads(fixture.body)
+        elif utils.string_type(fixture.body) == "xml":
+            # XML zu JSON konvertieren für FHIRPath
+            body_use = convert_xml_to_json(fixture.body)
+        else:
+            raise Exception ("fhirpath does not function if response is not json or xml")
     else:
         body_use = fixture.body
 
@@ -295,13 +329,13 @@ def check_result(output: list[str]) -> str:
 
     return warnings + "\n" + information #if no error
 
-def eval_compareTo(fixture, assertion : dict[str,Any]):
+def eval_compareTo(fixture: Interaction| Fixture, assertion : dict[str,Any]):
     """Evaluates the comparison value from a ``compareToSourceId`` assertion.
 
     Extracts the value from the referenced fixture using either
     ``compareToSourceExpression`` or ``compareToSourcePath``.
 
-    :param fixture: The ``Fixture`` or ``Interaction`` referenced by
+    :param fixture: The static ``Fixture`` or ``Interaction`` referenced by
         ``compareToSourceId``.
     :param assertion: The assertion dictionary containing the comparison
         field (``compareToSourceExpression`` or ``compareToSourcePath``).
@@ -309,9 +343,13 @@ def eval_compareTo(fixture, assertion : dict[str,Any]):
     """
     if "compareToSourceExpression" in assertion:
         if isinstance(fixture.body, str):
-            if utils.string_type(fixture.body) != "json":
-                raise Exception ("fhirpath does not function if response is not json")
-            body_use = json.loads(fixture.body)
+            if utils.string_type(fixture.body) == "json":
+                body_use = json.loads(fixture.body)
+            elif utils.string_type(fixture.body) == "xml":
+                # XML zu JSON konvertieren für FHIRPath
+                body_use = convert_xml_to_json(fixture.body)
+            else:
+                raise Exception ("fhirpath does not function if response is not json or xml")
         else:
             body_use = fixture.body
 
@@ -427,5 +465,67 @@ def eval_json_path(body : str, path:str):
 
     jsonpath_expr = parse(path)
     return ([match.value for match in jsonpath_expr.find(body)])
-    
 
+def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[dict]) -> None:
+    """Checks for duplicate source IDs in a TestScript.
+
+    Collects all fixture IDs, response IDs, and request IDs from operations
+    and raises an error if any duplicates are found.
+
+    :param testscript: Parsed TestScript JSON dictionary.
+    :param fixture_list: List of raw static fixture definition dictionaries from the TestScript.
+    :raises Exception: If duplicate source IDs are found.
+    """
+    source_ids = []
+
+    # Collect fixture IDs
+    for fixture in fixture_list:
+        fixture_id = fixture.get("id")
+        if fixture_id:
+            source_ids.append(("fixture", fixture_id))
+
+    # Collect responseId and requestId from operations in setup, test, and teardown
+    phases = ["setup", "test", "teardown"]
+    for phase in phases:
+        if phase == "test":
+            phase_data = testscript.get(phase, [])
+            if not isinstance(phase_data, list):
+                phase_data = [phase_data] if phase_data else []
+        else:
+            phase_data = testscript.get(phase, {})
+            if not isinstance(phase_data, dict):
+                phase_data = {}
+
+        # Handle test phase (list of test objects)
+        if phase == "test":
+            for test_obj in phase_data:
+                actions = test_obj.get("action", []) if isinstance(test_obj, dict) else []
+                for action in actions:
+                    if "operation" in action:
+                        op = action["operation"]
+                        response_id = op.get("responseId")
+                        request_id = op.get("requestId")
+                        if response_id:
+                            source_ids.append(("responseId", response_id))
+                        if request_id:
+                            source_ids.append(("requestId", request_id))
+        else:
+            # Handle setup and teardown phases (single object with actions)
+            actions = phase_data.get("action", []) if isinstance(phase_data, dict) else []
+            for action in actions:
+                if "operation" in action:
+                    op = action["operation"]
+                    response_id = op.get("responseId")
+                    request_id = op.get("requestId")
+                    if response_id:
+                        source_ids.append(("responseId", response_id))
+                    if request_id:
+                        source_ids.append(("requestId", request_id))
+
+    # Check for duplicates
+    seen_ids = {}
+    for id_type, id_value in source_ids:
+        if id_value in seen_ids:
+            raise Exception(f"Duplicate source ID found: '{id_value}' used in both {seen_ids[id_value]} and {id_type}. TestScript will be skipped.")
+        seen_ids[id_value] = id_type
+    

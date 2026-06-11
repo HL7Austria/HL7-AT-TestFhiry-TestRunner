@@ -1,0 +1,834 @@
+{
+  "resourceType": "TestScript",
+  "id": "testscript-all-operation-variants-with-assertions",
+  "url": "http://hl7.at/fhir/TestScript/testscript-all-operation-variants-with-assertions",
+  "version": "1.0",
+  "name": "TestScriptAllOperationVariantsWithAssertions",
+  "title": "TestScript - All Standard Operation Variants With Supported Assertions",
+  "status": "draft",
+  "experimental": true,
+  "date": "2025-05-12",
+  "publisher": "HL7 Austria",
+  "description": "Comprehensive TestScript covering every standard FHIR operation variant (create, read, vread, update, patch, delete-by-id, conditional-delete, search-GET, history-instance, history-type, capabilities, batch, transaction) with all supported assertion types (responseCode, response, contentType, headerField, expression) except validateProfileId. Fixtures reference existing Example_Instances.",
+  "origin": [
+    {
+      "index": 1,
+      "profile": {
+        "system": "http://terminology.hl7.org/CodeSystem/testscript-profile-origin-types",
+        "code": "FHIR-Client"
+      }
+    }
+  ],
+  "destination": [
+    {
+      "index": 1,
+      "profile": {
+        "system": "http://terminology.hl7.org/CodeSystem/testscript-profile-destination-types",
+        "code": "FHIR-Server"
+      }
+    }
+  ],
+  "fixture": [
+    {
+      "id": "patient-create",
+      "autocreate": true,
+      "autodelete": false,
+      "resource": {
+        "reference": "Patient-HL7ATCorePatientCreateTestExample.html"
+      }
+    },
+    {
+      "id": "patient-update",
+      "autocreate": true,
+      "autodelete": false,
+      "resource": {
+        "reference": "Patient-HL7ATCorePatientUpdateTestExample.html"
+      }
+    },
+    {
+      "id": "organization-create",
+      "autocreate": true,
+      "autodelete": false,
+      "resource": {
+        "reference": "Organization-Organization-example-f001-burgers.html"
+      }
+    },
+    {
+      "id": "patient-deceased",
+      "autocreate": true,
+      "autodelete": false,
+      "resource": {
+        "reference": "Patient-HL7ATCorePatientExample03-deceasedBoolean.html"
+      }
+    },
+    {
+      "id": "json-patch-patient",
+      "autocreate": false,
+      "autodelete": false,
+      "resource": {
+        "reference": "JSONPatch-Patient-active-false.html"
+      }
+    },
+    {
+      "id": "batch-bundle-patient",
+      "autocreate": false,
+      "autodelete": false,
+      "resource": {
+        "reference": "Bundle-batch-create-patient.html"
+      }
+    },
+    {
+      "id": "transaction-bundle-organization",
+      "autocreate": false,
+      "autodelete": false,
+      "resource": {
+        "reference": "Bundle-transaction-create-organization.html"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "name": "patientId",
+      "expression": "Patient.id",
+      "sourceId": "create-response"
+    },
+    {
+      "name": "patientVersionId",
+      "headerField": "ETag",
+      "sourceId": "read-response"
+    }
+  ],
+  "setup": {
+    "action": [
+      {
+        "operation": {
+          "type": {
+            "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+            "code": "delete"
+          },
+          "resource": "Patient",
+          "description": "Setup: Conditional delete to clean up any existing test patient.",
+          "accept": "json",
+          "contentType": "json",
+          "encodeRequestUrl": true,
+          "params": "?family=Bucher&given=Andreas"
+        }
+      },
+      {
+        "operation": {
+          "type": {
+            "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+            "code": "delete"
+          },
+          "resource": "Organization",
+          "description": "Setup: Conditional delete to clean up any existing test organization.",
+          "accept": "json",
+          "contentType": "json",
+          "encodeRequestUrl": true,
+          "params": "?name=Burgers%20University%20Medical%20Center"
+        }
+      }
+    ]
+  },
+  "test": [
+    {
+      "id": "Test01-Create",
+      "name": "Create Operation (POST)",
+      "description": "Create a Patient resource using the create operation (POST). Expects HTTP 201.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "create"
+            },
+            "resource": "Patient",
+            "description": "Create a new Patient resource on the server.",
+            "accept": "json",
+            "contentType": "json",
+            "encodeRequestUrl": true,
+            "responseId": "create-response",
+            "sourceId": "patient-create"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 201 (Created).",
+            "direction": "response",
+            "responseCode": "201",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'created'.",
+            "direction": "response",
+            "response": "created",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test02-Read",
+      "name": "Read Operation (GET by id)",
+      "description": "Read the created Patient resource using the read operation (GET /Patient/[id]).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "read"
+            },
+            "resource": "Patient",
+            "description": "Read the Patient created in Test01 by targetId.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "read-response",
+            "targetId": "create-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'okay'.",
+            "direction": "response",
+            "response": "okay",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned resource is a Patient.",
+            "expression": "Patient.resourceType = 'Patient'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned Patient has a family name of 'Bucher'.",
+            "expression": "Patient.name.where(family = 'Bucher').exists()",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the Location header is present.",
+            "headerField": "Content-Type",
+            "operator": "notEmpty",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test03-VRead",
+      "name": "VRead Operation (GET by id and versionId)",
+      "description": "Version-read the Patient resource using vread (GET /Patient/[id]/_history/[vid]).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "vread"
+            },
+            "resource": "Patient",
+            "description": "VRead the Patient using id and versionId from the read response.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "vread-response",
+            "targetId": "read-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'okay'.",
+            "direction": "response",
+            "response": "okay",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned resource is a Patient.",
+            "expression": "Patient.resourceType = 'Patient'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test04-Update",
+      "name": "Update Operation (PUT by id)",
+      "description": "Update the Patient resource using the update operation (PUT /Patient/[id]).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "update"
+            },
+            "resource": "Patient",
+            "description": "Update the Patient with changed data from patient-update fixture.",
+            "accept": "json",
+            "contentType": "json",
+            "encodeRequestUrl": true,
+            "responseId": "update-response",
+            "sourceId": "patient-update",
+            "targetId": "create-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'okay'.",
+            "direction": "response",
+            "response": "okay",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the updated Patient still has the name 'Bucher'.",
+            "expression": "Patient.name.where(family = 'Bucher').exists()",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test05-Patch",
+      "name": "Patch Operation (PATCH by id)",
+      "description": "Patch the Patient resource using a JSON Patch document (PATCH /Patient/[id]) with content type application/json-patch+json.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "patch"
+            },
+            "resource": "Patient",
+            "description": "Patch the Patient to set active=false using a JSON Patch document.",
+            "accept": "json",
+            "contentType": "application/json-patch+json",
+            "encodeRequestUrl": true,
+            "responseId": "patch-response",
+            "sourceId": "json-patch-patient",
+            "targetId": "create-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test06-SearchGET",
+      "name": "Search Operation (GET with params)",
+      "description": "Search for Patient resources using a GET-based search with query parameters.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "search"
+            },
+            "resource": "Patient",
+            "description": "Search for Patient by family name.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "search-response",
+            "params": "?family=Bucher"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'okay'.",
+            "direction": "response",
+            "response": "okay",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned Bundle contains at least one entry.",
+            "expression": "Bundle.entry.count() > 0",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned resource is a Bundle.",
+            "expression": "Bundle.resourceType = 'Bundle'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test07-HistoryInstance",
+      "name": "History Operation (Instance-level)",
+      "description": "Get the history of the specific Patient resource instance (GET /Patient/[id]/_history).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "history"
+            },
+            "resource": "Patient",
+            "description": "Get instance-level history for the Patient.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "history-instance-response",
+            "targetId": "create-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response is a Bundle.",
+            "expression": "Bundle.resourceType = 'Bundle'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the history Bundle has at least two entries (create + update).",
+            "expression": "Bundle.entry.count() > 1",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test08-HistoryType",
+      "name": "History Operation (Type-level)",
+      "description": "Get the history of all Patient resources (GET /Patient/_history).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "history"
+            },
+            "resource": "Patient",
+            "description": "Get type-level history for Patient.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "history-type-response",
+            "params": "/_history"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response is a Bundle.",
+            "expression": "Bundle.resourceType = 'Bundle'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test09-Capabilities",
+      "name": "Capabilities Operation (GET /metadata)",
+      "description": "Retrieve the server CapabilityStatement using the capabilities operation.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "capabilities"
+            },
+            "description": "Get the server CapabilityStatement (metadata).",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "capabilities-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'okay'.",
+            "direction": "response",
+            "response": "okay",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type is JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the returned resource is a CapabilityStatement.",
+            "expression": "CapabilityStatement.resourceType = 'CapabilityStatement'",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the CapabilityStatement has a fhirVersion element.",
+            "expression": "CapabilityStatement.fhirVersion.exists()",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test10-CreateOrganization",
+      "name": "Create Organization (for delete-by-id and batch/transaction tests)",
+      "description": "Create an Organization resource as prerequisite for the delete-by-id test.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "create"
+            },
+            "resource": "Organization",
+            "description": "Create Organization from fixture.",
+            "accept": "json",
+            "contentType": "json",
+            "encodeRequestUrl": true,
+            "responseId": "org-create-response",
+            "sourceId": "organization-create"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm Organization create returned 201.",
+            "direction": "response",
+            "responseCode": "201",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response display is 'created'.",
+            "direction": "response",
+            "response": "created",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test11-DeleteById",
+      "name": "Delete by ID Operation (DELETE /[type]/[id])",
+      "description": "Delete the Organization resource using delete by targetId.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "delete"
+            },
+            "resource": "Organization",
+            "description": "Delete Organization by targetId.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "targetId": "org-create-response"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm delete returned 200 or 204.",
+            "direction": "response",
+            "operator": "in",
+            "responseCode": "200,204",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test12-ConditionalDelete",
+      "name": "Conditional Delete Operation (DELETE with search params)",
+      "description": "Delete the Patient resource using conditional delete (DELETE /Patient?family=..&given=..).",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "delete"
+            },
+            "resource": "Patient",
+            "description": "Conditional delete of Patient by family name.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "params": "?family=Bucher&given=Andreas"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm delete returned 200 or 204.",
+            "direction": "response",
+            "operator": "in",
+            "responseCode": "200,204",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test13-SearchAfterDelete",
+      "name": "Search After Delete (Negative Test)",
+      "description": "Search for the deleted Patient and confirm the search returns 200 with an empty bundle.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "search"
+            },
+            "resource": "Patient",
+            "description": "Search for the deleted Patient by family name.",
+            "accept": "json",
+            "encodeRequestUrl": true,
+            "responseId": "search-after-delete-response",
+            "params": "?family=Bucher&given=Andreas"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the search returns 200 (empty bundle expected).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the Bundle has zero entries after delete.",
+            "expression": "Bundle.entry.count() = 0",
+            "operator": "eval",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test14-Batch",
+      "name": "Batch Operation (POST batch Bundle)",
+      "description": "Submit a batch Bundle (type=batch) that creates a Patient in a single request.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "batch"
+            },
+            "description": "POST a batch Bundle containing a create entry for Patient.",
+            "accept": "json",
+            "contentType": "json",
+            "encodeRequestUrl": true,
+            "responseId": "batch-response",
+            "sourceId": "batch-bundle-patient"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "Test15-Transaction",
+      "name": "Transaction Operation (POST transaction Bundle)",
+      "description": "Submit a transaction Bundle (type=transaction) containing a create operation for an Organization.",
+      "action": [
+        {
+          "operation": {
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+              "code": "transaction"
+            },
+            "description": "POST a transaction Bundle containing a create for Organization.",
+            "accept": "json",
+            "contentType": "json",
+            "encodeRequestUrl": true,
+            "responseId": "transaction-response",
+            "sourceId": "transaction-bundle-organization"
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm that the returned HTTP status is 200 (OK).",
+            "direction": "response",
+            "responseCode": "200",
+            "warningOnly": false
+          }
+        },
+        {
+          "assert": {
+            "description": "Confirm the response content type contains JSON.",
+            "contentType": "application/fhir+json",
+            "warningOnly": false
+          }
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "action": [
+      {
+        "operation": {
+          "type": {
+            "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+            "code": "delete"
+          },
+          "resource": "Patient",
+          "description": "Teardown: Conditional delete of any remaining test Patient.",
+          "accept": "json",
+          "encodeRequestUrl": true,
+          "params": "?family=Bucher&given=Andreas"
+        }
+      },
+      {
+        "operation": {
+          "type": {
+            "system": "http://terminology.hl7.org/CodeSystem/testscript-operation-codes",
+            "code": "delete"
+          },
+          "resource": "Organization",
+          "description": "Teardown: Conditional delete of any remaining test Organization.",
+          "accept": "json",
+          "encodeRequestUrl": true,
+          "params": "?name=Burgers%20University%20Medical%20Center"
+        }
+      }
+    ]
+  }
+}

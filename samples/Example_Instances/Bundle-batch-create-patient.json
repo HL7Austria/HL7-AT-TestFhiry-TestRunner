@@ -1,0 +1,28 @@
+{
+  "resourceType": "Bundle",
+  "type": "batch",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "profile": ["http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"]
+        },
+        "active": true,
+        "name": [
+          {
+            "family": "Bucher",
+            "given": ["Andreas"],
+            "prefix": ["Dipl.Ing.", "Dr."]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1961-12-24"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      }
+    }
+  ]
+}

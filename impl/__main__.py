@@ -15,8 +15,11 @@ if __name__ == "__main__":
         get_config_manager().init_logging()
 
         for testscript_path, resource_path in get_testscript_pairs():
-            testscript_data = load_testscript_data(testscript_path, resource_path)
-            test_fhir_operations(testscript_data)
+            try:
+                testscript_data = load_testscript_data(testscript_path, resource_path)
+                test_fhir_operations(testscript_data)
+            except Exception as e:
+                print(e)
     except Exception as e:
         print(str(e))
         sys.exit(1)

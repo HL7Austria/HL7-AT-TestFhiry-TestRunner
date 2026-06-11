@@ -1,7 +1,3 @@
-"""
-Configuration manager for FHIR testing tool.
-Handles loading and accessing configuration settings.
-"""
 import json
 import os
 from datetime import datetime
@@ -186,9 +182,15 @@ class ConfigManager:
                 for fixture in fixtures_raw:
                     fixture_ref = fixture.get("resource", {}).get("reference")
                     if fixture_ref:
-                        filename = os.path.splitext(os.path.basename(fixture_ref))[0] + ".json"
-                        fixture_path = str(Path(self.path) / "Example_Instances" / filename).replace("\\", "/")
-                        fixture_list.append(fixture_path)
+                        base_name = os.path.splitext(os.path.basename(fixture_ref))[0]
+                        fixture_path = None
+                        for ext in [".json", ".xml"]:
+                            candidate = f"Example_Instances/{base_name}{ext}".replace("\\", "/")
+                            if os.path.exists(utils.get_full_path(candidate)):
+                                fixture_path = candidate
+                                break
+                        if fixture_path:
+                            fixture_list.append(fixture_path)
 
                 result.append((ts_path, fixture_list))
 

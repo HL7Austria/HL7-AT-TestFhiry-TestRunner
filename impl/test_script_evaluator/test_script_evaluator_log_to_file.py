@@ -1,6 +1,7 @@
 import json
 import requests
 import re
+import xml.etree.ElementTree as ET
 from typing import Any
 
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -9,29 +10,18 @@ from impl.model.fixture import Fixture
 from impl.model.interaction import Interaction
 from impl.model.variable import Variable
 import impl.test_script_evaluator.validate as validate
-from impl.transactions.transactions import build_whole_transaction_bundle
 import impl.test_script_evaluator.utils as utils
+import impl.test_script_evaluator.reference_parser as reference_parser
+import impl.test_script_evaluator.dependency_resolver as dependency_resolver
 
 last_interaction = None
 
-FIXTURES = []
-REQ_RESP = []
+FIXTURES = [] # static Fixtures
+REQ_RESP = [] # responses
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
 
 FHIR_SERVER_BASE = None
-
-def extract_test_source_id(container): #do i even need this anymore?
-    """
-    Returns the sourceID
-    """
-    for action in container.get("action", []):
-        op = action.get("operation")
-        if op and "sourceId" in op:
-            return op["sourceId"]
-
-    return None
-
 
 def replacer(match):
     """
@@ -55,7 +45,6 @@ def replacer(match):
             return eval_variable(var)
     
     raise Exception(f"Variable {var_name} could not be found")
-
 
 def execute_operation(operation: dict[str, Any]):
     """
@@ -117,6 +106,13 @@ def execute_operation(operation: dict[str, Any]):
                 fixture = next((fix for fix in REQ_RESP if fix.res_id == sourceId), None)
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} nowhere found!")
+            
+            # Validate that fixture has all references resolved before using as sourceId
+            if isinstance(fixture, Fixture) and not fixture.references_resolved:
+                raise error.TestScriptError(
+                    f"Fixture {sourceId} has unresolved references and cannot be used as sourceId. "
+                    f"Unresolved references: {fixture.references}"
+                )
 
         utils.log_to_file(f"Executing: {operation_type.upper()} {url}")
         match (method):
@@ -129,13 +125,22 @@ def execute_operation(operation: dict[str, Any]):
                     else:
                         response = requests.post(url, headers=headers)
                 else:
-                    response = requests.post(url, headers=headers, json=fixture.body)
+                    body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
+                    response = requests.post(url, headers=headers, data=body_data)
             case "put":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PUT!")
                 
-                fixture.body["id"] = url.rstrip("/").split("/")[-1] #update url is [base]/[type]/[id]
-                response = requests.put(url, headers=headers, json=fixture.body)
+                update_id = url.rstrip("/").split("/")[-1] #update url is [base]/[type]/[id]
+                if utils.string_type(fixture.body) == "json":
+                    if isinstance(fixture.body, str):
+                        fixture.body = json.loads(fixture.body)
+                    fixture.body["id"] = update_id
+                    body_data = json.dumps(fixture.body)
+                else:
+                    fixture.body = re.sub(r'(<id[^>]*value=")[^"]*("/>)', r'\g<1>' + update_id + r'\g<2>', fixture.body)
+                    body_data = fixture.body
+                response = requests.put(url, headers=headers, data=body_data)
             case "delete":
                 response = requests.delete(url, headers=headers)
             case "head":
@@ -143,25 +148,37 @@ def execute_operation(operation: dict[str, Any]):
             case "patch":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PATCH!")
-                response = requests.patch(url, headers=headers, json=fixture.body)
+                body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
+                response = requests.patch(url, headers=headers, data=body_data)
             case _:
                 raise error.TestScriptError(f"Method {method} not supported.")
 
         if operation_type == "create":
             saved_resource_id = ""
-            try:
-                saved_resource_id = response.json().get("id")
-            except ValueError:
-                location = response.headers.get("Location", "")
-                if location:
-                    saved_resource_id = location.rstrip("/").split("/")[-3]
-                    utils.log_to_file(f"ID from Location header: {saved_resource_id}")
+            location = response.headers.get("Location", "")
+            if location:
+                parts = location.rstrip("/").split("/")
+                if "_history" in parts:
+                    # ID ist der Teil vor _history
+                    history_idx = parts.index("_history")
+                    saved_resource_id = parts[history_idx - 1]
                 else:
+                    # ID ist der letzte Teil
+                    saved_resource_id = parts[-1]
+                utils.log_to_file(f"ID from Location header: {saved_resource_id}")
+            else:
+                try:
+                    saved_resource_id = response.json().get("id")
+                except ValueError:
+                    root = ET.fromstring(response.text)
+                    ns = {'fhir': 'http://hl7.org/fhir'}
+                    id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
+                    saved_resource_id = id_el.get('value', '') if id_el is not None else ''
+                if not saved_resource_id:
                     raise ValueError("No ID found in response or Location header")
-            finally:
-                utils.log_to_file(f"Accessible at: {url}/{saved_resource_id}")
-                if isinstance(fixture, Fixture):
-                    fixture.server_id = saved_resource_id
+            utils.log_to_file(f"Accessible at: {url}/{saved_resource_id}")
+            if isinstance(fixture, Fixture):
+                fixture.server_id = saved_resource_id
 
         utils.log_to_file(f"Response: {response.status_code}")
     except Exception as e:
@@ -177,7 +194,7 @@ def execute_operation(operation: dict[str, Any]):
     last_interaction.res_id = int_id
     
 
-    if(int_id != None):
+    if int_id != None:
         REQ_RESP.append(last_interaction)
 
 def build_url(operation :dict [str, Any]) -> str:
@@ -205,13 +222,13 @@ def build_url(operation :dict [str, Any]) -> str:
     sourceId = operation.get("sourceId")
     targetId = operation.get("targetId")
     resource = operation.get("resource")
-    type = operation.get("type", {}).get("code", "").lower()
+    op_type = operation.get("type", {}).get("code", "").lower()
 
-    if targetId and type == "search":
+    if targetId and op_type == "search":
         raise error.TestScriptError("targetId should not be used with search.")
-    if targetId and type == "create":
+    if targetId and op_type == "create":
         raise error.TestScriptError("Create should not have a targetId")
-    if params and (type == "create" or type == "transaction"):
+    if params and (op_type == "create" or op_type == "transaction"):
         raise error.TestScriptError("Create and transaction should not have params!")
 
     fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -220,79 +237,90 @@ def build_url(operation :dict [str, Any]) -> str:
     Tfixture = next((fix for fix in FIXTURES if fix.source_id == targetId), None)
     if not Tfixture:
         Tfixture = next((fix for fix in REQ_RESP if fix.res_id == targetId), None)
-    #--> suchen der Fixture wenn leer = None
+    #--> checks to see if the ourceId is in the saved static Fixtures or responses
 
-    if type == "transaction" or type == "batch":
+    if op_type == "transaction" or op_type == "batch":
         return url
-    elif type == "capabilities" and not params:
+    elif op_type == "capabilities" and not params:
         return url + "/metadata"
 
     if params:
-        if type == "read" or type == "vread" or type == "update" or type == "delete":
+        if op_type == "read" or op_type == "vread" or op_type == "update" or op_type == "delete":
             if not resource:
-                raise error.TestScriptError(f"Resource-Type is needed for Operation {type} {params}")
+                raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
             url += "/" + resource
         return url + params
     else:
-        if not type:
+        if not op_type:
             raise error.TestScriptError("Could not create url for Operation!")
         
         if sourceId:
             if not fixture:
                 raise error.TestScriptError(f"Fixture {sourceId} could not be found")
-            if isinstance(fixture.body, dict):
-                url += "/" + fixture.body.get("resourceType")
+            if isinstance(fixture, Fixture):
+                if fixture.type:
+                    url += "/" + fixture.type
+            else:
+                _, res_type = utils.extract_fhir_meta(fixture.body)
+                if res_type:
+                    url += "/" + res_type
         
         if targetId:
-            id = ""
+            res_id = ""
             vid = ""
             url_type = ""
             if isinstance(Tfixture, Interaction):
                 if "Location" in Tfixture.header:
                     location = Tfixture.header.get("Location")
                     if "_history" in location:
-                        id = location.rstrip("/").split("/")[-3]
+                        res_id = location.rstrip("/").split("/")[-3]
                         vid = location.rstrip("/").split("/")[-1]
                     else:
-                        id = location.rstrip("/").split("/")[-1]
+                        res_id = location.rstrip("/").split("/")[-1]
                 else:
-                    if isinstance(Tfixture.body, dict):
-                        id = Tfixture.body.get("id")
-                        vid = Tfixture.body.get("meta").get("versionId")
-                    elif utils.string_type(Tfixture.body) == "json":
-                        body = json.loads(Tfixture.body)
-                        id = body.get("id")
-                        vid = body.get("meta").get("versionId")
+                    if utils.string_type(Tfixture.body) == "json":
+                        body = json.loads(Tfixture.body) if isinstance(Tfixture.body, str) else Tfixture.body
+                        res_id = body.get("id")
+                        meta = body.get("meta")
+                        vid = meta.get("versionId") if meta else ""
                     else:
-                        raise Exception("XML is not supported as of now")
+                        root = ET.fromstring(Tfixture.body)
+                        ns_match = root.tag.split('}')[0] + '}' if '{' in root.tag else ''
+                        ns = {'ns': ns_match.strip('{}')} if ns_match else {}
+                        if ns:
+                            id_el = root.find('ns:id', ns)
+                            meta_el = root.find('ns:meta/ns:versionId', ns)
+                        else:
+                            id_el = root.find('id')
+                            meta_el = root.find('meta/versionId')
+                        res_id = id_el.get('value', '') if id_el is not None else ''
+                        vid = meta_el.get('value', '') if meta_el is not None else ''
             elif isinstance(Tfixture, Fixture):
-                id = Tfixture.server_id
+                res_id = Tfixture.server_id
             else:
                 raise error.TestScriptError(f"Fixture {targetId} not found!")
             
-            if isinstance(Tfixture.body, dict):
-                url_type = Tfixture.body.get("resourceType")
+            if isinstance(Tfixture, Fixture):
+                url_type = Tfixture.type
             elif utils.string_type(Tfixture.body) == "json":
-                body = json.loads(Tfixture.body)
+                body = json.loads(Tfixture.body) if isinstance(Tfixture.body, str) else Tfixture.body
                 url_type = body.get("resourceType")
             else:
-                raise Exception("XML is not supported as of now")
+                root = ET.fromstring(Tfixture.body)
+                url_type = root.tag.split('}')[-1] if '}' in root.tag else root.tag
             
-            if (not sourceId) or type == "patch": #path has a source BUT that source isn't a normal resource
-                if type == "vread":
-                    if vid == "":
-                        raise error.OperationError("No versonId found for vread Operation.")
-                    return url +  "/" + url_type +  "/" + id + "/_history" +  "/" + vid
-                elif type == "history":
-                    return url +  "/" + url_type +  "/" + id + "/_history"
-                else:
-                    if type == "update" and sourceId:
-                        return url +  "/" + id
-                    else:
-                        return url +  "/" + url_type +  "/" + id
+            if op_type == "vread":
+                if vid == "":
+                    raise error.OperationError("No versonId found for vread Operation.")
+                return url +  "/" + url_type +  "/" + res_id + "/_history" +  "/" + vid
+            elif op_type == "history":
+                return url +  "/" + url_type +  "/" + res_id + "/_history"
             else:
-                return url + "/" + id
+                if op_type == "update" and sourceId:
+                    return url +  "/" + res_id
+                else:
+                    return url +  "/" + url_type +  "/" + res_id
         return url
 
 def execute_assertion(assertion : dict[str,Any]) -> None:
@@ -348,6 +376,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                     raise error.TestScriptError("CompareTo is only valid with expression or path!")
                 
                 fix = None
+                #check to see if the compareToSourceId is in the saved static Fixtures or responses
                 for int in REQ_RESP:
                     if int.res_id == assertion.get("compareToSourceId"):
                         fix = int
@@ -442,7 +471,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         if "minimumId" in assertion:
             #operator will be ignored
             """
-            find a way to check if this fixture is inside the response
+            find a way to check if this static fixture or previous response is inside the response
             --> find out if there is a library, find out if validator has that
             """
             raise NotImplementedError
@@ -461,12 +490,12 @@ def load_testscript_data(testscript_path, resource_path) -> tuple[dict,list]:
     Loads testscript and resource data for a given pair of paths.
 
     :param testscript_path: Path to the TestScript JSON file.
-    :param resource_path: Path to the resource JSON file(s), or None.
+    :param resource_path: Path to the resource file(s) (JSON or XML), or None.
     :return: Tuple of (testscript, resources) data.
     """
     testscript = utils.load_json(testscript_path)
     if resource_path:
-        resources = utils.load_json_list(resource_path)
+        resources = utils.load_resource_list(resource_path)
     else:
         resources = None
     return testscript, resources
@@ -501,13 +530,24 @@ def execute_actions(action: dict[str, Any]) -> None:
         elif "assert" in action:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
+            warningOnly = assertion.get("warningOnly", False)
             execute_assertion(assertion)
             utils.log_to_file("✓ Assertion passed\n")
-        
+
     except AssertionError as ae:
-        if not stopTestOnFail:
+        warningOnly = action.get("assert", {}).get("warningOnly", False)
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail")
+
+        if warningOnly:
+            # Log warning but continue test
+            utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
+        elif stopTestOnFail:
+            # stopTestOnFail is true - log error but continue test
             handle_assertion_error(ae, stopTestOnFail)
-        raise        
+        else:
+            # stopTestOnFail is false or not set - raise TestExecutionError to stop the test
+            raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
+
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
 
@@ -528,25 +568,25 @@ def save_variables(variables : list) -> None:
     """
     global VARIABLES
     for var in variables:
-        id = var.get("name")
+        var_id = var.get("name")
 
-        variable = Variable(id,path=var.get("path"), 
+        variable = Variable(var_id,path=var.get("path"), 
                                   expression=var.get("expression"),
                                   sourceId=var.get("sourceId"),
                                   headerField=var.get("headerField"),
                                   defaultValue=var.get("defaultValue"))
-        if id is None:
+        if var_id is None:
             raise error.TestScriptError("Variable not correctly defined!")
 
 
-        if(((variable.expression is not None) & (variable.headerField is not None)) | 
-           ((variable.headerField is not None) & (variable.path is not None)) | 
-           ((variable.expression is not None) & (variable.path is not None))):
-            raise error.TestScriptError(f"Variable {id} not valid Fhir, two value-expressions cannot be filled at the same time!")
+        if ((variable.expression is not None and variable.headerField is not None) or 
+           (variable.headerField is not None and variable.path is not None) or 
+           (variable.expression is not None and variable.path is not None)):
+            raise error.TestScriptError(f"Variable {var_id} not valid Fhir, two value-expressions cannot be filled at the same time!")
 
-        if ((variable.expression is None) & (variable.headerField is None) 
-            & (variable.path is None) & (variable.defaultValue is None)):
-            raise error.TestScriptError(f"Variable {id} is not filled!")
+        if (variable.expression is None and variable.headerField is None 
+            and variable.path is None and variable.defaultValue is None):
+            raise error.TestScriptError(f"Variable {var_id} is not filled!")
 
         VARIABLES.append(variable)
 
@@ -554,7 +594,7 @@ def eval_variable(var : Variable):
     """
     Resolves a single FHIR TestScript variable to its concrete value.
 
-    Looks up the referenced fixture or interaction via ``sourceId`` and
+    Looks up the referenced static fixture or interaction via ``sourceId`` and
     evaluates the variable's value source (``headerField``, ``expression``,
     or ``path``).  Falls back to ``defaultValue`` when no expression-based
     source is defined.
@@ -584,6 +624,7 @@ def eval_variable(var : Variable):
         fix = None
         sourceId = var.sourceId
 
+        #check if the sourceId is in the saved static Fixtures or responses
         for int in REQ_RESP:
             if int.res_id == sourceId:
                 fix = int
@@ -600,7 +641,14 @@ def eval_variable(var : Variable):
                 raise error.TestScriptError(f"HeaderField {var.headerField} could not be evaluated.")
 
         elif var.expression:
-            result = validate.eval_expression(fix.body, expr)
+            if utils.string_type(fix.body) == "json":
+                body_use = json.loads(fix.body) if isinstance(fix.body, str) else fix.body
+            elif utils.string_type(fix.body) == "xml":
+                # XML zu JSON konvertieren für FHIRPath
+                body_use = validate.convert_xml_to_json(fix.body) if isinstance(fix.body, str) else fix.body
+            else:
+                raise error.TestScriptError("FHIRPath expression cannot be evaluated on this body type.")
+            result = validate.eval_expression(body_use, expr)
             if isinstance(result, list):
                 if len(result) == 1:
                     result = result[0]
@@ -620,61 +668,145 @@ def eval_variable(var : Variable):
                     raise error.TestScriptError("More than one result!")
 
     return result
-def save_fixtures(jsonFiles:list[dict], fix_list:list[dict]) -> None:
+def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     """
     Registers FHIR TestScript fixtures locally and, for those marked with
-    ``autocreate``, uploads them to the FHIR server as a transaction bundle.
+    ``autocreate``, uploads them to the FHIR server sequentially based on
+    dependency order.
 
-    Each fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
-    ``autocreate`` flag is true are bundled into a single FHIR transaction
-    POST.  After a successful upload the server-assigned IDs are written back
-    into the corresponding ``Fixture`` objects so that later operations and
-    assertions can reference them.
+    Each static fixture is stored in the global ``FIXTURES`` list.  Fixtures whose
+    ``autocreate`` flag is true are parsed for references, ordered by dependency,
+    and created sequentially. References are replaced with server IDs as fixtures
+    are created.
 
-    :param jsonFiles: List of parsed JSON bodies of the Example Instance files
-        (one per fixture).
+    :param resources: List of parsed JSON dicts or raw XML strings of the
+        Example Instance files (one per fixture).
     :param fix_list: List of raw fixture definition dictionaries from the
-        TestScript JSON (parallel to ``jsonFiles``).
-    :raises Exception: If the transaction bundle POST fails, with the
-        diagnostic messages extracted from the server's OperationOutcome.
+        TestScript JSON (parallel to ``resources``).
+    :raises Exception: If fixture creation fails.
+    :raises error.CircularDependencyError: If fixtures have circular dependencies.
+    :raises error.UnresolvedReferenceError: If autocreate fixtures have unresolved references.
     """
-    bundle_json = []
-    for jsonf, fixture in zip(jsonFiles, fix_list):
-        fix_id = jsonf.get("id")
-        fix_type = jsonf.get("resourceType")
+    global FIXTURES
+
+    # Create all static fixture objects and parse references
+    all_fixtures = []
+    fixture_ids = []
+
+    for res, fixture in zip(resources, fix_list):
+        fix_id, fix_type = utils.extract_fhir_meta(res)
         fix_source_id = fixture.get("id")
         autocreate = fixture.get("autocreate", True)
         autodelete = fixture.get("autodelete", False)
-        if(autocreate):
-            bundle_json.append(jsonf)
-        FIXTURES.append(Fixture(fix_id,fix_source_id,autodelete, fix_type, jsonf))
 
-    if bundle_json:
-        bundle = build_whole_transaction_bundle(bundle_json)
-        try:
-            response = requests.post(
-            FHIR_SERVER_BASE,
-            headers={"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"},
-            json=json.loads(bundle)
+        fixture_obj = Fixture(fix_id, fix_source_id,autocreate, autodelete, fix_type, res)
+        all_fixtures.append(fixture_obj)
+        if fix_id is not None:
+            fixture_ids.append(fix_id)
+        FIXTURES.append(fixture_obj)
+
+    # Check for duplicate fixture IDs (from resource files)
+    seen_ids = {}
+    for fixture in all_fixtures:
+        if fixture.fixture_id is None:
+            continue
+        if fixture.fixture_id in seen_ids:
+            raise Exception(
+                f"Fixture Ids need to be unique to correctly resolve references. "
+                f"Duplicate ID '{fixture.fixture_id}' found in fixtures: "
+                f"'{seen_ids[fixture.fixture_id].source_id}' and '{fixture.source_id}'"
             )
+        seen_ids[fixture.fixture_id] = fixture
 
-            results = response.json().get("entry")
+    # Parse references for each fixture
+    for fixture in all_fixtures:
+        fixture.references = reference_parser.parse_references(fixture.body, fixture_ids)
 
-            for fix_cont, res in zip(bundle_json, results):
-                resp = res.get("response", {})
-                res_loc = resp.get("location", "")
-                res_id = res_loc.split("/")[1]  # server id
-                fix_id = fix_cont.get("id")  # id inside the Example Instance
+    autocreate_fixtures = [f for f in all_fixtures if f.autocreate]
+    non_autocreate_fixtures = [f for f in all_fixtures if not f.autocreate]
 
-                for fix in FIXTURES:
-                    if fix_id == fix.fixture_id:
-                        fix.server_id = res_id  # saves der Server id
+    # If there are autocreate fixtures, resolve creation order and create them
+    if autocreate_fixtures:
+        try:
+            ordered_fixtures = dependency_resolver.resolve_creation_order(autocreate_fixtures)
+            fixture_id_to_server_id = {}
+
+            # Create static fixtures sequentially
+            for fixture in ordered_fixtures:
+                # Replace references with already-resolved server IDs
+                resolved_body = dependency_resolver.replace_references(
+                    fixture.body, fixture_id_to_server_id
+                )
+                fixture.body = resolved_body
+
+                if isinstance(resolved_body, dict):
+                    is_xml = False
+                else:
+                    is_xml = utils.string_type(resolved_body) == "xml"
+
+                resource_type = fixture.type
+                url = f"{FHIR_SERVER_BASE}/{resource_type}"
+
+                if is_xml:
+                    headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
+                    response = requests.post(url, headers=headers, data=resolved_body)
+                else:
+                    if isinstance(resolved_body, dict):
+                        body_data = json.dumps(resolved_body, ensure_ascii=False)
+                    elif isinstance(resolved_body, str):
+                        body_data = resolved_body
+                    else:
+                        body_data = str(resolved_body)
+                    headers = {"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"}
+                    response = requests.post(url, headers=headers, data=body_data)
+
+                # Extract server ID from response
+                if response.status_code >= 200 and response.status_code < 300:
+                    location = response.headers.get("Location", "")
+                    if location:
+                        parts = location.rstrip("/").split("/")
+                        if "_history" in parts:
+                            history_idx = parts.index("_history")
+                            server_id = parts[history_idx - 1]
+                        else:
+                            server_id = parts[-1]
+                    else:
+                        try:
+                            if is_xml:
+                                root = ET.fromstring(response.text)
+                                ns = {'fhir': 'http://hl7.org/fhir'}
+                                id_el = root.find('fhir:id', ns) if '}' in root.tag else root.find('id')
+                                server_id = id_el.get('value', '') if id_el is not None else ''
+                            else:
+                                response_json = response.json()
+                                server_id = response_json.get("id")
+                        except Exception:
+                            server_id = ""
+
+                    if not server_id:
+                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id}")
+
+                    # Update static fixture with server ID
+                    fixture.server_id = server_id
+                    fixture_id_to_server_id[fixture.fixture_id] = server_id
+                    fixture.references_resolved = True
+                else:
+                    raise Exception(f"Failed to create fixture {fixture.fixture_id}: {response.status_code} - {response.text[:500]}")
+
+            # Validate all references are resolved
+            dependency_resolver.validate_all_references_resolved(autocreate_fixtures)
+
+        except error.CircularDependencyError as e:
+            raise
+        except error.UnresolvedReferenceError as e:
+            raise
         except Exception as e:
-            msg = ""
-            json_data = json.loads(response.text)
-            for item in json_data.get("issue"):
-                msg += item.get("diagnostics")
-            raise Exception(msg)
+            raise
+
+    # Mark non-autocreate fixtures as having no references to resolve (they're not created)
+    for fixture in non_autocreate_fixtures:
+        if not fixture.references:
+            fixture.references_resolved = True
     
 def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
     """
@@ -727,7 +859,7 @@ def SETUP(setup_data, fixture_list : list, resources):
     """
     Executes the **setup** phase of a FHIR TestScript.
 
-    Creates fixtures on the server (autocreate), rewrites inter-fixture
+    Creates static fixtures on the server (autocreate), rewrites inter-fixture
     references so they point to server-assigned IDs, and then runs every
     setup action in order.
 
@@ -743,19 +875,9 @@ def SETUP(setup_data, fixture_list : list, resources):
 
     try:
         
-        if fixture_list: #if there are fixtures to save
+        if fixture_list: #if there are static fixtures to save
             save_fixtures(resources, fixture_list)
 
-
-        if FIXTURES:
-            for fix1 in FIXTURES:
-                for fix2 in FIXTURES:
-                    json_string = json.dumps(fix1.body)
-                    my_regex = "\"reference\" *: *\"[a-zA-Z:]*" + str(fix2.type) + "/" + str(fix2.fixture_id) + "\""
-                    fix1.body = json.loads(re.sub(my_regex , "\"reference\": \"" + str(fix2.type) +"/"+ str(fix2.server_id) + "\"", json_string))
-
-                if re.search("\"reference\" *: *\"[a-zA-Z]*/[a-zA-Z-]+", json.dumps(fix1.body)) != None: #look again to make sure no unattended references exist
-                    raise error.TestScriptError("Unknown Reference remaining.")
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
@@ -811,6 +933,7 @@ def TEST(test_data):
 
     except error.TestExecutionError as e:
         utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+        failed = True
         #test schould get stopped, and next test needs to start
     finally:
         if failed:
@@ -823,7 +946,7 @@ def TEARDOWN(teardown_data : dict):
     Executes the **teardown** phase of a FHIR TestScript.
 
     Runs every teardown action (operations and assertions) and afterwards
-    calls ``autodelete`` to remove all fixtures whose ``autodelete`` flag
+    calls ``autodelete`` to remove all static fixtures whose ``autodelete`` flag
     is set.
 
     :param teardown_data: The ``teardown`` dictionary from the TestScript
@@ -844,7 +967,7 @@ def test_fhir_operations(testscript_data):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
-    Extracts fixtures, variables, and profiles from the TestScript, then
+    Extracts static fixtures, variables, and profiles from the TestScript, then
     drives execution through the three TestScript phases in order:
     **SETUP** → **TEST** → **TEARDOWN**.  On severe errors
     the run is aborted and ``autodelete`` is invoked to clean up
@@ -862,12 +985,16 @@ def test_fhir_operations(testscript_data):
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         return
-    
+
     testscript, resources = testscript_data
 
-    
-        
+
+
     try:
+
+        # Check for duplicate source IDs
+        fixture_list = utils.get_fixture(testscript)
+        validate.check_duplicate_source_ids(testscript, fixture_list)
 
         #validateTS(testscript) #see if the TestScript is valid
         #print("testScript is valid!") #debug message
@@ -875,8 +1002,6 @@ def test_fhir_operations(testscript_data):
 
         #test capability
         #--> find out how important origin and destnation are
-
-        fixture_list = utils.get_fixture(testscript)
 
         variable_list = utils.get_variables(testscript)
         
