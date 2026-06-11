@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Patient xmlns="http://hl7.org/fhir">
+  <id value="HL7ATCorePatientCreateTestExampleXML"/>
+  <meta>
+    <profile value="http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/StructureDefinition/at-core-patient"/>
+  </meta>
+  <name>
+    <family value="Wolfesberger"/>
+    <given value="Alexander"/>
+    <given value="Robert"/>
+  </name>
+  <gender value="male"/>
+  <birthDate value="1961-12-24"/>
+</Patient>

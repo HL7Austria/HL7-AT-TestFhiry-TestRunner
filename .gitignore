@@ -44,3 +44,5 @@ docker-compose.override.yml
 #eigene Dateien
 Results/
 impl/temp/
+samples/
+

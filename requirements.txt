@@ -3,3 +3,5 @@ beautifulsoup4~=4.14.2
 fhirpathpy~=0.2.3
 jsonpath_ng~=1.7.0
 lxml~=5.4.0
+fhir.resources~=8.2.0
+xmltodict~=0.13.0
