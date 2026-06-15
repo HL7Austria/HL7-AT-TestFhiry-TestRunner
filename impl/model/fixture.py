@@ -1,4 +1,10 @@
 class Fixture:
+    """Represents a static FHIR resource fixture defined in a TestScript.
+
+    Fixtures may be created on the server (autocreate), may have inter-fixture
+    references that must be resolved before creation, and may be deleted after
+    the test run (autodelete).
+    """
 
     def __init__(self, fixture_id,source_id ,autocreate,  autodelete, type, fix_body, server_id = ""):
         self.fixture_id = fixture_id                # z.B. "HL7ATCorePatientCreateTestExample"

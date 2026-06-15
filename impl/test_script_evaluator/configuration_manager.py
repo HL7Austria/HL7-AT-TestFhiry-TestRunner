@@ -147,6 +147,15 @@ class ConfigManager:
         return bool(self.fhir_server and self.fhir_server.strip())
 
     def get_testscripts_from_config(self):
+        """Discovers TestScript files and their associated Example Instance resources.
+
+        Uses either the explicit ``testscripts`` list from config.json or scans
+        the ``Test_Scripts`` folder under the configured ``path``. For each
+        TestScript, referenced fixtures are resolved to local Example Instance
+        file paths (JSON or XML).
+
+        :returns: List of tuples ``(testscript_path, [fixture_paths...])``.
+        """
 
         if not self.path or not Path(self.path).is_dir():
             utils.log_to_file(f"Test konnte nicht gestartet werden: 'path' ist leer oder existiert nicht ({self.path!r})")

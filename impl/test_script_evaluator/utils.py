@@ -20,6 +20,15 @@ OperationType = Literal['read', 'vread', 'update', 'patch', 'delete', 'history',
 OperationMethod = Literal['get', 'put', 'post', 'patch', 'head', 'delete']
 
 def get_full_path(path:str) -> Path:
+    """Resolves a (possibly relative) path to an absolute path.
+
+    If the path is absolute it is returned as-is. Otherwise it is resolved
+    relative to the configured base path (from ConfigManager) or the package
+    base directory as a fallback.
+
+    :param path: A relative or absolute filesystem path string.
+    :returns: A resolved absolute Path.
+    """
     p = Path(path)
     if p.is_absolute():
         return p
