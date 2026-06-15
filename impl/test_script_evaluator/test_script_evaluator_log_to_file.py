@@ -385,7 +385,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                         fix = fixt
 
                 if fix is None:
-                    raise error.TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+                    raise error.TestScriptError(f"No fixture found by compareToSourceId {assertion.get('compareToSourceId')}")
                 
                 if not ("value" in assertion): #  Ignored if "assert.value" is used.
                     compare_val = validate.eval_compareTo(fix, assertion)

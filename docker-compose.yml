@@ -2,13 +2,11 @@ version: '3.8'
 
 services:
   fhir-test-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: fhir-test-runner:latest
     volumes:
-      - ./impl/Test_Scripts:/data/Test_Scripts
-      - ./impl/Example_Instances:/data/Example_Instances
-      - ./impl/Profiles:/data/Profiles
+      - ./impl/samples/Test_Scripts:/data/Test_Scripts
+      - ./impl/samples/Example_Instances:/data/Example_Instances
+      - ./impl/samples/Profiles:/data/Profiles
       - ./impl/config.json:/data/config/config.json
       - ./Results:/data/Results
       - ./validator_cli.jar:/data/validator_cli.jar

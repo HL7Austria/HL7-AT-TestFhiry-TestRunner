@@ -8,14 +8,14 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip --trusted-host pypi.org --trusted-host files.pythonhosted.org && \
     pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Copy the application code
 COPY impl/ ./impl/
 
 # Create data directories
-RUN mkdir -p /data/Test_Scripts /data/Example_Instances /data/Profiles /data/Results /data/config
+RUN mkdir -p /data/Test_Scripts /data/Example_Instances /data/Profiles /data/Results
 
 # Set up volume for data
 VOLUME ["/data"]
