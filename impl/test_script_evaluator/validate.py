@@ -208,11 +208,6 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
 def validate_resource(response: Interaction, expected: str, operator: operator_type) -> None:
     """Validates that the FHIR resource type of the response body matches the expected type.
 
-    Extracts the resource type from the body:
-    - For JSON (dict or JSON string): uses the top-level "resourceType" field.
-    - For XML: uses the local name of the root element (namespace-stripped).
-    Only "equals" and "notEquals" operators are expected to be passed from the caller.
-
     :param response: The ``Interaction`` containing the server response body.
     :param expected: The expected FHIR resource type name (e.g. "Bundle", "Patient").
     :param operator: The comparison operator ("equals" or "notEquals").
@@ -221,53 +216,11 @@ def validate_resource(response: Interaction, expected: str, operator: operator_t
     """
     if not response or not response.body:
         raise AssertionError("Response body is empty; cannot assert resource type.")
-
-    actual = None
+    
     body = response.body
-
-    if isinstance(body, dict):
-        actual = body.get("resourceType")
-    elif isinstance(body, str):
-        kind = utils.string_type(body)
-        if kind == "json":
-            try:
-                parsed = json.loads(body)
-                if isinstance(parsed, dict):
-                    actual = parsed.get("resourceType")
-            except Exception:
-                actual = None
-        elif kind == "xml":
-            try:
-                root = ET.fromstring(body)
-                tag = root.tag
-                actual = tag.split('}')[-1] if '}' in tag else tag
-            except Exception:
-                actual = None
-        else:
-            actual = None
-    else:
-        # Fallback: try attribute access or str() conversion
-        try:
-            if hasattr(body, "get"):
-                actual = body.get("resourceType")
-            else:
-                s = str(body)
-                kind = utils.string_type(s)
-                if kind == "json":
-                    parsed = json.loads(s)
-                    actual = parsed.get("resourceType") if isinstance(parsed, dict) else None
-                elif kind == "xml":
-                    root = ET.fromstring(s)
-                    tag = root.tag
-                    actual = tag.split('}')[-1] if '}' in tag else tag
-        except Exception:
-            actual = None
-
-    if not actual:
-        raise AssertionError("Could not determine resourceType from response body.")
-
-    utils.log_to_file(f"Asserting resource {actual} {operator} {expected}")
-    validate_operator(operator, actual, expected)
+    _, resource = utils.extract_fhir_meta(body)
+    utils.log_to_file(f"Asserting resource {resource} {operator} {expected}")
+    validate_operator(operator, resource, expected)
 
 def execute_validator(cmd : str) -> list[str]:
     """Runs a shell command and returns its stdout as a list of lines.
