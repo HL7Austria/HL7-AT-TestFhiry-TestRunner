@@ -204,7 +204,71 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
     actual_status = str(response.status_code)
     utils.log_to_file(f"Asserting response {actual_status} {operator} {expected} (mapped to {expected_status})")
     validate_operator(operator, actual_status, expected_status)
-    
+
+def validate_resource(response: Interaction, expected: str, operator: operator_type) -> None:
+    """Validates that the FHIR resource type of the response body matches the expected type.
+
+    Extracts the resource type from the body:
+    - For JSON (dict or JSON string): uses the top-level "resourceType" field.
+    - For XML: uses the local name of the root element (namespace-stripped).
+    Only "equals" and "notEquals" operators are expected to be passed from the caller.
+
+    :param response: The ``Interaction`` containing the server response body.
+    :param expected: The expected FHIR resource type name (e.g. "Bundle", "Patient").
+    :param operator: The comparison operator ("equals" or "notEquals").
+    :raises AssertionError: If the body is empty, cannot be parsed, has no discernible
+        resource type, or the type does not satisfy the operator check.
+    """
+    if not response or not response.body:
+        raise AssertionError("Response body is empty; cannot assert resource type.")
+
+    actual = None
+    body = response.body
+
+    if isinstance(body, dict):
+        actual = body.get("resourceType")
+    elif isinstance(body, str):
+        kind = utils.string_type(body)
+        if kind == "json":
+            try:
+                parsed = json.loads(body)
+                if isinstance(parsed, dict):
+                    actual = parsed.get("resourceType")
+            except Exception:
+                actual = None
+        elif kind == "xml":
+            try:
+                root = ET.fromstring(body)
+                tag = root.tag
+                actual = tag.split('}')[-1] if '}' in tag else tag
+            except Exception:
+                actual = None
+        else:
+            actual = None
+    else:
+        # Fallback: try attribute access or str() conversion
+        try:
+            if hasattr(body, "get"):
+                actual = body.get("resourceType")
+            else:
+                s = str(body)
+                kind = utils.string_type(s)
+                if kind == "json":
+                    parsed = json.loads(s)
+                    actual = parsed.get("resourceType") if isinstance(parsed, dict) else None
+                elif kind == "xml":
+                    root = ET.fromstring(s)
+                    tag = root.tag
+                    actual = tag.split('}')[-1] if '}' in tag else tag
+        except Exception:
+            actual = None
+
+    if not actual:
+        raise AssertionError("Could not determine resourceType from response body.")
+
+    utils.log_to_file(f"Asserting resource {actual} {operator} {expected}")
+    validate_operator(operator, actual, expected)
+
 def execute_validator(cmd : str) -> list[str]:
     """Runs a shell command and returns its stdout as a list of lines.
 
@@ -382,7 +446,7 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     path_type = utils.detect_path_type(path)
     if response.header.get("Content-Type"):
         if not path_type in response.header.get("Content-Type"): #check if pathtype is the same as content-type
-            raise AssertionError(f"Response-Body is not of type {path_type}!")
+            raise AssertionError(f"Response-Body is not of type {path_type}!\n")
 
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")

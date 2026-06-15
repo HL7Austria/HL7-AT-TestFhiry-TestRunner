@@ -431,12 +431,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
-            """
-            check if xml or json
-            xml --> regex? look what resource-Type (should be root)
-            json --> resourceType aus dict
-            """
-            raise NotImplementedError
+            validate.validate_resource(response, assertion.get("resource"), operator)
         
         elif "headerField" in assertion:
             #mit value
