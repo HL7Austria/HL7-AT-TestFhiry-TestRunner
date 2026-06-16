@@ -538,6 +538,7 @@ def execute_actions(action: dict[str, Any]) -> None:
         if warningOnly:
             # Log warning but continue test
             utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
+            return f"⚠ WARNING: {str(ae)}"
         elif stopTestOnFail:
             # stopTestOnFail is true - log error but continue test
             handle_assertion_error(ae, stopTestOnFail)
@@ -894,12 +895,12 @@ def SETUP(setup_data, fixture_list : list, resources):
         error_type = "OperationError"
         raise error.TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except error.TestExecutionError as teE:
-        error_message = "Setup failed: " + str(teE)
+        error_message = f"Setup action failed: {str(teE)}"
         error_type = "TestExecutionError"
         raise error.TestScriptError("Setup failed: " , teE) #stop the whole testscript
     
     except Exception as e: #usually only failure in autocreate
-        error_message = "✗ TEST SKIPPED: Failure to start TestScript: " +str(e)
+        error_message = f"Fixture initialization failed ({type(e).__name__}): {str(e)}"
         error_type = type(e).__name__
         raise error.TestScriptError(error_message)
     finally:
@@ -929,6 +930,7 @@ def TEST(test_data):
     failed = False
     error_message = ""
     error_type = None
+    warnings = []
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -939,7 +941,9 @@ def TEST(test_data):
       
         for action in test_data.get("action" , []):
             try:
-                execute_actions(action)
+                warning = execute_actions(action)
+                if warning:
+                    warnings.append(warning)
 
             #per action in test
             except error.OperationError as oe:
@@ -947,7 +951,7 @@ def TEST(test_data):
 
             except AssertionError as ae:
                 failed = True
-                error_message = str(ae)
+                error_message = f"Assertion failed: {str(ae)}"
                 error_type = "AssertionError"
             except error.TestExecutionError as e:
                 raise
@@ -967,6 +971,8 @@ def TEST(test_data):
             message = "Test failed"
         else:
             message = "Test passed"
+        if warnings:
+            message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
         if failed:
             utils.log_to_file(f"✗ TEST FAILED: {test_name}")
@@ -1032,10 +1038,11 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         tracker = rt.get_result_tracker()
         if tracker.current_test_run is None:
             tracker.initialize_test_run()
-        nm = "Unnamed TestScript"
-        tracker.initialize_testscript(nm, testscript_path or "")
+        ts_temp, _ = testscript_data
+        nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
+        tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))
         tracker.start_outcome("Setup", "Skipped")
-        tracker.finish_outcome(result="fail", message="No FHIR server configured", error_type="Skipped")
+        tracker.finish_outcome(result="skip", message="No FHIR server configured", error_type="Skipped")
         return
 
     testscript, resources = testscript_data
@@ -1044,7 +1051,7 @@ def test_fhir_operations(testscript_data, testscript_path=""):
     if tracker.current_test_run is None:
         tracker.initialize_test_run()
     testscript_name = testscript.get('name', testscript.get('id', 'Unnamed TestScript'))
-    tracker.initialize_testscript(testscript_name, testscript_path or "")
+    tracker.initialize_testscript(testscript_name, testscript.get("url", testscript_path or ""))
 
     try:
 
@@ -1088,20 +1095,20 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         autodelete() #autodelete after everything went wrong
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=str(tse), error_type="TestScriptError")
+            trk.finish_outcome(result="fail", message=f"TestScript aborted: {str(tse)}", error_type="TestScriptError")
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
     except Exception as e:
         utils.log_to_file("TestScript stopped! " + str(e))
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=str(e), error_type=type(e).__name__)
+            trk.finish_outcome(result="fail", message=f"Unexpected error ({type(e).__name__}): {str(e)}", error_type=type(e).__name__)
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message="Unfinished due to error", error_type="Aborted")
+            trk.finish_outcome(result="fail", message="Execution interrupted unexpectedly - phase did not complete", error_type="Aborted")
             
         FIXTURES.clear() 
         REQ_RESP.clear()

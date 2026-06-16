@@ -32,6 +32,7 @@ class TestScriptResult:
     name: str
     url: str
     outcome: str
+    timestamp: str = ""
     outcomes: List[TestOutcome] = field(default_factory=list)
 
 @dataclass
@@ -72,7 +73,7 @@ class ResultTracker:
         :param url: Source path or URL of the TestScript.
         """
         self.current_testscript = TestScriptResult(
-            name=name, url=url, outcome="pass"
+            name=name, url=url, outcome="pass", timestamp=datetime.now().isoformat()
         )
         if self.current_test_run:
             self.current_test_run.testscript_results.append(self.current_testscript)
@@ -120,6 +121,8 @@ class ResultTracker:
             self.current_testscript.outcomes.append(self.current_outcome)
             if result == "fail":
                 self.current_testscript.outcome = "fail"
+            elif result == "skip" and self.current_testscript.outcome != "fail":
+                self.current_testscript.outcome = "skip"
             self.current_outcome = None
             self._phase_start_time = None
     
@@ -169,6 +172,7 @@ class ResultTracker:
                 "name": ts.name,
                 "url": ts.url,
                 "outcome": ts.outcome,
+                "timestamp": ts.timestamp,
                 "outcomes": []
             }
             for outcome in ts.outcomes:
