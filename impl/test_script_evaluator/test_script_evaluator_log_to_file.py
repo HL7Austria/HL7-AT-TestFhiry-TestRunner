@@ -1102,11 +1102,10 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         trk = rt.get_result_tracker()
         if trk.current_outcome:
             trk.finish_outcome(result="fail", message="Unfinished due to error", error_type="Aborted")
-
-    # Final summary --> find out how to save results from each test and log them
-
+            
+        FIXTURES.clear() 
+        REQ_RESP.clear()
+        PROFILES.clear()
+        VARIABLES.clear()
         
-    FIXTURES.clear() 
-    REQ_RESP.clear()
-    PROFILES.clear()
-    VARIABLES.clear()
+    

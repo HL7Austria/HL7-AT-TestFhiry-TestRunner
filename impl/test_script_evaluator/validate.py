@@ -397,9 +397,9 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     :raises AssertionError: If the path-result does not satisfy the operator check.
     """
     path_type = utils.detect_path_type(path)
-    if response.header.get("Content-Type"):
-        if not path_type in response.header.get("Content-Type"): #check if pathtype is the same as content-type
-            raise AssertionError(f"Response-Body is not of type {path_type}!\n")
+    ct = (response.header.get("Content-Type") or "").lower()
+    if path_type not in ct:
+        raise AssertionError(f"Response-Body is not of type {path_type}!\n")
 
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
@@ -431,7 +431,11 @@ def eval_path(body, path:str):
 
     result = None
     path_type = utils.detect_path_type(path)
-    if body_type != path_type : 
+    if body_type == "json" and path_type == "json":
+        pass
+    elif body_type == "xml" and path_type == "xml":
+        pass
+    elif body_type != path_type:
         raise Exception(f"Path {path} is not compatible with body type {body_type}!")
 
     #check if xml or jsonpath
@@ -471,16 +475,11 @@ def eval_xpath(body : str, path:str):
     return result
 
 def eval_json_path(body : str, path:str):
-    """Evaluates a JSONPath expression against a JSON resource body.
-
-    :param body: The FHIR resource as a dict or JSON string.
-    :param path: The JSONPath expression to evaluate.
-    :returns: List of matched values.
-    """
     if isinstance(body,str):
         body = json.loads(body)
 
-    jsonpath_expr = parse(path)
+    norm = utils.normalize_jsonpath(path)
+    jsonpath_expr = parse(norm)
     return ([match.value for match in jsonpath_expr.find(body)])
 
 def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[dict]) -> None:
