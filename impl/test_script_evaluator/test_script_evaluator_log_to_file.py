@@ -1052,8 +1052,6 @@ def test_fhir_operations(testscript_data, testscript_path=""):
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         tracker = rt.get_result_tracker()
-        if tracker.current_test_run is None:
-            tracker.initialize_test_run()
         ts_temp, _ = testscript_data
         nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
         tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))

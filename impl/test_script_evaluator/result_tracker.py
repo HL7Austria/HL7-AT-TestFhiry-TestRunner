@@ -8,6 +8,7 @@ from dataclasses import asdict
 
 import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.configuration_manager as conf_man
+import impl.exception.Error as error
 
 @dataclass
 class TestOutcome:
@@ -173,9 +174,13 @@ class ResultTracker:
                 outcome_dict = asdict(outcome)
                 ts_dict["outcomes"].append(outcome_dict)
             results_dict["testscript_results"].append(ts_dict)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(results_dict, f, indent=2)
-        return filepath
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(results_dict, f, indent=2)
+        except PermissionError:
+            raise error.TestScriptError(f"No write permission for results file: {filepath}")
+        except Exception as e:
+            raise error.TestScriptError(f"Failed to write results file: {filepath} - {e}")
     
     def emit_summary_to_log(self):
         """Writes a human-readable summary of the entire test run to the log file (and console).

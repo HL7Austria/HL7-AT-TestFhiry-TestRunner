@@ -400,6 +400,8 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     """
     path_type = utils.detect_path_type(path)
     ct = (response.header.get("Content-Type") or "").lower()
+    if ct == "":
+        ct = utils.string_type(response.body)
     if path_type not in ct:
         raise AssertionError(f"Response-Body is not of type {path_type}!\n")
 
