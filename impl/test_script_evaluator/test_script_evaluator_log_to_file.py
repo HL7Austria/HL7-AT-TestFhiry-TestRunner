@@ -532,18 +532,20 @@ def execute_actions(action: dict[str, Any]) -> None:
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
-        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail")
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", True)
 
         if warningOnly:
             # Log warning but continue test
             utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
             return f"⚠ WARNING: {str(ae)}"
         elif stopTestOnFail:
-            # stopTestOnFail is true - log error but continue test
-            handle_assertion_error(ae, stopTestOnFail)
+            # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
+            utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
+            return f"✗ ASSERTION FAILED: {str(ae)}"
         else:
-            # stopTestOnFail is false or not set - raise TestExecutionError to stop the test
+            # stopTestOnFail is false  
             raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
+
 
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
@@ -877,6 +879,7 @@ def SETUP(setup_data, fixture_list : list, resources):
     error_message = ""
     error_type = None
     warnings = []
+    errors = []
     try:
         
         if fixture_list: #if there are static fixtures to save
@@ -885,9 +888,12 @@ def SETUP(setup_data, fixture_list : list, resources):
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
-            warning = execute_actions(action)
-            if warning:
-                warnings.append(warning)
+            result = execute_actions(action)
+            if result:
+                if "WARNING" in result:
+                    warnings.append(result)
+                elif "ASSERTION FAILED" in result:
+                    errors.append(result)
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             utils.log_to_file(f"✓ SETUP SUCCESSFUL")
@@ -906,11 +912,13 @@ def SETUP(setup_data, fixture_list : list, resources):
         error_type = type(e).__name__
         raise error.TestScriptError(error_message)
     finally:
-        result = "fail" if error_message else "pass"
+        result = "fail" if (error_message or errors) else "pass"
         if error_message:
             message = error_message
         else:
             message = "Setup successful"
+        if errors:
+            message += "\n" + "\n".join(errors)
         if warnings:
             message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
@@ -938,6 +946,7 @@ def TEST(test_data):
     error_message = ""
     error_type = None
     warnings = []
+    errors = []
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -948,21 +957,21 @@ def TEST(test_data):
       
         for action in test_data.get("action" , []):
             try:
-                warning = execute_actions(action)
-                if warning:
-                    warnings.append(warning)
+                result = execute_actions(action)
+                if result:
+                    if "WARNING" in result:
+                        warnings.append(result)
+                    elif "ASSERTION FAILED" in result:
+                        errors.append(result)
+                        failed = True
+                        error_type = "AssertionError"
 
             #per action in test
             except error.OperationError as oe:
                 raise error.TestScriptError("Test operation failed: ", oe)
 
-            except AssertionError as ae:
-                failed = True
-                error_message = f"Assertion failed: {str(ae)}"
-                error_type = "AssertionError"
             except error.TestExecutionError as e:
                 raise
-                # Continue with next test even if this one was stopped
 
     except error.TestExecutionError as e:
         utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
@@ -978,6 +987,8 @@ def TEST(test_data):
             message = "Test failed"
         else:
             message = "Test passed"
+        if errors:
+            message += "\n" + "\n".join(errors)
         if warnings:
             message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
@@ -1007,11 +1018,15 @@ def TEARDOWN(teardown_data : dict):
     error_message = ""
     error_type = None
     warnings = []
+    errors = []
     try:
         for action in teardown_data.get("action", []):
-            warning = execute_actions(action)
-            if warning:
-                warnings.append(warning)
+            result = execute_actions(action)
+            if result:
+                if "WARNING" in result:
+                    warnings.append(result)
+                elif "ASSERTION FAILED" in result:
+                    errors.append(result)
         
         autodelete()
         
@@ -1020,11 +1035,13 @@ def TEARDOWN(teardown_data : dict):
         error_type = "OperationError"
         raise error.TestScriptError("Teardown operation failed: " , oe)
     finally:
-        result = "fail" if error_message else "pass"
+        result = "fail" if (error_message or errors) else "pass"
         if error_message:
             message = error_message
         else:
             message = "Teardown successful"
+        if errors:
+            message += "\n" + "\n".join(errors)
         if warnings:
             message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
