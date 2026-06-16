@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import time
+from dataclasses import asdict
 
 import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.configuration_manager as conf_man
@@ -163,28 +164,13 @@ class ResultTracker:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"test_results_{timestamp}.json"
         filepath = Path(results_dir) / filename
-        results_dict = {
-            "timestamp": self.current_test_run.timestamp,
-            "testscript_results": []
-        }
+        results_dict = asdict(self.current_test_run)
+        results_dict["testscript_results"] = []  # wird später gefüllt
         for ts in self.current_test_run.testscript_results:
-            ts_dict = {
-                "name": ts.name,
-                "url": ts.url,
-                "outcome": ts.outcome,
-                "timestamp": ts.timestamp,
-                "outcomes": []
-            }
-            for outcome in ts.outcomes:
-                outcome_dict = {
-                    "class": outcome.class_type,
-                    "name": outcome.name,
-                    "time_spent": outcome.time_spent,
-                    "assertion_count": outcome.assertion_count,
-                    "result": outcome.result,
-                    "message": outcome.message,
-                    "error_type": outcome.error_type
-                }
+            ts_dict = asdict(ts)
+            ts_dict["outcomes"] = []  # wird später gefüllt
+            for outcome in ts.outcomes: 
+                outcome_dict = asdict(outcome)
                 ts_dict["outcomes"].append(outcome_dict)
             results_dict["testscript_results"].append(ts_dict)
         with open(filepath, "w", encoding="utf-8") as f:

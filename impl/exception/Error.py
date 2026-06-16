@@ -21,3 +21,7 @@ class UnresolvedReferenceError(Exception):
 class ReferenceResolutionError(Exception):
     """General reference parsing/resolution errors"""
     pass
+
+class WarningException(Exception):
+    """Exception for non-critical warnings that should not stop test execution"""
+    pass

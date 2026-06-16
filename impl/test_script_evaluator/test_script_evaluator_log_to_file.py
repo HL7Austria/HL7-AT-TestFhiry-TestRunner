@@ -537,11 +537,11 @@ def execute_actions(action: dict[str, Any]) -> None:
         if warningOnly:
             # Log warning but continue test
             utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
-            return f"⚠ WARNING: {str(ae)}"
+            raise error.WarningException(str(ae))
         elif stopTestOnFail:
             # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
             utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
-            return f"✗ ASSERTION FAILED: {str(ae)}"
+            raise error.TestExecutionError(f"Assertion failed: {str(ae)}")
         else:
             # stopTestOnFail is false  
             raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
@@ -888,12 +888,10 @@ def SETUP(setup_data, fixture_list : list, resources):
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
-            result = execute_actions(action)
-            if result:
-                if "WARNING" in result:
-                    warnings.append(result)
-                elif "ASSERTION FAILED" in result:
-                    errors.append(result)
+            try:
+                execute_actions(action)
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             utils.log_to_file(f"✓ SETUP SUCCESSFUL")
@@ -946,7 +944,6 @@ def TEST(test_data):
     error_message = ""
     error_type = None
     warnings = []
-    errors = []
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -957,19 +954,13 @@ def TEST(test_data):
       
         for action in test_data.get("action" , []):
             try:
-                result = execute_actions(action)
-                if result:
-                    if "WARNING" in result:
-                        warnings.append(result)
-                    elif "ASSERTION FAILED" in result:
-                        errors.append(result)
-                        failed = True
-                        error_type = "AssertionError"
+                execute_actions(action)
 
             #per action in test
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
             except error.OperationError as oe:
                 raise error.TestScriptError("Test operation failed: ", oe)
-
             except error.TestExecutionError as e:
                 raise
 
@@ -987,8 +978,6 @@ def TEST(test_data):
             message = "Test failed"
         else:
             message = "Test passed"
-        if errors:
-            message += "\n" + "\n".join(errors)
         if warnings:
             message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
@@ -1018,15 +1007,12 @@ def TEARDOWN(teardown_data : dict):
     error_message = ""
     error_type = None
     warnings = []
-    errors = []
     try:
         for action in teardown_data.get("action", []):
-            result = execute_actions(action)
-            if result:
-                if "WARNING" in result:
-                    warnings.append(result)
-                elif "ASSERTION FAILED" in result:
-                    errors.append(result)
+            try:
+                execute_actions(action)
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
         
         autodelete()
         
@@ -1035,13 +1021,11 @@ def TEARDOWN(teardown_data : dict):
         error_type = "OperationError"
         raise error.TestScriptError("Teardown operation failed: " , oe)
     finally:
-        result = "fail" if (error_message or errors) else "pass"
+        result = "fail" if error_message else "pass"
         if error_message:
             message = error_message
         else:
             message = "Teardown successful"
-        if errors:
-            message += "\n" + "\n".join(errors)
         if warnings:
             message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
@@ -1080,8 +1064,6 @@ def test_fhir_operations(testscript_data, testscript_path=""):
     testscript, resources = testscript_data
 
     tracker = rt.get_result_tracker()
-    if tracker.current_test_run is None:
-        tracker.initialize_test_run()
     testscript_name = testscript.get('name', testscript.get('id', 'Unnamed TestScript'))
     tracker.initialize_testscript(testscript_name, testscript.get("url", testscript_path or ""))
 

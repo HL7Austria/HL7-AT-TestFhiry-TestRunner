@@ -25,12 +25,6 @@ if __name__ == "__main__":
                 print(e)
     except Exception as e:
         print(str(e))
-        if tracker is not None:
-            try:
-                tracker.save_results()
-                tracker.emit_summary_to_log()
-            except Exception:
-                pass
         sys.exit(1)
     finally:
         if tracker is not None:
