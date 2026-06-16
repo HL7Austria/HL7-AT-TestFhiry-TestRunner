@@ -450,7 +450,7 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Test–Assert    | requestMethod       | Methode des zu empfangenden Requests         | –         | out of scope             |
 | Test–Assert    | requestURL       | URL des Requests          | –         | out of scope             |
 | Test–Assert    | response       | Response-Bezeichnung (okay, accepted usw.)          | –         | partiell             |
-| Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
+| Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | ✅             |
 
 
 ---
