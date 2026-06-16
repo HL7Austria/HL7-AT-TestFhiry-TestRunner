@@ -527,7 +527,6 @@ def execute_actions(action: dict[str, Any]) -> None:
         elif "assert" in action:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
-            warningOnly = assertion.get("warningOnly", False)
             execute_assertion(assertion)
             utils.log_to_file("✓ Assertion passed\n")
 
@@ -877,6 +876,7 @@ def SETUP(setup_data, fixture_list : list, resources):
     tracker.set_assertion_count(declared_asserts)
     error_message = ""
     error_type = None
+    warnings = []
     try:
         
         if fixture_list: #if there are static fixtures to save
@@ -885,7 +885,9 @@ def SETUP(setup_data, fixture_list : list, resources):
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
-            execute_actions(action)
+            warning = execute_actions(action)
+            if warning:
+                warnings.append(warning)
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             utils.log_to_file(f"✓ SETUP SUCCESSFUL")
@@ -905,7 +907,12 @@ def SETUP(setup_data, fixture_list : list, resources):
         raise error.TestScriptError(error_message)
     finally:
         result = "fail" if error_message else "pass"
-        message = error_message if error_message else "Setup successful"
+        if error_message:
+            message = error_message
+        else:
+            message = "Setup successful"
+        if warnings:
+            message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
 
 def TEST(test_data):
@@ -999,9 +1006,12 @@ def TEARDOWN(teardown_data : dict):
     tracker.set_assertion_count(declared_asserts)
     error_message = ""
     error_type = None
+    warnings = []
     try:
         for action in teardown_data.get("action", []):
-            execute_actions(action)
+            warning = execute_actions(action)
+            if warning:
+                warnings.append(warning)
         
         autodelete()
         
@@ -1011,7 +1021,12 @@ def TEARDOWN(teardown_data : dict):
         raise error.TestScriptError("Teardown operation failed: " , oe)
     finally:
         result = "fail" if error_message else "pass"
-        message = error_message if error_message else "Teardown successful"
+        if error_message:
+            message = error_message
+        else:
+            message = "Teardown successful"
+        if warnings:
+            message += "\n" + "\n".join(warnings)
         tracker.finish_outcome(result=result, message=message, error_type=error_type)
 
 def test_fhir_operations(testscript_data, testscript_path=""):

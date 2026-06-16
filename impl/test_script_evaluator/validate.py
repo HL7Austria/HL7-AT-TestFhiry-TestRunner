@@ -98,12 +98,14 @@ def list_val(value) -> Any:
 
     :param value: A value that may or may not be a list.
     :returns: The unwrapped scalar if the input is a single-element list,
-        or the original value unchanged.
+        or the original value unchanged (including empty lists).
     :raises TypeError: If the input is a list with more than one element.
     """
     if isinstance(value, list):
         if len(value) == 1:
             return value[0]
+        elif len(value) == 0:
+            return value
         else:
             raise TypeError("value to compare is not the Same type")
     else:
@@ -478,8 +480,7 @@ def eval_json_path(body : str, path:str):
     if isinstance(body,str):
         body = json.loads(body)
 
-    norm = utils.normalize_jsonpath(path)
-    jsonpath_expr = parse(norm)
+    jsonpath_expr = parse(path)
     return ([match.value for match in jsonpath_expr.find(body)])
 
 def check_duplicate_source_ids(testscript: dict[str, Any], fixture_list: list[dict]) -> None:
