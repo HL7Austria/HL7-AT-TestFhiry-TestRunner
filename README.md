@@ -254,7 +254,7 @@ Alle Abhängigkeiten sind in der `requirements.txt` definiert:
 ```
 requests~=2.32.3
 beautifulsoup4~=4.14.2
-fhirpathpy~=0.2.3
+fhirpathpy~=0.2.2
 jsonpath_ng~=1.7.0
 lxml~=5.4.0
 fhir.resources~=8.2.0
