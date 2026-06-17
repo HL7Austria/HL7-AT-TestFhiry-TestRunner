@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir --upgrade pip --trusted-host pypi.org --trusted-h
 COPY impl/ ./impl/
 
 # Create data directories
-RUN mkdir -p /data/Test_Scripts /data/Example_Instances /data/Profiles /data/Results
+RUN mkdir -p /data/Test_Scripts /data/Example_Instances /data/Profiles /data/Results /data/config
 
 # Set up volume for data
 VOLUME ["/data"]
