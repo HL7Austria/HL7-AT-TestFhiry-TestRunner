@@ -1,6 +1,7 @@
 import json
 import requests
 import re
+import time
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -13,6 +14,7 @@ import impl.test_script_evaluator.validate as validate
 import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.reference_parser as reference_parser
 import impl.test_script_evaluator.dependency_resolver as dependency_resolver
+import impl.test_script_evaluator.result_tracker as rt
 
 last_interaction = None
 
@@ -385,7 +387,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                         fix = fixt
 
                 if fix is None:
-                    raise error.TestScriptError(f"No fixture found by compareToSourceId {assertion.get("compareToSourceId")}")
+                    raise error.TestScriptError(f"No fixture found by compareToSourceId {assertion.get('compareToSourceId')}")
                 
                 if not ("value" in assertion): #  Ignored if "assert.value" is used.
                     compare_val = validate.eval_compareTo(fix, assertion)
@@ -429,12 +431,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
-            """
-            check if xml or json
-            xml --> regex? look what resource-Type (should be root)
-            json --> resourceType aus dict
-            """
-            raise NotImplementedError
+            validate.validate_resource(response, assertion.get("resource"), operator)
         
         elif "headerField" in assertion:
             #mit value
@@ -530,23 +527,25 @@ def execute_actions(action: dict[str, Any]) -> None:
         elif "assert" in action:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
-            warningOnly = assertion.get("warningOnly", False)
             execute_assertion(assertion)
             utils.log_to_file("✓ Assertion passed\n")
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
-        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail")
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", True)
 
         if warningOnly:
             # Log warning but continue test
             utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
+            raise error.WarningException(str(ae))
         elif stopTestOnFail:
-            # stopTestOnFail is true - log error but continue test
-            handle_assertion_error(ae, stopTestOnFail)
+            # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
+            utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
+            raise error.TestExecutionError(f"Assertion failed: {str(ae)}")
         else:
-            # stopTestOnFail is false or not set - raise TestExecutionError to stop the test
+            # stopTestOnFail is false  
             raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
+
 
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
@@ -872,7 +871,15 @@ def SETUP(setup_data, fixture_list : list, resources):
     :raises TestScriptError: If a setup operation fails
     """
     global FIXTURES
-
+    tracker = rt.get_result_tracker()
+    tracker.start_outcome("Setup", "Setup")
+    setup_actions = (setup_data or {}).get("action", []) or []
+    declared_asserts = sum(1 for a in setup_actions if "assert" in a)
+    tracker.set_assertion_count(declared_asserts)
+    error_message = ""
+    error_type = None
+    warnings = []
+    errors = []
     try:
         
         if fixture_list: #if there are static fixtures to save
@@ -881,18 +888,38 @@ def SETUP(setup_data, fixture_list : list, resources):
         utils.log_to_file(f"\n ----------- Starting Setup: -----------")
 
         for action in setup_data.get("action", []):
-            execute_actions(action)
+            try:
+                execute_actions(action)
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
         
         if isinstance(setup_data,dict): #if there was a setup other than autocreate
             utils.log_to_file(f"✓ SETUP SUCCESSFUL")
 
     except error.OperationError as oe:
+        error_message = "Setup operation failed: " + str(oe)
+        error_type = "OperationError"
         raise error.TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
     except error.TestExecutionError as teE:
+        error_message = f"Setup action failed: {str(teE)}"
+        error_type = "TestExecutionError"
         raise error.TestScriptError("Setup failed: " , teE) #stop the whole testscript
     
     except Exception as e: #usually only failure in autocreate
-        raise error.TestScriptError("✗ TEST SKIPPED: Failure to start TestScript: " +str(e))
+        error_message = f"Fixture initialization failed ({type(e).__name__}): {str(e)}"
+        error_type = type(e).__name__
+        raise error.TestScriptError(error_message)
+    finally:
+        result = "fail" if (error_message or errors) else "pass"
+        if error_message:
+            message = error_message
+        else:
+            message = "Setup successful"
+        if errors:
+            message += "\n" + "\n".join(errors)
+        if warnings:
+            message += "\n" + "\n".join(warnings)
+        tracker.finish_outcome(result=result, message=message, error_type=error_type)
 
 def TEST(test_data):
     """
@@ -914,6 +941,14 @@ def TEST(test_data):
     test_name = test_data.get('name', 'Unnamed Test')
     utils.log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
     failed = False
+    error_message = ""
+    error_type = None
+    warnings = []
+    tracker = rt.get_result_tracker()
+    tracker.start_outcome("Test", test_name)
+    test_actions = (test_data or {}).get("action", []) or []
+    declared_asserts = sum(1 for a in test_actions if "assert" in a)
+    tracker.set_assertion_count(declared_asserts)
 
     try:
       
@@ -922,20 +957,30 @@ def TEST(test_data):
                 execute_actions(action)
 
             #per action in test
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
             except error.OperationError as oe:
                 raise error.TestScriptError("Test operation failed: ", oe)
-
-            except AssertionError as ae:
-                failed = True
             except error.TestExecutionError as e:
                 raise
-                # Continue with next test even if this one was stopped
 
     except error.TestExecutionError as e:
         utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         failed = True
+        error_message = str(e)
+        error_type = "TestExecutionError"
         #test schould get stopped, and next test needs to start
     finally:
+        result = "fail" if (failed or error_message) else "pass"
+        if error_message:
+            message = error_message
+        elif failed:
+            message = "Test failed"
+        else:
+            message = "Test passed"
+        if warnings:
+            message += "\n" + "\n".join(warnings)
+        tracker.finish_outcome(result=result, message=message, error_type=error_type)
         if failed:
             utils.log_to_file(f"✗ TEST FAILED: {test_name}")
         else : 
@@ -954,16 +999,38 @@ def TEARDOWN(teardown_data : dict):
     :raises TestScriptError: If a teardown operation fails
         (wraps ``OperationError``).
     """
+    tracker = rt.get_result_tracker()
+    tracker.start_outcome("Teardown", "Teardown")
+    teardown_actions = (teardown_data or {}).get("action", []) or []
+    declared_asserts = sum(1 for a in teardown_actions if "assert" in a)
+    tracker.set_assertion_count(declared_asserts)
+    error_message = ""
+    error_type = None
+    warnings = []
     try:
         for action in teardown_data.get("action", []):
-            execute_actions(action)
+            try:
+                execute_actions(action)
+            except error.WarningException as we:
+                warnings.append(f"⚠ WARNING: {str(we)}")
         
         autodelete()
         
     except error.OperationError as oe:
+        error_message = "Teardown operation failed: " + str(oe)
+        error_type = "OperationError"
         raise error.TestScriptError("Teardown operation failed: " , oe)
+    finally:
+        result = "fail" if error_message else "pass"
+        if error_message:
+            message = error_message
+        else:
+            message = "Teardown successful"
+        if warnings:
+            message += "\n" + "\n".join(warnings)
+        tracker.finish_outcome(result=result, message=message, error_type=error_type)
 
-def test_fhir_operations(testscript_data):
+def test_fhir_operations(testscript_data, testscript_path=""):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
@@ -984,11 +1051,19 @@ def test_fhir_operations(testscript_data):
 
     if not conf_man.has_fhir_server():
         utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
+        tracker = rt.get_result_tracker()
+        ts_temp, _ = testscript_data
+        nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
+        tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))
+        tracker.start_outcome("Setup", "Skipped")
+        tracker.finish_outcome(result="skip", message="No FHIR server configured", error_type="Skipped")
         return
 
     testscript, resources = testscript_data
 
-
+    tracker = rt.get_result_tracker()
+    testscript_name = testscript.get('name', testscript.get('id', 'Unnamed TestScript'))
+    tracker.initialize_testscript(testscript_name, testscript.get("url", testscript_path or ""))
 
     try:
 
@@ -1030,13 +1105,26 @@ def test_fhir_operations(testscript_data):
     except error.TestScriptError as tse:
         utils.log_to_file("Severe error: " + str(tse))
         autodelete() #autodelete after everything went wrong
+        trk = rt.get_result_tracker()
+        if trk.current_outcome:
+            trk.finish_outcome(result="fail", message=f"TestScript aborted: {str(tse)}", error_type="TestScriptError")
+        if trk.current_testscript:
+            trk.current_testscript.outcome = "fail"
     except Exception as e:
         utils.log_to_file("TestScript stopped! " + str(e))
-
-    # Final summary --> find out how to save results from each test and log them
-
+        trk = rt.get_result_tracker()
+        if trk.current_outcome:
+            trk.finish_outcome(result="fail", message=f"Unexpected error ({type(e).__name__}): {str(e)}", error_type=type(e).__name__)
+        if trk.current_testscript:
+            trk.current_testscript.outcome = "fail"
+    finally:
+        trk = rt.get_result_tracker()
+        if trk.current_outcome:
+            trk.finish_outcome(result="fail", message="Execution interrupted unexpectedly - phase did not complete", error_type="Aborted")
+            
+        FIXTURES.clear() 
+        REQ_RESP.clear()
+        PROFILES.clear()
+        VARIABLES.clear()
         
-    FIXTURES.clear() 
-    REQ_RESP.clear()
-    PROFILES.clear()
-    VARIABLES.clear()
+    

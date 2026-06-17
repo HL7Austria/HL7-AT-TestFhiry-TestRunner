@@ -98,12 +98,14 @@ def list_val(value) -> Any:
 
     :param value: A value that may or may not be a list.
     :returns: The unwrapped scalar if the input is a single-element list,
-        or the original value unchanged.
+        or the original value unchanged (including empty lists).
     :raises TypeError: If the input is a list with more than one element.
     """
     if isinstance(value, list):
         if len(value) == 1:
             return value[0]
+        elif len(value) == 0:
+            return value
         else:
             raise TypeError("value to compare is not the Same type")
     else:
@@ -204,7 +206,24 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
     actual_status = str(response.status_code)
     utils.log_to_file(f"Asserting response {actual_status} {operator} {expected} (mapped to {expected_status})")
     validate_operator(operator, actual_status, expected_status)
+
+def validate_resource(response: Interaction, expected: str, operator: operator_type) -> None:
+    """Validates that the FHIR resource type of the response body matches the expected type.
+
+    :param response: The ``Interaction`` containing the server response body.
+    :param expected: The expected FHIR resource type name (e.g. "Bundle", "Patient").
+    :param operator: The comparison operator ("equals" or "notEquals").
+    :raises AssertionError: If the body is empty, cannot be parsed, has no discernible
+        resource type, or the type does not satisfy the operator check.
+    """
+    if not response or not response.body:
+        raise AssertionError("Response body is empty; cannot assert resource type.")
     
+    body = response.body
+    _, resource = utils.extract_fhir_meta(body)
+    utils.log_to_file(f"Asserting resource {resource} {operator} {expected}")
+    validate_operator(operator, resource, expected)
+
 def execute_validator(cmd : str) -> list[str]:
     """Runs a shell command and returns its stdout as a list of lines.
 
@@ -380,9 +399,11 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     :raises AssertionError: If the path-result does not satisfy the operator check.
     """
     path_type = utils.detect_path_type(path)
-    if response.header.get("Content-Type"):
-        if not path_type in response.header.get("Content-Type"): #check if pathtype is the same as content-type
-            raise AssertionError(f"Response-Body is not of type {path_type}!")
+    ct = (response.header.get("Content-Type") or "").lower()
+    if ct == "":
+        ct = utils.string_type(response.body)
+    if path_type not in ct:
+        raise AssertionError(f"Response-Body is not of type {path_type}!\n")
 
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
@@ -414,7 +435,11 @@ def eval_path(body, path:str):
 
     result = None
     path_type = utils.detect_path_type(path)
-    if body_type != path_type : 
+    if body_type == "json" and path_type == "json":
+        pass
+    elif body_type == "xml" and path_type == "xml":
+        pass
+    elif body_type != path_type:
         raise Exception(f"Path {path} is not compatible with body type {body_type}!")
 
     #check if xml or jsonpath
@@ -454,12 +479,6 @@ def eval_xpath(body : str, path:str):
     return result
 
 def eval_json_path(body : str, path:str):
-    """Evaluates a JSONPath expression against a JSON resource body.
-
-    :param body: The FHIR resource as a dict or JSON string.
-    :param path: The JSONPath expression to evaluate.
-    :returns: List of matched values.
-    """
     if isinstance(body,str):
         body = json.loads(body)
 

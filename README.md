@@ -14,6 +14,7 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
     - [Zielsetzung](#zielsetzung)
     - [Aktuelle Funktionalität](#aktuelle-funktionalität)
       - [Speicherung der TestScripts](#speicherung-der-testscripts)
+      - [Ergebnisspeicherung (Laufzeit)](#ergebnisspeicherung-laufzeit)
   - [Systemüberblick und Architektur](#systemüberblick-und-architektur)
     - [Aufbau](#aufbau)
     - [Verzeichnis-Zweck](#verzeichnis-zweck)
@@ -57,6 +58,42 @@ Konkret ermöglicht er:
 Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und können über `load_ig_from_internet.py` automatisiert heruntergeladen werden.
 
 * **Speicherort**: Die Scripts werden als **JSON-Dateien** im konfigurierten `path`-Verzeichnis unter `Test_Scripts/` abgelegt.
+
+#### Ergebnisspeicherung (Laufzeit)
+
+> **Hinweis:** Der Ergebnisspeicher befindet sich aktuell in einem frühen Stadium. Die generierte Ausgabe dient **ausschließlich zur Überprüfung, ob das Speichern korrekt funktioniert** – eine weiterführende Auswertung oder Darstellung ist noch nicht implementiert.
+
+> **Skip-Verhalten:** Laut FHIR R4-Spezifikation wird ein TestScript (oder einzelne Tests) geskippt, wenn die `metadata.capability`-Prüfung fehlschlägt – d.h. der Server erfüllt die im TestScript geforderten Capabilities nicht. **Dieser Mechanismus ist noch nicht implementiert.** Aktuell tritt `result="skip"` nur auf, wenn kein FHIR-Server konfiguriert ist.
+
+Während der Ausführung sammelt der `ResultTracker` (`result_tracker.py`) alle Testergebnisse zentral im Arbeitsspeicher und persistiert sie am Ende des Programmlaufs.
+
+**Wo wird gespeichert?**
+
+* **JSON-Datei**: Am Ende jedes Programmlaufs wird eine Datei `test_results_<Zeitstempel>.json` im `Results/`-Ordner abgelegt (Standard: `<path>/Results/`, konfigurierbar über `results_path`).
+* **Log-Datei**: Zusätzlich werden alle Ereignisse fortlaufend in die Log-Datei geschrieben (konfigurierter `log_file_path`).
+
+**Was wird gespeichert?**
+
+Pro TestScript-Ausführung wird ein Ergebnisobjekt mit folgenden Feldern angelegt:
+
+| Feld | Beschreibung |
+|------|--------------|
+| `name` | Name oder ID des TestScripts |
+| `url` | Kanonische URL des TestScripts (`TestScript.url`, `1..1` laut FHIR R4) |
+| `outcome` | Gesamtergebnis: `pass`, `fail` oder `skip` |
+| `outcomes` | Liste der Phasen-Ergebnisse (siehe unten) |
+
+Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Ergebnisobjekt:
+
+| Feld | Beschreibung |
+|------|--------------|
+| `class` | Phasentyp: `Setup`, `Test` oder `Teardown` |
+| `name` | Name der Phase (Testname bzw. `"Setup"`/`"Teardown"`) |
+| `time_spent` | Laufzeit der Phase in Sekunden |
+| `assertion_count` | Anzahl der deklarierten Assertions in der Phase |
+| `result` | Phasenergebnis: `pass`, `fail` oder `skip` |
+| `message` | Fehler- oder Erfolgsmeldung der Phase |
+| `error_type` | Fehlerklasse bei Fehlschlag (z.B. `AssertionError`, `TestExecutionError`) |
 
 ## Systemüberblick und Architektur
 
@@ -332,7 +369,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 
 ```json
 {
-  "url": "<url_to_IG>",
+  "url": "<url_zum_IG>",
   "path": "C:/Pfad/zum/Überordner",
   "testscripts": [
     "Test_Scripts/TestScript-beispiel.json"
@@ -413,7 +450,7 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Test–Assert    | requestMethod       | Methode des zu empfangenden Requests         | –         | out of scope             |
 | Test–Assert    | requestURL       | URL des Requests          | –         | out of scope             |
 | Test–Assert    | response       | Response-Bezeichnung (okay, accepted usw.)          | –         | partiell             |
-| Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | –             |
+| Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | ✅             |
 
 
 ---
