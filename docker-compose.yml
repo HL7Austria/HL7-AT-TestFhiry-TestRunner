@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  fhir-test-runner:
+    image: fhir-test-runner:latest
+    volumes:
+      - ./impl/samples/Test_Scripts:/data/Test_Scripts
+      - ./impl/samples/Example_Instances:/data/Example_Instances
+      - ./impl/samples/Profiles:/data/Profiles
+      - ./impl/config.json:/data/config/config.json
+      - ./Results:/data/Results
+      - ./validator_cli.jar:/data/validator_cli.jar
+    environment:
+      - PYTHONUNBUFFERED=1
+    network_mode: host
