@@ -40,8 +40,6 @@ def replacer(match):
     """
     global VARIABLES
     var_name = match.group(1)
-    print("Found variable:", var_name)  # if you want to see them
-
     for var in VARIABLES:
         if var.name == var_name:
             return eval_variable(var)
@@ -116,7 +114,6 @@ def execute_operation(operation: dict[str, Any]):
                     f"Unresolved references: {fixture.references}"
                 )
 
-        utils.log_to_file(f"Executing: {operation_type.upper()} {url}")
         match (method):
             case "get":
                 response = requests.get(url,headers=headers)
@@ -167,7 +164,6 @@ def execute_operation(operation: dict[str, Any]):
                 else:
                     # ID ist der letzte Teil
                     saved_resource_id = parts[-1]
-                utils.log_to_file(f"ID from Location header: {saved_resource_id}")
             else:
                 try:
                     saved_resource_id = response.json().get("id")
@@ -178,11 +174,8 @@ def execute_operation(operation: dict[str, Any]):
                     saved_resource_id = id_el.get('value', '') if id_el is not None else ''
                 if not saved_resource_id:
                     raise ValueError("No ID found in response or Location header")
-            utils.log_to_file(f"Accessible at: {url}/{saved_resource_id}")
             if isinstance(fixture, Fixture):
                 fixture.server_id = saved_resource_id
-
-        utils.log_to_file(f"Response: {response.status_code}")
     except Exception as e:
         raise error.TestScriptError(e)
     
@@ -477,7 +470,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             raise error.TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
                 
         elif assertion.get("direction") == "request" or "requestMethod" in assertion or "requestUrl" in assertion:
-            utils.log_to_file("direction request out of scope")
+            raise error.TestScriptError("Direction request out of scope")
 
     except AssertionError as e:
         raise
@@ -528,7 +521,6 @@ def execute_actions(action: dict[str, Any]) -> None:
             assertion = action["assert"]
             stopTestOnFail = assertion.get("stopTestOnFail")
             execute_assertion(assertion)
-            utils.log_to_file("✓ Assertion passed\n")
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
@@ -536,15 +528,12 @@ def execute_actions(action: dict[str, Any]) -> None:
 
         if warningOnly:
             # Log warning but continue test
-            utils.log_to_file(f"⚠ WARNING (warningOnly=true): {str(ae)}\n")
             raise error.WarningException(str(ae))
         elif stopTestOnFail:
             # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
-            utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
             raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
         else:
             # stopTestOnFail is false  
-            utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
             raise ae
 
 
@@ -839,7 +828,6 @@ def handle_assertion_error(e, stop_test_on_fail : bool):
     :raises TestExecutionError: If ``stop_test_on_fail`` is ``False``,
         indicating the test must not continue.
     """
-    utils.log_to_file(f"✗ ASSERTION FAILED: {str(e)}")
     if stop_test_on_fail == False:
         raise error.TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
     return False  # Test failed, but continuing allowed
@@ -885,18 +873,12 @@ def SETUP(setup_data, fixture_list : list, resources):
         
         if fixture_list: #if there are static fixtures to save
             save_fixtures(resources, fixture_list)
-
-        utils.log_to_file(f"\n ----------- Starting Setup: -----------")
-
         for action in setup_data.get("action", []):
             try:
                 execute_actions(action)
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
         
-        if isinstance(setup_data,dict): #if there was a setup other than autocreate
-            utils.log_to_file(f"✓ SETUP SUCCESSFUL")
-
     except error.OperationError as oe:
         error_message = "Setup operation failed: " + str(oe)
         error_type = "OperationError"
@@ -939,7 +921,6 @@ def TEST(test_data):
     #Test Capabilities --> if Error --> skip test --> maybe in main
 
     test_name = test_data.get('name', 'Unnamed Test')
-    utils.log_to_file(f"\n ----------- Starting Test: {test_name} -----------")
     failed = False
     error_message = ""
     error_type = None
@@ -971,12 +952,10 @@ def TEST(test_data):
                 raise
 
     except AssertionError as e:
-        utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         failed = True
         error_message = str(e)
         error_type = type(e).__name__
     except error.TestExecutionError as e:
-        utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         failed = True
         error_message = str(e)
         error_type = type(e).__name__
@@ -997,11 +976,7 @@ def TEST(test_data):
             messages.append("Test passed")
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
-        if failed:
-            utils.log_to_file(f"✗ TEST FAILED: {test_name}")
-        else : 
-            utils.log_to_file(f"✓ TEST PASSED: {test_name}")
-        
+    
 def TEARDOWN(teardown_data : dict):
     """
     Executes the **teardown** phase of a FHIR TestScript.
@@ -1066,7 +1041,6 @@ def test_fhir_operations(testscript_data, testscript_path=""):
     FHIR_SERVER_BASE = conf_man.get_fhir_server()
 
     if not conf_man.has_fhir_server():
-        utils.log_to_file("✗ TEST SKIPPED: No FHIR server configured")
         tracker = rt.get_result_tracker()
         ts_temp, _ = testscript_data
         nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
@@ -1087,12 +1061,7 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         fixture_list = utils.get_fixture(testscript)
         validate.check_duplicate_source_ids(testscript, fixture_list)
 
-        #validateTS(testscript) #see if the TestScript is valid
-        #print("testScript is valid!") #debug message
-        #--> comment so that the execution of the Tests isn't taking as much time
-
-        #test capability
-        #--> find out how important origin and destnation are
+        #validate.validateTS(testscript) #see if the TestScript is valid
 
         variable_list = utils.get_variables(testscript)
         
@@ -1119,7 +1088,6 @@ def test_fhir_operations(testscript_data, testscript_path=""):
             TEARDOWN({})
 
     except error.TestScriptError as tse:
-        utils.log_to_file("Severe error: " + str(tse))
         autodelete() #autodelete after everything went wrong
         trk = rt.get_result_tracker()
         if trk.current_outcome:
@@ -1127,7 +1095,6 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
     except Exception as e:
-        utils.log_to_file("TestScript stopped! " + str(e))
         trk = rt.get_result_tracker()
         if trk.current_outcome:
             trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
