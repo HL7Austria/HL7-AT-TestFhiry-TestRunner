@@ -541,10 +541,11 @@ def execute_actions(action: dict[str, Any]) -> None:
         elif stopTestOnFail:
             # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
             utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
-            raise error.TestExecutionError(f"Assertion failed: {str(ae)}")
+            raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
         else:
             # stopTestOnFail is false  
-            raise error.TestExecutionError(f"Test stopped due to assertion failure: {str(ae)}")
+            utils.log_to_file(f"✗ ASSERTION FAILED: {str(ae)}\n")
+            raise ae
 
 
     except Exception as e:
@@ -911,15 +912,14 @@ def SETUP(setup_data, fixture_list : list, resources):
         raise error.TestScriptError(error_message)
     finally:
         result = "fail" if (error_message or errors) else "pass"
+        messages = []
         if error_message:
-            message = error_message
+            messages.append(error_message)
         else:
-            message = "Setup successful"
-        if errors:
-            message += "\n" + "\n".join(errors)
-        if warnings:
-            message += "\n" + "\n".join(warnings)
-        tracker.finish_outcome(result=result, message=message, error_type=error_type)
+            messages.append("Setup successful")
+        messages.extend(errors)
+        messages.extend(warnings)
+        tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
 def TEST(test_data):
     """
@@ -944,6 +944,7 @@ def TEST(test_data):
     error_message = ""
     error_type = None
     warnings = []
+    errors = []
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -959,28 +960,43 @@ def TEST(test_data):
             #per action in test
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
+            except error.AssertionFailedContinueError as e:
+                failed = True
+                errors.append(str(e))
+            except AssertionError as e:
+                raise
             except error.OperationError as oe:
                 raise error.TestScriptError("Test operation failed: ", oe)
             except error.TestExecutionError as e:
                 raise
 
+    except AssertionError as e:
+        utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
+        failed = True
+        error_message = str(e)
+        error_type = type(e).__name__
     except error.TestExecutionError as e:
         utils.log_to_file(f"✗ TEST STOPPED: {test_name} - {str(e)}")
         failed = True
         error_message = str(e)
-        error_type = "TestExecutionError"
+        error_type = type(e).__name__
         #test schould get stopped, and next test needs to start
     finally:
         result = "fail" if (failed or error_message) else "pass"
+        messages = []
         if error_message:
-            message = error_message
+            messages.append(error_message)
+            if errors:
+                messages.extend(errors)
+        elif errors:
+            messages.extend(errors)
+            error_type = "AssertionError"
         elif failed:
-            message = "Test failed"
+            messages.append("Test failed")
         else:
-            message = "Test passed"
-        if warnings:
-            message += "\n" + "\n".join(warnings)
-        tracker.finish_outcome(result=result, message=message, error_type=error_type)
+            messages.append("Test passed")
+        messages.extend(warnings)
+        tracker.finish_outcome(result=result, message=messages, error_type=error_type)
         if failed:
             utils.log_to_file(f"✗ TEST FAILED: {test_name}")
         else : 
@@ -1022,13 +1038,13 @@ def TEARDOWN(teardown_data : dict):
         raise error.TestScriptError("Teardown operation failed: " , oe)
     finally:
         result = "fail" if error_message else "pass"
+        messages = []
         if error_message:
-            message = error_message
+            messages.append(error_message)
         else:
-            message = "Teardown successful"
-        if warnings:
-            message += "\n" + "\n".join(warnings)
-        tracker.finish_outcome(result=result, message=message, error_type=error_type)
+            messages.append("Teardown successful")
+        messages.extend(warnings)
+        tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
 def test_fhir_operations(testscript_data, testscript_path=""):
     """
@@ -1056,7 +1072,7 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
         tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))
         tracker.start_outcome("Setup", "Skipped")
-        tracker.finish_outcome(result="skip", message="No FHIR server configured", error_type="Skipped")
+        tracker.finish_outcome(result="skip", message=["No FHIR server configured"], error_type="Skipped")
         return
 
     testscript, resources = testscript_data
@@ -1107,20 +1123,20 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         autodelete() #autodelete after everything went wrong
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=f"TestScript aborted: {str(tse)}", error_type="TestScriptError")
+            trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
     except Exception as e:
         utils.log_to_file("TestScript stopped! " + str(e))
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=f"Unexpected error ({type(e).__name__}): {str(e)}", error_type=type(e).__name__)
+            trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message="Execution interrupted unexpectedly - phase did not complete", error_type="Aborted")
+            trk.finish_outcome(result="fail", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
             
         FIXTURES.clear() 
         REQ_RESP.clear()

@@ -6,6 +6,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import (
     test_fhir_operations,
 )
 import impl.test_script_evaluator.result_tracker as rt
+import impl.test_script_evaluator.xml_logger as logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FHIR TestScript Runner")
@@ -31,5 +32,6 @@ if __name__ == "__main__":
             try:
                 tracker.save_results()
                 tracker.emit_summary_to_log()
+                logger.fill_and_save(tracker)
             except Exception:
                 pass

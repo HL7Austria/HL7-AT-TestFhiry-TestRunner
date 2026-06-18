@@ -25,3 +25,7 @@ class ReferenceResolutionError(Exception):
 class WarningException(Exception):
     """Exception for non-critical warnings that should not stop test execution"""
     pass
+
+class AssertionFailedContinueError(Exception):
+    """Raised when an assertion fails but stopTestOnFail is false — execution continues"""
+    pass

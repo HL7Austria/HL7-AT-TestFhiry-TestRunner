@@ -22,7 +22,7 @@ class TestOutcome:
     time_spent: float
     assertion_count: int
     result: str
-    message: str
+    message: List[str]
     error_type: Optional[str] = None
 
 @dataclass
@@ -35,6 +35,7 @@ class TestScriptResult:
     url: str
     outcome: str
     timestamp: str = ""
+    total_time: float = 0.0
     outcomes: List[TestOutcome] = field(default_factory=list)
 
 @dataclass
@@ -44,6 +45,7 @@ class TestRunResults:
     Holds the run timestamp and a list of per-TestScript results.
     """
     timestamp: str
+    total_time: float = 0.0
     testscript_results: List[TestScriptResult] = field(default_factory=list)
 
 class ResultTracker:
@@ -114,13 +116,16 @@ class ResultTracker:
         if result is None:
             result = "pass"
         if message is None:
-            message = ""
+            message = []
         if self.current_outcome and self.current_testscript:
             self.current_outcome.time_spent = time_spent
             self.current_outcome.result = result
             self.current_outcome.message = message
             self.current_outcome.error_type = error_type
             self.current_testscript.outcomes.append(self.current_outcome)
+            self.current_testscript.total_time += time_spent
+            if self.current_test_run:
+                self.current_test_run.total_time += time_spent
             if result == "fail":
                 self.current_testscript.outcome = "fail"
             elif result == "skip" and self.current_testscript.outcome != "fail":
@@ -195,7 +200,7 @@ class ResultTracker:
             for o in ts.outcomes:
                 utils.log_to_file(f"  {o.class_type} [{o.name}]: {o.result} ({o.time_spent:.3f}s, {o.assertion_count} assertions)")
                 if o.message:
-                    utils.log_to_file(f"    message: {o.message}")
+                    utils.log_to_file(f"    message: {' | '.join(o.message)}")
         utils.log_to_file("======================================\n")
 
 _result_tracker = None

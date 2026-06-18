@@ -156,7 +156,10 @@ def validate_expression(fixture : Interaction | Fixture, expression : str, opera
         if len(value) == 1:
             value = value[0]
     utils.log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
-    validate_operator(operator, res, value)
+    try:
+        validate_operator(operator, res, value)
+    except AssertionError as ae:
+        raise AssertionError(f"[expression: {expression}] {ae}") from ae
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
     """Validates the HTTP status code of a server response.

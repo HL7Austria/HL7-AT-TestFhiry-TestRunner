@@ -1,61 +1,66 @@
 from impl.test_script_evaluator.result_tracker import ResultTracker
 from bs4 import BeautifulSoup
+from impl.test_script_evaluator.utils import string_type
+from datetime import datetime
+from pathlib import Path
+from xml.dom.minidom import parseString
+import impl.test_script_evaluator.configuration_manager as conf_man
 def construct_body(tracker: ResultTracker) -> str:
     """
-     Construct the body recursivly?? or what exactly do I need to writ where?
+    Constructs the Body of a JUnit style xml from a ResultTracker object.
+    The XML is a very basic Junit style xml as any added info is simply ignored.
 
-     <?xml>
-     <testsuites time="soundso">
-        <testsuite name="TestScript" classname="TestScript" time="">
-            <testcase name="soundso" classname="phase" assertions="" time="">
-                <system-out> INFO </system-out>
-                <skipped message="jkn"/> --> wenn ein test als skip geflagged wird
-                <failure message="errormessage" type="Errortype">
-                    stack trace?? vlt wenns mehrere failure gibt, sollte es eig. nd bei direkten failure oder?? vlt. bei stoptestonfail
-                </failure>
-                <error message="wäre glb ich TesScriptError" type=""/>
-    "testscript_results": [
-    {
-      "name": "HL7\u00ae AT Core TestScript - Patient Update",
-      "url": "http://hl7.at/fhir/HL7ATCoreProfiles/4.0.1/TestScript/testscript-patient-update-at-core",
-      "outcome": "pass",
-      "timestamp": "2026-06-17T11:10:35.103368",
-      "outcomes": [
-        {
-          "class_type": "Setup",
-          "name": "Setup",
-          "time_spent": 0.20143604278564453,
-          "assertion_count": 0,
-          "result": "pass",
-          "message": "Setup successful",
-          "error_type": null
-        },
-        {
+    :param tracker: filled Resulttracker
+    
+    :raises Exception: If the tracker is empty
     """
+    if not tracker:
+        raise Exception("tracker needs to be filled before saving as Junit XML")
     result = f"""<?xml version="1.0" encoding="UTF-8"?>
-    <testsuites time="{tracker.current_test_run.timestamp}">"""
+    <testsuites time="{tracker.current_test_run.total_time}">"""
     for testscrpt in tracker.current_test_run.testscript_results:
-        result += f"""<testsuit name="{testscrpt.name}" classname="TestScript" time="{testscrpt.timestamp}">\n"""
+        result += f"""<testsuit name="{testscrpt.name}" classname="TestScript" time="{testscrpt.total_time}">"""
         for phase in testscrpt.outcomes:
-            result += f"""<testcase name="{phase.name}" classname="{phase.class_type}" assertions="{phase.assertion_count}" time="{phase.time_spent}">\n"""
+            result += f"""<testcase name="{phase.name}" classname="{phase.class_type}" assertions="{phase.assertion_count}" time="{phase.time_spent}">"""
+            first_msg = phase.message[0] if phase.message else ""
+            extra_msgs = phase.message[1:]
             if phase.result == "fail":
-                if phase.error_type == "TestScriptError":
-                    result += f"""<error message="{phase.message}" type="{phase.error_type}"/>\n"""
+                tag = "error" if phase.error_type == "TestScriptError" else "failure"
+                if extra_msgs:
+                    result += f"""<{tag} message="{first_msg}" type="{phase.error_type}">"""
+                    result += f"""<system-out>{chr(10).join(extra_msgs)}</system-out>"""
+                    result += f"""</{tag}>"""
                 else:
-                    result += f"""<failure message="{phase.message}" type="{phase.error_type}"/>\n"""
+                    result += f"""<{tag} message="{first_msg}" type="{phase.error_type}"/>"""
             elif phase.result == "skip":
-                result += f"""<skipped message="{phase.message}"/>\n"""
+                result += f"""<skipped message="{first_msg}"/>"""
             else:
-                result += f"""<system-out>{phase.message}</system-out>\n"""
-            result+= "</testcase>\n"
-        result +="</testsuit> \n"
+                result += f"""<system-out>{chr(10).join(phase.message)}</system-out>"""
+            result += "</testcase>"
+        result +="</testsuit> "
     result+="</testsuites>"
+    return result
 
-    bs = BeautifulSoup(result, "xml")
-    print(bs.prettify())
+def fill_and_save(tracker: ResultTracker):
+    results_dir = None
+    try:
+        cm = conf_man.get_config_manager()
+        if cm is not None and getattr(cm, "results_dir", None):
+            results_dir = cm.results_dir
+    except Exception:
+        pass
+    if results_dir is None:
+        base = Path(__file__).resolve().parent.parent
+        results_dir = base / "Results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xml"
+    filepath = Path(results_dir) / filename
+    body = construct_body(tracker)
+    pretty_body = parseString(body.encode("utf-8")).toprettyxml(indent="    ", encoding="UTF-8").decode("utf-8")
+    save_xml(pretty_body, str(filepath))
 
 def save_xml(body: str, filepath: str):
-    """saves an xml-file with body"""
+    """saves xml file with body as content"""
 
     if not filepath.endswith(".xml"):
          filepath += ".xml"
