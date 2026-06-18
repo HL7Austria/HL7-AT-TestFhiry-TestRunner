@@ -162,8 +162,7 @@ class ResultTracker:
             base = Path(__file__).resolve().parent.parent
             results_dir = base / "Results"
             results_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"test_results_{timestamp}.json"
+        filename = f"test_results_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json"
         filepath = Path(results_dir) / filename
         results_dict = asdict(self.current_test_run)
         results_dict["testscript_results"] = []  # wird später gefüllt
