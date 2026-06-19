@@ -186,22 +186,6 @@ class ResultTracker:
         except Exception as e:
             raise error.TestScriptError(f"Failed to write results file: {filepath} - {e}")
     
-    def emit_summary_to_log(self):
-        """Writes a human-readable summary of the entire test run to the log file (and console).
-
-        Includes per-TestScript outcomes and per-phase details with timing and assertion counts.
-        Does nothing if there is no current test run.
-        """
-        if not self.current_test_run:
-            return
-        utils.log_to_file("\n=========== Test Run Summary ===========")
-        for ts in self.current_test_run.testscript_results:
-            utils.log_to_file(f"TestScript: {ts.name} - {ts.outcome}")
-            for o in ts.outcomes:
-                utils.log_to_file(f"  {o.class_type} [{o.name}]: {o.result} ({o.time_spent:.3f}s, {o.assertion_count} assertions)")
-                if o.message:
-                    utils.log_to_file(f"    message: {' | '.join(o.message)}")
-        utils.log_to_file("======================================\n")
 
 _result_tracker = None
 

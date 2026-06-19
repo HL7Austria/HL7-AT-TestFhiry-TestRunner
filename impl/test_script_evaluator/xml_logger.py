@@ -19,7 +19,7 @@ def construct_body(tracker: ResultTracker) -> str:
     result = f"""<?xml version="1.0" encoding="UTF-8"?>
     <testsuites time="{tracker.current_test_run.total_time}">"""
     for testscrpt in tracker.current_test_run.testscript_results:
-        result += f"""<testsuit name="{testscrpt.name}" classname="TestScript" time="{testscrpt.total_time}">"""
+        result += f"""<testsuite name="{testscrpt.name}" classname="TestScript" time="{testscrpt.total_time}">"""
         for phase in testscrpt.outcomes:
             result += f"""<testcase name="{phase.name}" classname="{phase.class_type}" assertions="{phase.assertion_count}" time="{phase.time_spent}">"""
             first_msg = phase.message[0] if phase.message else ""
@@ -37,7 +37,7 @@ def construct_body(tracker: ResultTracker) -> str:
             else:
                 result += f"""<system-out>{chr(10).join(phase.message)}</system-out>"""
             result += "</testcase>"
-        result +="</testsuit> "
+        result +="</testsuite> "
     result+="</testsuites>"
     return result
 

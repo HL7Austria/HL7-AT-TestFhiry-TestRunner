@@ -122,21 +122,6 @@ class ConfigManager:
         """
         return self._log_file_path
 
-    def init_logging(self):
-        """
-        Initializes the Results directory and log file based on config path.
-        Creates the directory and an initial log file.
-        """
-        if self.results_path:
-            self._results_dir = Path(self.results_path) / "Results"
-        else:
-            self._results_dir = Path(self.path) / "Results"
-        self._results_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_filename = f"test_results_{timestamp}.txt"
-        self._log_file_path = os.path.abspath(self._results_dir / log_filename)
-        with open(self._log_file_path, "w", encoding="utf-8") as f:
-            f.write(f"FHIR Test Log - {datetime.now()}\n\n")
 
     def has_fhir_server(self):
         """

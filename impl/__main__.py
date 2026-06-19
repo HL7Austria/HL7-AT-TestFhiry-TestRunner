@@ -15,7 +15,6 @@ if __name__ == "__main__":
     tracker = None
     try:
         init_config_manager(args.config)
-        get_config_manager().init_logging()
         tracker = rt.init_result_tracker()
         tracker.initialize_test_run()
         for testscript_path, resource_path in get_testscript_pairs():
@@ -30,8 +29,7 @@ if __name__ == "__main__":
     finally:
         if tracker is not None:
             try:
-                tracker.save_results()
-                tracker.emit_summary_to_log()
                 logger.fill_and_save(tracker)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Fehler beim Speichern der XML-Datei: {e}")
+                raise
