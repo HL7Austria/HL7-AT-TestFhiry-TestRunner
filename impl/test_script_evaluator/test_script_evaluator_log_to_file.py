@@ -1,7 +1,6 @@
 import json
 import requests
 import re
-import time
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -1094,12 +1093,24 @@ def test_fhir_operations(testscript_data, testscript_path=""):
             trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
+        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
+        for test in testscript.get("test", []):
+            test_name = test.get('name', 'Unnamed Test')
+            if test_name not in already_run:
+                trk.start_outcome("Test", test_name)
+                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
     except Exception as e:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
             trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
+        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
+        for test in testscript.get("test", []):
+            test_name = test.get('name', 'Unnamed Test')
+            if test_name not in already_run:
+                trk.start_outcome("Test", test_name)
+                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:

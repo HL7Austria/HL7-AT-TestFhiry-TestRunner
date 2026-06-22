@@ -143,7 +143,6 @@ class ConfigManager:
         """
 
         if not self.path or not Path(self.path).is_dir():
-            utils.log_to_file(f"Test konnte nicht gestartet werden: 'path' ist leer oder existiert nicht ({self.path!r})")
             return []
 
         TESTSCRIPT_FOLDER = str(Path(self.path) / "Test_Scripts")
@@ -189,21 +188,19 @@ class ConfigManager:
                 result.append((ts_path, fixture_list))
 
             except FileNotFoundError:
-                utils.log_to_file(f"TestScript not found: {ts_path}")
+                raise
             except json.decoder.JSONDecodeError as e:
-
                 message = (
                     "INVALID JSON\n"
                     f"File: {ts_path}\n"
                     f"Error: {e.msg}\n"
                     f"Line: {e.lineno}, Column: {e.colno}\n"
                 )
+                raise json.decoder.JSONDecodeError(message)
 
-                utils.log_to_file(message)
 
         if not result:
-            utils.log_to_file("No valid TestScripts found")
-
+            raise FileExistsError("No valid TestScripts found!")
         return result
 
 

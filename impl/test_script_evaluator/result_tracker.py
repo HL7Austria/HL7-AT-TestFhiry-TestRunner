@@ -22,7 +22,7 @@ class TestOutcome:
     time_spent: float
     assertion_count: int
     result: str
-    message: List[str]
+    messages: List[str]
     error_type: Optional[str] = None
 
 @dataclass
@@ -91,7 +91,7 @@ class ResultTracker:
         self.current_outcome = TestOutcome(
             class_type=class_type, name=name,
             time_spent=0.0, assertion_count=0,
-            result="pass", message=""
+            result="pass", messages=[]
         )
         self._phase_start_time = time.time()
     
@@ -167,7 +167,7 @@ class ResultTracker:
             base = Path(__file__).resolve().parent.parent
             results_dir = base / "Results"
             results_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"test_results_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json"
+        filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
         filepath = Path(results_dir) / filename
         results_dict = asdict(self.current_test_run)
         results_dict["testscript_results"] = []  # wird später gefüllt
