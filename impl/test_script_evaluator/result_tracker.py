@@ -157,12 +157,9 @@ class ResultTracker:
         if not self.current_test_run:
             return None
         results_dir = None
-        try:
-            cm = conf_man.get_config_manager()
-            if cm is not None and cm.results_dir:
-                results_dir = cm.results_dir
-        except Exception:
-            pass
+        cm = conf_man.get_config_manager()
+        results_dir = cm.results_dir
+
         if results_dir is None:
             base = Path(__file__).resolve().parent.parent
             results_dir = base / "Results"

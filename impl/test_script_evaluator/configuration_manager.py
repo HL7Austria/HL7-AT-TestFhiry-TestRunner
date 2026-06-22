@@ -182,8 +182,6 @@ class ConfigManager:
         if not result:
             raise FileExistsError("No valid TestScripts found!")
         return result
-
-
 # Singleton instance for easy import
 _config_manager = None
 
@@ -193,6 +191,7 @@ def get_config_manager() -> ConfigManager:
     Gets global ConfigManager instance.
     :return: ConfigManager instance.
     """
+    assert _config_manager is not None
     return _config_manager
 
 def init_config_manager(config_path):
