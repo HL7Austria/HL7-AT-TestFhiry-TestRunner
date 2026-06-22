@@ -159,7 +159,7 @@ class ResultTracker:
         results_dir = None
         try:
             cm = conf_man.get_config_manager()
-            if cm is not None and getattr(cm, "results_dir", None):
+            if cm is not None and cm.results_dir:
                 results_dir = cm.results_dir
         except Exception:
             pass
