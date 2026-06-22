@@ -524,6 +524,12 @@ def execute_actions(action: dict[str, Any]) -> None:
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
         stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", True)
+        # Convert string values to boolean for robust comparison
+        if isinstance(warningOnly, str):
+            warningOnly = warningOnly.lower() == "true"
+        if isinstance(stopTestOnFail, str):
+            stopTestOnFail = stopTestOnFail.lower() == "true"
+
 
         if warningOnly:
             # Log warning but continue test
@@ -532,7 +538,7 @@ def execute_actions(action: dict[str, Any]) -> None:
             # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
             raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
         else:
-            # stopTestOnFail is false  
+            # stopTestOnFail is false
             raise ae
 
 

@@ -33,14 +33,13 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
             extra_msgs = phase.message[1:]
             if phase.result == "fail":
                 if phase.error_type == "TestScriptError":
-                    err = Error(message=first_msg, type_=phase.error_type)
+                    case.result = [Error(message=first_msg, type_=phase.error_type)]
                 else:
-                    err = Failure(message=first_msg, type_=phase.error_type)
+                    case.result = [Failure(message=first_msg, type_=phase.error_type)]
                 if extra_msgs:
-                    err._elem.text = "\n".join(extra_msgs)
-                case.result.append(err)
+                    case.result[0]._elem.text = "\n".join(extra_msgs)
             elif phase.result == "skip":
-                case.result.append(Skipped(message=first_msg))
+                case.result = [Skipped(message=first_msg)]
             else:
                 case.system_out = "\n".join(phase.message) if phase.message else ""
             suite.add_testcase(case)
