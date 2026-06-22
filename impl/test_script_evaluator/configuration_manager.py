@@ -21,8 +21,7 @@ class ConfigManager:
         self.config_path = Path(config_path)
 
         self.config = self._load_config()
-        self._results_dir = None
-        self._log_file_path = None
+        
 
     def _load_config(self):
         """
@@ -103,25 +102,6 @@ class ConfigManager:
         :return: The configuration value or default.
         """
         return self.config.get(key, default)
-
-    @property
-    def results_dir(self):
-        """
-        Gets the Results directory path (parent of config path).
-
-        :return: Path to the Results directory.
-        """
-        return self._results_dir
-
-    @property
-    def log_file_path(self):
-        """
-        Gets the log file path inside the Results directory.
-
-        :return: Absolute path string to the log file.
-        """
-        return self._log_file_path
-
 
     def has_fhir_server(self):
         """

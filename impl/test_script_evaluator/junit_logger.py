@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 from xml.dom.minidom import parseString
 import impl.test_script_evaluator.configuration_manager as conf_man
-import io
 def construct_junit(tracker: ResultTracker) -> JUnitXml:
     """
     Constructs the Body of a JUnit style xml from a ResultTracker object.
@@ -50,16 +49,23 @@ def fill_and_save(tracker: ResultTracker):
     results_dir = None
     try:
         cm = conf_man.get_config_manager()
-        if cm is not None and getattr(cm, "results_dir", None):
-            results_dir = cm.results_dir
+        if cm is not None and getattr(cm, "results_path", None):
+            results_dir = cm.results_path
     except Exception:
         pass
     if results_dir is None:
-        base = Path(__file__).resolve().parent.parent
-        results_dir = base / "Results"
+        cm = conf_man.get_config_manager()
+        if cm is not None and getattr(cm, "path", None):
+            results_dir = Path(cm.path) / "Result"
+        else:
+            base = Path(__file__).resolve().parent.parent
+            results_dir = base / "Results"
         results_dir.mkdir(parents=True, exist_ok=True)
+    
+    junit_dir = Path(results_dir) / "Junit"
+    junit_dir.mkdir(parents=True, exist_ok=True)
     filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xml"
-    filepath = Path(results_dir) / filename
+    filepath = junit_dir / filename
     junit = construct_junit(tracker)
     
     save_xml(junit, str(filepath))

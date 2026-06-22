@@ -67,7 +67,7 @@ Während der Ausführung sammelt der `ResultTracker` (`result_tracker.py`) alle 
 
 **Wo wird gespeichert?**
 
-* **JUnit-Datei**: Am Ende jedes Programmlaufs wird eine Datei `test_results_<Zeitstempel>.xml` im `Results/`-Ordner abgelegt (Standard: `<path>/Results/`, konfigurierbar über `results_path`).
+* **JUnit-Datei**: Am Ende jedes Programmlaufs wird eine JUnit-style XML-Datei `test_results_<Zeitstempel>.xml` im `Junit/`-Ordner abgelegt (Standard: `<path>/Result/Junit/`, konfigurierbar über `results_path`).
 
 **Was wird gespeichert?**
 
@@ -382,7 +382,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 | `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
 | `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
 | `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
-| `results_path`  | Nein    | Pfad, in dem der `Results/`-Ordner mit den erzeugten JUnit-Dateien erstellt wird. Wenn leer, wird `Results/` im `path`-Verzeichnis angelegt.                                                  |
+| `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
 
 > **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
 > ```
@@ -393,7 +393,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 > └── validator_cli.jar
 > ```
 
-> **Results-Ordner:** Der `Results/`-Ordner mit den Log-Dateien wird standardmäßig unter `<path>/Results/` erstellt. Über das optionale Feld `results_path` kann ein alternativer Speicherort angegeben werden – in diesem Fall wird der Ordner unter `<results_path>/Results/` erstellt.
+> **Results-Ordner:** Die JUnit-XML-Dateien werden in einem Unterordner `Junit/` gespeichert. Wenn `results_path` gesetzt ist, werden sie unter `<results_path>/Junit/` abgelegt. Wenn `results_path` nicht gesetzt ist, werden sie unter `<path>/Result/Junit/` erstellt.
 
 ### Ressourcen herunterladen (optional)
 
