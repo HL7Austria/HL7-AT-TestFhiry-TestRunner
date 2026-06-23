@@ -1,9 +1,8 @@
 from pathlib import Path
-import os
 import json
 import re
 import xml.etree.ElementTree as ET
-from typing import Literal, Optional
+from typing import Literal
 import re
 from lxml import etree
 from jsonpath_ng import parse as jp_parse
@@ -39,7 +38,7 @@ def get_full_path(path:str) -> Path:
     return BASE_DIR / path
 
 
-def get_fixture(testscript):
+def get_fixture(testscript: dict) -> list[dict]:
     fixtures = []
     for fixture in testscript.get("fixture", []):
         fixtures.append(fixture)
@@ -60,7 +59,7 @@ def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
     
     return profiles, profile_ids
 
-def get_variables(testscript):
+def get_variables(testscript: dict) -> list[dict]:
     """Extracts the list of variable definitions from a TestScript.
 
     :param testscript: Parsed TestScript JSON dictionary.
@@ -81,7 +80,6 @@ def load_json(path : str):
     full_path = get_full_path(path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
-    
 
 def load_resource(path : str):
     """
@@ -98,7 +96,7 @@ def load_resource(path : str):
         else:
             return json.load(f)
 
-def load_resource_list(paths : list[str]):
+def load_resource_list(paths : list[str]) -> list:
     """Loads multiple FHIR resource files (JSON or XML) from the given paths.
 
     :param paths: List of relative path strings to resource files.

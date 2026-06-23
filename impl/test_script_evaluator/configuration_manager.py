@@ -1,6 +1,5 @@
 import json
 import os
-from datetime import datetime
 from pathlib import Path
 import impl.test_script_evaluator.utils as utils
 
@@ -12,14 +11,14 @@ class ConfigManager:
         config (dict): Loaded configuration dictionary
     """
 
-    def __init__(self, config_path):
+    def __init__(self, config_path, noval):
         """
         Initializes the ConfigManager and loads configuration.
 
         :param config_path: Path to config.json file.
         """
         self.config_path = Path(config_path)
-
+        self._validator = noval
         self.config = self._load_config()
         
 
@@ -65,6 +64,15 @@ class ConfigManager:
         :return: URL string or empty string if not configured.
         """
         return self.config.get("url", "")
+    
+    @property
+    def validator(self) -> bool:
+        """
+        Get the decision wether validator should be used.
+        
+        :return: decision for validator
+        """
+        return self._validator
 
     @property
     def path(self):
@@ -194,10 +202,11 @@ def get_config_manager() -> ConfigManager:
     assert _config_manager is not None
     return _config_manager
 
-def init_config_manager(config_path):
+def init_config_manager(config_path: str, noval: bool):
     """Initializes the global ConfigManager instance."""
     global _config_manager
-    _config_manager = ConfigManager(config_path)
+    _config_manager = ConfigManager(config_path, noval)
+
 
 
 # Convenience functions for direct access
@@ -214,3 +223,9 @@ def get_testscript_pairs():
 def has_fhir_server():
     """Convenience function to check if FHIR server is configured."""
     return get_config_manager().has_fhir_server()
+
+
+def get_validator():
+    """Convenience function to get validator setting."""
+    return get_config_manager().validator
+

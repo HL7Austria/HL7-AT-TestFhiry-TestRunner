@@ -2,7 +2,6 @@ from impl.test_script_evaluator.result_tracker import ResultTracker
 from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure
 from datetime import datetime
 from pathlib import Path
-from xml.dom.minidom import parseString
 import impl.test_script_evaluator.configuration_manager as conf_man
 def construct_junit(tracker: ResultTracker) -> JUnitXml:
     """
