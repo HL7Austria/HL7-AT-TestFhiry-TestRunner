@@ -158,7 +158,7 @@ class ResultTracker:
             return None
         results_dir = None
         cm = conf_man.get_config_manager()
-        results_dir = cm.results_dir
+        results_dir = cm.results_path
 
         if results_dir is None:
             base = Path(__file__).resolve().parent.parent
