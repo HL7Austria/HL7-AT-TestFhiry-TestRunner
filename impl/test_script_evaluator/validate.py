@@ -121,8 +121,6 @@ def validate_content_type(response : Interaction, expected_type, operator: opera
     """
 
     actual_content_type = response.header.get("Content-Type", "")
-    
-    utils.log_to_file(f"Asserting Content-Type {actual_content_type} {operator} {expected_type}'")
     validate_operator(operator, actual_content_type, expected_type)
 
 def validate_expression(fixture : Interaction | Fixture, expression : str, operator: operator_type, value = None) ->None:
@@ -155,8 +153,10 @@ def validate_expression(fixture : Interaction | Fixture, expression : str, opera
     if isinstance(value, list):
         if len(value) == 1:
             value = value[0]
-    utils.log_to_file(f"Asserting Expression {expression}: {res} {operator} {value}")
-    validate_operator(operator, res, value)
+    try:
+        validate_operator(operator, res, value)
+    except AssertionError as ae:
+        raise AssertionError(f"[expression: {expression}] {ae}") from ae
 
 def validate_responseCode(response: Interaction, expected_codes, operator: operator_type) -> None:
     """Validates the HTTP status code of a server response.
@@ -167,7 +167,6 @@ def validate_responseCode(response: Interaction, expected_codes, operator: opera
     :raises AssertionError: If the status code does not satisfy the operator check.
     """
     status_code = str(response.status_code)
-    utils.log_to_file(f"Asserting response code {status_code} {operator} {expected_codes}")
     validate_operator(operator, status_code, expected_codes)
 
 RESPONSE_CODE_MAP = {
@@ -204,7 +203,6 @@ def validate_response(response: Interaction, expected, operator: operator_type) 
     if not expected_status:
         raise error.TestScriptError(f"Unknown response code '{expected}'. Must be one of: {', '.join(RESPONSE_CODE_MAP.keys())}")
     actual_status = str(response.status_code)
-    utils.log_to_file(f"Asserting response {actual_status} {operator} {expected} (mapped to {expected_status})")
     validate_operator(operator, actual_status, expected_status)
 
 def validate_resource(response: Interaction, expected: str, operator: operator_type) -> None:
@@ -221,7 +219,6 @@ def validate_resource(response: Interaction, expected: str, operator: operator_t
     
     body = response.body
     _, resource = utils.extract_fhir_meta(body)
-    utils.log_to_file(f"Asserting resource {resource} {operator} {expected}")
     validate_operator(operator, resource, expected)
 
 def execute_validator(cmd : str) -> list[str]:
@@ -290,8 +287,6 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
         the validator (empty if none).
     :raises AssertionError: If the validator reports errors.
     """
-    utils.log_to_file(f"Asserting profile {profileRef}")
-
     base_path = Path(conf_man.get_config_manager().path)
     temp_dir = base_path / "temp"
     pathF = temp_dir / "temp"
@@ -408,7 +403,6 @@ def validate_path(response: Interaction, path:str, expected, operator: operator_
     if not response.body:
         raise AssertionError("Response-Body is empty and cannot be tested with path.")
     res = eval_path(response.body, path)
-    utils.log_to_file(f"Asserting Path: {path}, {res} {operator} {expected}.")
     validate_operator(operator, res, expected)
 
 def validate_headerfield(response: Interaction, field:str, expected: Any, operator: operator_type) -> None:

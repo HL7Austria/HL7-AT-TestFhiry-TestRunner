@@ -38,12 +38,6 @@ def get_full_path(path:str) -> Path:
         return Path(config_path) / path
     return BASE_DIR / path
 
-def log_to_file(message: str):
-    import impl.test_script_evaluator.configuration_manager as conf_man
-    print(message)
-    log_path = conf_man.get_config_manager().log_file_path
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(message + "\n")
 
 def get_fixture(testscript):
     fixtures = []
@@ -85,24 +79,9 @@ def load_json(path : str):
     """
 
     full_path = get_full_path(path)
-    printInfoJson(path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
     
-def printInfoJson(path : str):
-    """
-    Logs information about loaded JSON files based on their path.
-
-    :param path: Path of the loaded file.
-    """
-    if "Test_Scripts" in str(path):
-        filename = os.path.basename(path)
-        name_without_extension = os.path.splitext(filename)[0]
-        log_to_file(f"\n\n=========== Starting Testscript: {name_without_extension} ===========")
-    if "Example_Instances" in str(path):
-        log_to_file(f"Load Example Instance: {path}")
-    if "Profiles" in str(path):
-        log_to_file(f"Load Profile: {path}")
 
 def load_resource(path : str):
     """
@@ -113,7 +92,6 @@ def load_resource(path : str):
     if path.startswith("impl"):
         path = path.replace("impl/", "")
     full_path = get_full_path(path)
-    printInfoJson(path)
     with open(full_path, "r", encoding="utf-8") as f:
         if str(full_path).endswith(".xml"):
             return f.read()

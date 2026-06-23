@@ -22,7 +22,7 @@ class TestOutcome:
     time_spent: float
     assertion_count: int
     result: str
-    message: str
+    messages: List[str]
     error_type: Optional[str] = None
 
 @dataclass
@@ -35,6 +35,7 @@ class TestScriptResult:
     url: str
     outcome: str
     timestamp: str = ""
+    total_time: float = 0.0
     outcomes: List[TestOutcome] = field(default_factory=list)
 
 @dataclass
@@ -44,6 +45,7 @@ class TestRunResults:
     Holds the run timestamp and a list of per-TestScript results.
     """
     timestamp: str
+    total_time: float = 0.0
     testscript_results: List[TestScriptResult] = field(default_factory=list)
 
 class ResultTracker:
@@ -89,7 +91,7 @@ class ResultTracker:
         self.current_outcome = TestOutcome(
             class_type=class_type, name=name,
             time_spent=0.0, assertion_count=0,
-            result="pass", message=""
+            result="pass", messages=[]
         )
         self._phase_start_time = time.time()
     
@@ -114,13 +116,16 @@ class ResultTracker:
         if result is None:
             result = "pass"
         if message is None:
-            message = ""
+            message = []
         if self.current_outcome and self.current_testscript:
             self.current_outcome.time_spent = time_spent
             self.current_outcome.result = result
             self.current_outcome.message = message
             self.current_outcome.error_type = error_type
             self.current_testscript.outcomes.append(self.current_outcome)
+            self.current_testscript.total_time += time_spent
+            if self.current_test_run:
+                self.current_test_run.total_time += time_spent
             if result == "fail":
                 self.current_testscript.outcome = "fail"
             elif result == "skip" and self.current_testscript.outcome != "fail":
@@ -152,18 +157,14 @@ class ResultTracker:
         if not self.current_test_run:
             return None
         results_dir = None
-        try:
-            cm = conf_man.get_config_manager()
-            if cm is not None and getattr(cm, "results_dir", None):
-                results_dir = cm.results_dir
-        except Exception:
-            pass
+        cm = conf_man.get_config_manager()
+        results_dir = cm.results_path
+
         if results_dir is None:
             base = Path(__file__).resolve().parent.parent
             results_dir = base / "Results"
             results_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"test_results_{timestamp}.json"
+        filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
         filepath = Path(results_dir) / filename
         results_dict = asdict(self.current_test_run)
         results_dict["testscript_results"] = []  # wird später gefüllt
@@ -182,22 +183,6 @@ class ResultTracker:
         except Exception as e:
             raise error.TestScriptError(f"Failed to write results file: {filepath} - {e}")
     
-    def emit_summary_to_log(self):
-        """Writes a human-readable summary of the entire test run to the log file (and console).
-
-        Includes per-TestScript outcomes and per-phase details with timing and assertion counts.
-        Does nothing if there is no current test run.
-        """
-        if not self.current_test_run:
-            return
-        utils.log_to_file("\n=========== Test Run Summary ===========")
-        for ts in self.current_test_run.testscript_results:
-            utils.log_to_file(f"TestScript: {ts.name} - {ts.outcome}")
-            for o in ts.outcomes:
-                utils.log_to_file(f"  {o.class_type} [{o.name}]: {o.result} ({o.time_spent:.3f}s, {o.assertion_count} assertions)")
-                if o.message:
-                    utils.log_to_file(f"    message: {o.message}")
-        utils.log_to_file("======================================\n")
 
 _result_tracker = None
 

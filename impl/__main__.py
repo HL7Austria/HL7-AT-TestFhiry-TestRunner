@@ -6,6 +6,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import (
     test_fhir_operations,
 )
 import impl.test_script_evaluator.result_tracker as rt
+import impl.test_script_evaluator.junit_logger as logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FHIR TestScript Runner")
@@ -14,7 +15,6 @@ if __name__ == "__main__":
     tracker = None
     try:
         init_config_manager(args.config)
-        get_config_manager().init_logging()
         tracker = rt.init_result_tracker()
         tracker.initialize_test_run()
         for testscript_path, resource_path in get_testscript_pairs():
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     finally:
         if tracker is not None:
             try:
-                tracker.save_results()
-                tracker.emit_summary_to_log()
-            except Exception:
-                pass
+                logger.fill_and_save(tracker)
+            except Exception as e:
+                print(f"Error while saving the JUnit XML: {e}")
+                raise

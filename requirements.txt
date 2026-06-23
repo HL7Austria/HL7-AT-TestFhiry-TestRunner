@@ -5,3 +5,4 @@ jsonpath_ng~=1.7.0
 lxml~=5.4.0
 fhir.resources~=8.2.0
 xmltodict~=0.13.0
+junitparser~=5.0.1

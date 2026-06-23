@@ -61,16 +61,13 @@ Alle **FHIR® TestScripts** aus den Leitfäden werden zentral gespeichert und k�
 
 #### Ergebnisspeicherung (Laufzeit)
 
-> **Hinweis:** Der Ergebnisspeicher befindet sich aktuell in einem frühen Stadium. Die generierte Ausgabe dient **ausschließlich zur Überprüfung, ob das Speichern korrekt funktioniert** – eine weiterführende Auswertung oder Darstellung ist noch nicht implementiert.
-
 > **Skip-Verhalten:** Laut FHIR R4-Spezifikation wird ein TestScript (oder einzelne Tests) geskippt, wenn die `metadata.capability`-Prüfung fehlschlägt – d.h. der Server erfüllt die im TestScript geforderten Capabilities nicht. **Dieser Mechanismus ist noch nicht implementiert.** Aktuell tritt `result="skip"` nur auf, wenn kein FHIR-Server konfiguriert ist.
 
 Während der Ausführung sammelt der `ResultTracker` (`result_tracker.py`) alle Testergebnisse zentral im Arbeitsspeicher und persistiert sie am Ende des Programmlaufs.
 
 **Wo wird gespeichert?**
 
-* **JSON-Datei**: Am Ende jedes Programmlaufs wird eine Datei `test_results_<Zeitstempel>.json` im `Results/`-Ordner abgelegt (Standard: `<path>/Results/`, konfigurierbar über `results_path`).
-* **Log-Datei**: Zusätzlich werden alle Ereignisse fortlaufend in die Log-Datei geschrieben (konfigurierter `log_file_path`).
+* **JUnit-Datei**: Am Ende jedes Programmlaufs wird eine JUnit-style XML-Datei `test_results_<Zeitstempel>.xml` im `Junit/`-Ordner abgelegt (Standard: `<path>/Result/Junit/`, konfigurierbar über `results_path`).
 
 **Was wird gespeichert?**
 
@@ -255,7 +252,7 @@ Wenn zwei Example Instances die gleiche ID haben, kann das System nicht untersch
 2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
 3. Alle Referenzen der autocreate Fixtures werden aufgelöst.
 4. Tests werden ausgeführt (POST, GET, PUT).
-5. Ergebnisse werden als Logdatei exportiert.
+5. Ergebnisse werden als JUnit-Datei exportiert.
 
 ```mermaid
 sequenceDiagram
@@ -385,7 +382,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 | `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
 | `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
 | `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
-| `results_path`  | Nein    | Pfad, in dem der `Results/`-Ordner erstellt wird. Wenn leer, wird `Results/` im `path`-Verzeichnis angelegt.                                                  |
+| `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
 
 > **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
 > ```
@@ -396,7 +393,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 > └── validator_cli.jar
 > ```
 
-> **Results-Ordner:** Der `Results/`-Ordner mit den Log-Dateien wird standardmäßig unter `<path>/Results/` erstellt. Über das optionale Feld `results_path` kann ein alternativer Speicherort angegeben werden – in diesem Fall wird der Ordner unter `<results_path>/Results/` erstellt.
+> **Results-Ordner:** Die JUnit-XML-Dateien werden in einem Unterordner `Junit/` gespeichert. Wenn `results_path` gesetzt ist, werden sie unter `<results_path>/Junit/` abgelegt. Wenn `results_path` nicht gesetzt ist, werden sie unter `<path>/Result/Junit/` erstellt.
 
 ### Ressourcen herunterladen (optional)
 

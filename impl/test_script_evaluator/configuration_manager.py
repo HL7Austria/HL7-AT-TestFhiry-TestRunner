@@ -21,8 +21,7 @@ class ConfigManager:
         self.config_path = Path(config_path)
 
         self.config = self._load_config()
-        self._results_dir = None
-        self._log_file_path = None
+        
 
     def _load_config(self):
         """
@@ -104,40 +103,6 @@ class ConfigManager:
         """
         return self.config.get(key, default)
 
-    @property
-    def results_dir(self):
-        """
-        Gets the Results directory path (parent of config path).
-
-        :return: Path to the Results directory.
-        """
-        return self._results_dir
-
-    @property
-    def log_file_path(self):
-        """
-        Gets the log file path inside the Results directory.
-
-        :return: Absolute path string to the log file.
-        """
-        return self._log_file_path
-
-    def init_logging(self):
-        """
-        Initializes the Results directory and log file based on config path.
-        Creates the directory and an initial log file.
-        """
-        if self.results_path:
-            self._results_dir = Path(self.results_path) / "Results"
-        else:
-            self._results_dir = Path(self.path) / "Results"
-        self._results_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_filename = f"test_results_{timestamp}.txt"
-        self._log_file_path = os.path.abspath(self._results_dir / log_filename)
-        with open(self._log_file_path, "w", encoding="utf-8") as f:
-            f.write(f"FHIR Test Log - {datetime.now()}\n\n")
-
     def has_fhir_server(self):
         """
         Checks if a FHIR server is configured.
@@ -158,7 +123,6 @@ class ConfigManager:
         """
 
         if not self.path or not Path(self.path).is_dir():
-            utils.log_to_file(f"Test konnte nicht gestartet werden: 'path' ist leer oder existiert nicht ({self.path!r})")
             return []
 
         TESTSCRIPT_FOLDER = str(Path(self.path) / "Test_Scripts")
@@ -204,24 +168,20 @@ class ConfigManager:
                 result.append((ts_path, fixture_list))
 
             except FileNotFoundError:
-                utils.log_to_file(f"TestScript not found: {ts_path}")
+                raise
             except json.decoder.JSONDecodeError as e:
-
                 message = (
                     "INVALID JSON\n"
                     f"File: {ts_path}\n"
                     f"Error: {e.msg}\n"
                     f"Line: {e.lineno}, Column: {e.colno}\n"
                 )
+                raise json.decoder.JSONDecodeError(message)
 
-                utils.log_to_file(message)
 
         if not result:
-            utils.log_to_file("No valid TestScripts found")
-
+            raise FileExistsError("No valid TestScripts found!")
         return result
-
-
 # Singleton instance for easy import
 _config_manager = None
 
@@ -231,6 +191,7 @@ def get_config_manager() -> ConfigManager:
     Gets global ConfigManager instance.
     :return: ConfigManager instance.
     """
+    assert _config_manager is not None
     return _config_manager
 
 def init_config_manager(config_path):
