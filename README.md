@@ -1,4 +1,4 @@
-# TestFhiry Tester
+# TestFhiry TestRunner
 
 Das Tool lädt automatisch zuvor definierte **TestScripts** herunter, führt sie gegen einen **FHIR®-Server** aus und dokumentiert die Ergebnisse.
 Dadurch können Entwickler:innen frühzeitig Fehler erkennen und die **Konformität mit dem FHIR®-Standard** sicherstellen.
@@ -8,7 +8,7 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
 ---
 ## Inhaltsverzeichnis
 
-- [TestFhiry Tester](#testfhiry-tester)
+- [TestFhiry TestRunner](#testfhiry-testrunner)
   - [Inhaltsverzeichnis](#inhaltsverzeichnis)
   - [Einleitung](#einleitung)
     - [Zielsetzung](#zielsetzung)
@@ -20,16 +20,18 @@ Dies ist ein Teil eines übergestellten Studienprojekts, der zweite Teil ist das
     - [Verzeichnis-Zweck](#verzeichnis-zweck)
     - [Ablaufdiagramm](#ablaufdiagramm)
   - [Funktionsweise](#funktionsweise)
-  - [Bibliotheken](#bibliotheken)
+  - [Installation \& Setup](#installation--setup)
+    - [Voraussetzungen](#voraussetzungen)
+    - [Installation](#installation)
+    - [Ausführung](#ausführung)
   - [Codebase Overview](#codebase-overview)
     - [exception/](#exception)
     - [ig\_loader/](#ig_loader)
     - [model/](#model)
     - [test\_script\_evaluator/](#test_script_evaluator)
     - [transactions/](#transactions)
-  - [Installation \& Setup](#installation--setup)
-    - [Voraussetzungen](#voraussetzungen)
-    - [Installation](#installation)
+  - [Autocreate Reference Resolution](#autocreate-reference-resolution)
+  - [Bibliotheken](#bibliotheken)
   - [Projektteam](#projektteam)
   - [TestScript-Mapping](#testscript-mapping)
 
@@ -91,6 +93,8 @@ Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Erg
 | `result` | Phasenergebnis: `pass`, `fail` oder `skip` |
 | `message` | Fehler- oder Erfolgsmeldung der Phase |
 | `error_type` | Fehlerklasse bei Fehlschlag (z.B. `AssertionError`, `TestExecutionError`) |
+
+---
 
 ## Systemüberblick und Architektur
 
@@ -154,6 +158,166 @@ flowchart TD
     B --> C[test_script_evaluator_log_to_file.py<br/><i>führt Tests aus & loggt</i>]
     C --> D((FHIR® Server<br/><i>externer Testserver</i>))
 ```
+---
+
+## Funktionsweise
+
+1. Konfiguration aus `config.json` wird geladen.
+2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
+3. Alle Referenzen der autocreate Fixtures werden aufgelöst.
+4. Tests werden ausgeführt (POST, GET, PUT).
+5. Ergebnisse werden als JUnit-Datei exportiert.
+
+```mermaid
+sequenceDiagram
+    participant Config as configuration_manager.py
+    participant Loader as load_ig_from_internet.py
+    participant Builder as dependency_resolver.py
+    participant Evaluator as test_script_evaluator_log_to_file.py
+    participant Server as FHIR® Server
+
+    Config->>Loader: Lade Einstellungen
+    Loader->>Builder: Übergibt Ressourcen
+    Builder->>Evaluator: Löst Referenzen auf
+    Evaluator->>Server: Führt HTTP Requests aus
+    Server-->>Evaluator: Sendet Antworten
+    Evaluator->>Evaluator: Speichert Ergebnisse
+```
+---
+
+## Installation & Setup
+
+### Voraussetzungen
+
+* **Python >= 3.10**
+* Internetverbindung (für `load_ig_from_internet.py`)
+* Zugriff auf einen **FHIR®-kompatiblen Server**
+* **Java Runtime** (für `validator_cli.jar`, falls Validierung verwendet wird)
+* **Internetverbindung für Validator** (falls Validierung verwendet wird): Der `validator_cli.jar` lädt bei der ersten Ausführung automatisch die benötigten FHIR-Pakete (z.B. `hl7.fhir.r4.core`) aus dem Internet in den lokalen Package Cache. Ohne Internetverbindung schlägt die Validierung fehl, wenn die Pakete noch nicht lokal vorhanden sind.
+
+### Installation
+
+```bash
+git clone https://github.com/HL7Austria/HL7-AT-TestFhiry-TestRunner.git
+cd HL7-AT-TestFhiry-TestRunner
+pip install -r requirements.txt
+```
+
+### Konfiguration (`config.json`)
+
+Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
+
+```json
+{
+  "url": "<url_zum_IG>",
+  "path": "C:/Pfad/zum/Überordner",
+  "testscripts": [
+    "Test_Scripts/TestScript-beispiel.json"
+  ],
+  "fhirServer": "<fhirServer>",
+  "results_path": ""
+}
+```
+
+| Feld            | Pflicht | Beschreibung                                                                                                                                                  |
+| --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`           | Ja      | URL des Implementation Guide, aus dem TestScripts und Example Instances heruntergeladen werden.                                                               |
+| `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
+| `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
+| `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
+| `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
+
+> **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
+> ```
+> <path>/
+> ├── Profiles/
+> ├── Example_Instances/
+> ├── Test_Scripts/
+> └── validator_cli.jar
+> ```
+
+> **Results-Ordner:** Die JUnit-XML-Dateien werden in einem Unterordner `Junit/` gespeichert. Wenn `results_path` gesetzt ist, werden sie unter `<results_path>/Junit/` abgelegt. Wenn `results_path` nicht gesetzt ist, werden sie unter `<path>/Result/Junit/` erstellt.
+
+### Ressourcen herunterladen (optional)
+
+Falls die Ordner `Profiles/`, `Example_Instances/` und `Test_Scripts/` noch nicht existieren oder leer sind, können die Ressourcen automatisch aus dem Internet heruntergeladen werden:
+
+```bash
+python -m impl.ig_loader.load_ig_from_internet --config Pfad/zur/config.json
+```
+
+> **Hinweis:** Dieser Schritt ist nur nötig, wenn die Ordner mit Profiles, Example Instances und Test Scripts noch nicht vorhanden sind. Wenn diese bereits befüllt sind, kann dieser Schritt übersprungen werden.
+
+### Ausführung
+
+Das Argument `--config` ist **pflicht** und muss den Pfad zur `config.json` angeben:
+
+```bash
+python -m impl --config Pfad/zur/config.json
+```
+
+Beispiel:
+
+```bash
+python -m impl --config impl/config.json
+```
+
+Das Argument `--novalidator` ist optional und wird verwendet um die ausführung des `validator_cli.jar` zu stoppen.
+
+Beispiel:
+
+```bash
+python -m impl --config impl/config.json --novalidator
+```
+
+---
+
+## Codebase Overview
+
+### exception/
+
+**Hauptdateien:**
+- `Error.py` → Benutzerdefinierte Exceptions (`TestExecutionError`, `TestScriptError`, `OperationError`, `CircularDependencyError`, `UnresolvedReferenceError`, `ReferenceResolutionError`). 
+
+### ig_loader/
+
+**Hauptdateien:**
+- `load_ig_from_internet.py` → Lädt Example Instances, Profile und Test-Skripte aus dem Internet und speichert sie in den vorgesehenen Ordnern. 
+
+
+### model/
+
+**Hauptdateien:**
+- `configuration.py` → Modell für das config.json-File. 
+- `fixture.py` → Modell für die Fixtures. 
+- `interaction.py` → Modell für HTTP-Interaktionen (Request/Response). 
+- `variable.py` → Modell für TestScript-Variablen. 
+
+### test_script_evaluator/
+
+**Hauptdateien:**
+- `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
+- `dependency_resolver.py` → Bestimmt Erstellungsreihenfolge und löst Referenzen auf.
+- `reference_parser.py` → Durchsucht Fhir-Ressourcen auf Referenzen.
+- `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
+- `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
+- `validate.py` → Validierungen der Test-Scripts. 
+
+#### Namespace-Handling in **eval_xpath**
+
+Die Methode **eval_xpath** entfernt vor der XPath-Auswertung alle XML-Namespaces aus dem geparsten Dokument.
+Dazu wird über alle Elemente iteriert und jeder Tag sowie jedes Attribut auf seinen lokalen Namen reduziert (`etree.QName(...).localname`).
+Anschließend werden nicht mehr referenzierte Namespace-Deklarationen mittels `etree.cleanup_namespaces()` bereinigt.
+
+Dies ist notwendig, weil FHIR®-XPath-Ausdrücke in TestScripts typischerweise ohne Namespace-Präfixe formuliert sind (z. B. `Patient/name/family` statt `fhir:Patient/fhir:name/fhir:family`).
+Ohne diese Bereinigung würden solche Ausdrücke gegen ein namespace-behaftetes XML-Dokument keine Treffer liefern.
+Das bedeutet auch, dass XPath-Ausdrücke in den TestScripts **ohne Namespace-Präfixe** (z. B. `fhir:`) geschrieben sein müssen, damit sie korrekt ausgewertet werden.
+
+#### Encoding-Workaround in **eval_xpath**
+
+Vor dem Parsen wird die XML-Deklaration (`<?xml ... ?>`) per Regex entfernt und der String anschließend als UTF-8 kodiert.
+`lxml.etree.fromstring()` akzeptiert bei einem `bytes`-Objekt die Encoding-Angabe aus der Deklaration, wirft aber einen Fehler wenn ein Python-`str` (der intern bereits Unicode ist) eine Encoding-Deklaration enthält.
+Da kein zuverlässigerer Weg gefunden wurde, diesen Konflikt aufzulösen, wird die Deklaration schlicht entfernt bevor der Body als `bytes` an den Parser übergeben wird.
 
 ---
 
@@ -161,20 +325,20 @@ flowchart TD
 
 Das Tool verfügt über ein automatisches Reference Resolution System für Fixtures mit `autocreate=true`. Dieses System stellt sicher, dass Fixtures in der korrekten Reihenfolge erstellt werden, damit Referenzen zwischen Fixtures korrekt aufgelöst werden können.
 
-### Funktionsweise
+#### Funktionsweise
 
 1. **Referenz-Parsing**: Alle Fixtures werden nach Referenzen auf andere Fixtures gescannt (sowohl JSON als auch XML)
 2. **Dependency Resolution**: Die Fixtures werden topologisch sortiert, um die korrekte Erstellungsreihenfolge zu bestimmen
 3. **Sequentielle Erstellung**: Fixtures werden nacheinander erstellt, beginnend mit denen ohne Abhängigkeiten
 4. **Referenz-Ersetzung**: Während der Erstellung werden lokale Fixture-Referenzen durch die tatsächlichen Server-IDs ersetzt
 
-### Vorteile
+#### Vorteile
 
 - Keine zirkulären Abhängigkeiten werden toleriert (werden mit Fehler abgebrochen)
 - Referenzen werden automatisch mit server-seitigen IDs aktualisiert
 - Keine manuelle Anpassung von Referenzen erforderlich
 
-### Voraussetzungen für TestScripts
+#### Voraussetzungen für TestScripts
 
 Damit das Autocreate Reference Resolution System korrekt funktioniert, müssen TestScripts folgende Anforderungen erfüllen:
 
@@ -246,31 +410,6 @@ Wenn zwei Example Instances die gleiche ID haben, kann das System nicht untersch
 
 ---
 
-## Funktionsweise
-
-1. Konfiguration aus `config.json` wird geladen.
-2. Das Tool lädt Implementation Guides (TestScripts & Example Instances).
-3. Alle Referenzen der autocreate Fixtures werden aufgelöst.
-4. Tests werden ausgeführt (POST, GET, PUT).
-5. Ergebnisse werden als JUnit-Datei exportiert.
-
-```mermaid
-sequenceDiagram
-    participant Config as configuration_manager.py
-    participant Loader as load_ig_from_internet.py
-    participant Builder as dependency_resolver.py
-    participant Evaluator as test_script_evaluator_log_to_file.py
-    participant Server as FHIR® Server
-
-    Config->>Loader: Lade Einstellungen
-    Loader->>Builder: Übergibt Ressourcen
-    Builder->>Evaluator: Löst Referenzen auf
-    Evaluator->>Server: Führt HTTP Requests aus
-    Server-->>Evaluator: Sendet Antworten
-    Evaluator->>Evaluator: Speichert Ergebnisse
-```
----
-
 ## Bibliotheken
 
 | Bibliothek              | Zweck                                        |
@@ -292,131 +431,8 @@ fhirpathpy~=0.2.2
 jsonpath_ng~=1.7.0
 lxml~=5.4.0
 fhir.resources~=8.2.0
-xmltodict~=0.13.0 
-```
-
----
-## Codebase Overview
-
-### exception/
-
-**Hauptdateien:**
-- `Error.py` → Benutzerdefinierte Exceptions (`TestExecutionError`, `TestScriptError`, `OperationError`, `CircularDependencyError`, `UnresolvedReferenceError`, `ReferenceResolutionError`). 
-
-### ig_loader/
-
-**Hauptdateien:**
-- `load_ig_from_internet.py` → Lädt Example Instances, Profile und Test-Skripte aus dem Internet und speichert sie in den vorgesehenen Ordnern. 
-
-
-### model/
-
-**Hauptdateien:**
-- `configuration.py` → Modell für das config.json-File. 
-- `fixture.py` → Modell für die Fixtures. 
-- `interaction.py` → Modell für HTTP-Interaktionen (Request/Response). 
-- `variable.py` → Modell für TestScript-Variablen. 
-
-### test_script_evaluator/
-
-**Hauptdateien:**
-- `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
-- `dependency_resolver.py` → Bestimmt Erstellungsreihenfolge und löst Referenzen auf.
-- `reference_parser.py` → Durchsucht Fhir-Ressourcen auf Referenzen.
-- `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
-- `utils.py` → Hilfsfunktionen, die mehrfach verwendet werden. 
-- `validate.py` → Validierungen der Test-Scripts. 
-
-##### Namespace-Handling in **eval_xpath**
-
-Die Methode **eval_xpath** entfernt vor der XPath-Auswertung alle XML-Namespaces aus dem geparsten Dokument.
-Dazu wird über alle Elemente iteriert und jeder Tag sowie jedes Attribut auf seinen lokalen Namen reduziert (`etree.QName(...).localname`).
-Anschließend werden nicht mehr referenzierte Namespace-Deklarationen mittels `etree.cleanup_namespaces()` bereinigt.
-
-Dies ist notwendig, weil FHIR®-XPath-Ausdrücke in TestScripts typischerweise ohne Namespace-Präfixe formuliert sind (z. B. `Patient/name/family` statt `fhir:Patient/fhir:name/fhir:family`).
-Ohne diese Bereinigung würden solche Ausdrücke gegen ein namespace-behaftetes XML-Dokument keine Treffer liefern.
-Das bedeutet auch, dass XPath-Ausdrücke in den TestScripts **ohne Namespace-Präfixe** (z. B. `fhir:`) geschrieben sein müssen, damit sie korrekt ausgewertet werden.
-
-##### Encoding-Workaround in **eval_xpath**
-
-Vor dem Parsen wird die XML-Deklaration (`<?xml ... ?>`) per Regex entfernt und der String anschließend als UTF-8 kodiert.
-`lxml.etree.fromstring()` akzeptiert bei einem `bytes`-Objekt die Encoding-Angabe aus der Deklaration, wirft aber einen Fehler wenn ein Python-`str` (der intern bereits Unicode ist) eine Encoding-Deklaration enthält.
-Da kein zuverlässigerer Weg gefunden wurde, diesen Konflikt aufzulösen, wird die Deklaration schlicht entfernt bevor der Body als `bytes` an den Parser übergeben wird.
-
-## Installation & Setup
-
-### Voraussetzungen
-
-* **Python >= 3.10**
-* Internetverbindung (für `load_ig_from_internet.py`)
-* Zugriff auf einen **FHIR®-kompatiblen Server**
-* **Java Runtime** (für `validator_cli.jar`, falls Validierung verwendet wird)
-
-### Installation
-
-```bash
-git clone https://github.com/HL7Austria/HL7-AT-TestFhiry-TestRunner.git
-cd HL7-AT-TestFhiry-TestRunner
-pip install -r requirements.txt
-```
-
-### Konfiguration (`config.json`)
-
-Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
-
-```json
-{
-  "url": "<url_zum_IG>",
-  "path": "C:/Pfad/zum/Überordner",
-  "testscripts": [
-    "Test_Scripts/TestScript-beispiel.json"
-  ],
-  "fhirServer": "<fhirServer>",
-  "results_path": ""
-}
-```
-
-| Feld            | Pflicht | Beschreibung                                                                                                                                                  |
-| --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`           | Ja      | URL des Implementation Guide, aus dem TestScripts und Example Instances heruntergeladen werden.                                                               |
-| `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
-| `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
-| `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
-| `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
-
-> **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
-> ```
-> <path>/
-> ├── Profiles/
-> ├── Example_Instances/
-> ├── Test_Scripts/
-> └── validator_cli.jar
-> ```
-
-> **Results-Ordner:** Die JUnit-XML-Dateien werden in einem Unterordner `Junit/` gespeichert. Wenn `results_path` gesetzt ist, werden sie unter `<results_path>/Junit/` abgelegt. Wenn `results_path` nicht gesetzt ist, werden sie unter `<path>/Result/Junit/` erstellt.
-
-### Ressourcen herunterladen (optional)
-
-Falls die Ordner `Profiles/`, `Example_Instances/` und `Test_Scripts/` noch nicht existieren oder leer sind, können die Ressourcen automatisch aus dem Internet heruntergeladen werden:
-
-```bash
-python -m impl.ig_loader.load_ig_from_internet --config Pfad/zur/config.json
-```
-
-> **Hinweis:** Dieser Schritt ist nur nötig, wenn die Ordner mit Profiles, Example Instances und Test Scripts noch nicht vorhanden sind. Wenn diese bereits befüllt sind, kann dieser Schritt übersprungen werden.
-
-### Ausführung
-
-Das Argument `--config` ist **pflicht** und muss den Pfad zur `config.json` angeben:
-
-```bash
-python -m impl --config Pfad/zur/config.json
-```
-
-Beispiel:
-
-```bash
-python -m impl --config impl/config.json
+xmltodict~=0.13.0
+junitparser~=5.0.1
 ```
 
 ---
