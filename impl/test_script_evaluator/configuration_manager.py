@@ -20,6 +20,7 @@ class ConfigManager:
         self.config_path = Path(config_path)
         self._validator = noval
         self.config = self._load_config()
+        print(self.config)
         
 
     def _load_config(self):
