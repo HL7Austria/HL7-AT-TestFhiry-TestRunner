@@ -27,7 +27,6 @@ def format_summary(tracker: ResultTracker) -> str:
     lines.append(f"failed: {failed_scripts}")
     lines.append(f"skipped: {skipped_scripts}")
     lines.append("-" * 34)
-    lines.append("-" * 34)
     
     if failed_scripts > 0:
         lines.append("failed TestScripts:")
