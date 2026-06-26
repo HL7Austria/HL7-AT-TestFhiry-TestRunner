@@ -7,6 +7,7 @@ from impl.test_script_evaluator.test_script_evaluator_log_to_file import (
 )
 import impl.test_script_evaluator.result_tracker as rt
 import impl.test_script_evaluator.junit_logger as logger
+import impl.test_script_evaluator.summary_logger as summary_logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FHIR TestScript Runner")
@@ -32,6 +33,9 @@ if __name__ == "__main__":
         if tracker is not None:
             try:
                 logger.fill_and_save(tracker)
+                summary_logger.print_summary(tracker)
+                summary_logger.save_summary(tracker)
+                
             except Exception as e:
                 print(f"Error while saving the JUnit XML: {e}")
                 raise
