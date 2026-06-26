@@ -115,7 +115,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
 
         match (method):
             case "get":
-                response = requests.get(url,headers=headers)
+                response = requests.get(url, headers=headers)
             case "post":
                 if not fixture:
                     if not (operation_type == "search" or operation_type == "capabilities"):
@@ -243,7 +243,7 @@ def build_url(operation :dict [str, Any]) -> str:
             if not resource:
                 raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
-            url += "/" + resource
+            url += "/" + resource + "/"
         return url + params
     else:
         if not op_type:
