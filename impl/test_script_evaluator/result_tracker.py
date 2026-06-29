@@ -6,7 +6,6 @@ from pathlib import Path
 import time
 from dataclasses import asdict
 
-import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
 

@@ -24,7 +24,7 @@ PROFILES = {} #saving profilesIDs with the references
 
 FHIR_SERVER_BASE = None
 
-def replacer(match):
+def replacer(match) -> str:
     """
     Regex substitution callback that resolves a FHIR TestScript variable placeholder
     (e.g. ``${varName}``) to its evaluated value.
@@ -45,7 +45,7 @@ def replacer(match):
     
     raise Exception(f"Variable {var_name} could not be found")
 
-def execute_operation(operation: dict[str, Any]):
+def execute_operation(operation: dict[str, Any]) -> None:
     """
     Executes a single FHIR TestScript operation against the configured FHIR server.
 
@@ -115,7 +115,7 @@ def execute_operation(operation: dict[str, Any]):
 
         match (method):
             case "get":
-                response = requests.get(url,headers=headers)
+                response = requests.get(url, headers=headers)
             case "post":
                 if not fixture:
                     if not (operation_type == "search" or operation_type == "capabilities"):
@@ -243,7 +243,7 @@ def build_url(operation :dict [str, Any]) -> str:
             if not resource:
                 raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
-            url += "/" + resource
+            url += "/" + resource + "/"
         return url + params
     else:
         if not op_type:
@@ -540,7 +540,8 @@ def execute_actions(action: dict[str, Any]) -> None:
         else:
             # stopTestOnFail is false
             raise ae
-
+    except error.WarningException as we:
+        raise
 
     except Exception as e:
         raise error.TestExecutionError(f"Test stopped: {str(e)}")
@@ -662,6 +663,7 @@ def eval_variable(var : Variable):
                     raise error.TestScriptError("More than one result!")
 
     return result
+
 def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     """
     Registers FHIR TestScript fixtures locally and, for those marked with
@@ -815,7 +817,7 @@ def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> 
     for prof, pId in zip(profilerefs, profile_ids):
         PROFILES[pId.get("id")] = prof
              
-def handle_assertion_error(e, stop_test_on_fail : bool):
+def handle_assertion_error(e, stop_test_on_fail : bool) -> bool:
     """
     Logs a failed assertion and decides whether the current test should be
     aborted or is allowed to continue.
@@ -848,7 +850,7 @@ def autodelete() -> None:
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
 
-def SETUP(setup_data, fixture_list : list, resources):
+def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     """
     Executes the **setup** phase of a FHIR TestScript.
 
@@ -908,7 +910,7 @@ def SETUP(setup_data, fixture_list : list, resources):
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
-def TEST(test_data):
+def TEST(test_data : dict) -> None:
     """
     Executes a single **test** phase of a FHIR TestScript.
 
@@ -982,7 +984,7 @@ def TEST(test_data):
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
     
-def TEARDOWN(teardown_data : dict):
+def TEARDOWN(teardown_data : dict) -> None:
     """
     Executes the **teardown** phase of a FHIR TestScript.
 
@@ -1026,7 +1028,7 @@ def TEARDOWN(teardown_data : dict):
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
-def test_fhir_operations(testscript_data, testscript_path=""):
+def test_fhir_operations(testscript_data : dict, testscript_path=""):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
@@ -1066,7 +1068,7 @@ def test_fhir_operations(testscript_data, testscript_path=""):
         fixture_list = utils.get_fixture(testscript)
         validate.check_duplicate_source_ids(testscript, fixture_list)
 
-        #validate.validateTS(testscript) #see if the TestScript is valid
+        validate.validateTS(testscript) #see if the TestScript is valid
 
         variable_list = utils.get_variables(testscript)
         

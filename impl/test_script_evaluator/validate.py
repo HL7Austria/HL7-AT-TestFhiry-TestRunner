@@ -15,7 +15,6 @@ import xml.etree.ElementTree as ET
 import xmltodict
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
-
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
 
@@ -35,7 +34,6 @@ def convert_xml_to_json(xml_string: str) -> dict:
     except (ImportError, AttributeError):
         # Fallback: xmltodict
         return xmltodict.parse(xml_string)
-
 
 def validate_operator(operator : operator_type, valueResp: Any, valueTS:Any) -> None:
     """Applies a FHIR TestScript comparison operator to two values.
@@ -254,6 +252,8 @@ def validateTS(testScript: dict[str, Any]) -> None:
     :raises Exception: If the validator reports errors (wraps the
         ``AssertionError`` from ``check_result``).
     """
+    if conf_man.get_validator():
+        return #return to main function without stopping the TestScript
     base_path = Path(conf_man.get_config_manager().path)
     validator = base_path / "validator_cli.jar"
     temp_dir = base_path / "temp"
@@ -287,6 +287,8 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
         the validator (empty if none).
     :raises AssertionError: If the validator reports errors.
     """
+    if conf_man.get_validator():
+        raise error.WarningException("Validator has been disabled")
     base_path = Path(conf_man.get_config_manager().path)
     temp_dir = base_path / "temp"
     pathF = temp_dir / "temp"
@@ -370,7 +372,6 @@ def eval_compareTo(fixture: Interaction| Fixture, assertion : dict[str,Any]):
         return eval_expression(body_use, assertion.get("compareToSourceExpression"))
     elif "compareToSourcePath" in assertion:
         return eval_path(fixture.body, assertion.get("compareToSourcePath"))
-
 
 def eval_expression(body : dict[str, Any], expression : str):
     """Evaluates a FHIRPath expression against a resource body.

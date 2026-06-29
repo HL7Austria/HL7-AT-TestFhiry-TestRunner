@@ -1,8 +1,9 @@
 FROM python:3.11-slim
 
-# Install Java Runtime for HL7 validator and CA certificates
-RUN apt-get update && apt-get install -y openjdk-21-jre-headless ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY ./certs/ /usr/local/share/ca-certificates/
 
+RUN apt-get update && apt-get install -y ca-certificates openjdk-21-jre-headless \
+    && update-ca-certificates     
 # Set working directory
 WORKDIR /app
 
@@ -21,4 +22,4 @@ RUN mkdir -p /data/Test_Scripts /data/Example_Instances /data/Profiles /data/Res
 VOLUME ["/data"]
 
 # Default command
-CMD ["python", "-m", "impl", "--config", "/data/config/config.json"]
+CMD ["python", "-m", "impl", "--config", "/data/config/config.json", "--novalidator"]
