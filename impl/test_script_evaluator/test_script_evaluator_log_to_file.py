@@ -152,6 +152,14 @@ def execute_operation(operation: dict[str, Any]) -> None:
                 raise error.TestScriptError(f"Method {method} not supported.")
 
         if operation_type == "create":
+            # Surface the real server error instead of a misleading "No ID found"
+            # message when the create is rejected (e.g. validation / referential
+            # integrity errors returned as a non-2xx OperationOutcome).
+            if not (200 <= response.status_code < 300):
+                raise error.TestScriptError(
+                    f"Create operation failed: HTTP {response.status_code} {response.reason} - "
+                    f"{response.text[:500]}"
+                )
             saved_resource_id = ""
             location = response.headers.get("Location", "")
             if location:
