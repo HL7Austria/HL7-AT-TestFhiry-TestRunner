@@ -804,18 +804,36 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
         if not fixture.references:
             fixture.references_resolved = True
     
-def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
+def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None:
     """
     Stores FHIR StructureDefinition profile references in the global
     ``PROFILES`` dictionary, keyed by their TestScript-local ID.
 
-    :param profilerefs: List of profile canonical URL references.
-    :param profile_ids: List of dictionaries each containing an ``id`` key
-        that serves as the TestScript-local identifier for the profile.
+    Supports both TestScript ``profile`` encodings:
+
+    * **R5 ``canonical[]``** – ``profilerefs`` holds canonical URL strings and the
+      element IDs are supplied out-of-band via the ``_profile`` primitive-extension
+      array (``profile_ids``), paired positionally.
+    * **R4 ``Reference``** – each entry in ``profilerefs`` is an object of the form
+      ``{"id": ..., "reference": ...}`` and ``profile_ids`` is empty.
+
+    :param profilerefs: List of profile entries – canonical URL strings (R5) or
+        ``Reference`` objects (R4).
+    :param profile_ids: List of ``_profile`` primitive-extension objects, each
+        containing an ``id`` key (R5 only; empty for R4).
     """
     global PROFILES
-    for prof, pId in zip(profilerefs, profile_ids):
-        PROFILES[pId.get("id")] = prof
+    for idx, prof in enumerate(profilerefs):
+        if isinstance(prof, dict):
+            # R4 Reference form: {"id": ..., "reference": ...}
+            pid = prof.get("id")
+            if pid:
+                PROFILES[pid] = prof.get("reference")
+        else:
+            # R5 canonical form: prof is a URL string; id comes from _profile[idx]
+            pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
+            if pid:
+                PROFILES[pid] = prof
              
 def handle_assertion_error(e, stop_test_on_fail : bool) -> bool:
     """
