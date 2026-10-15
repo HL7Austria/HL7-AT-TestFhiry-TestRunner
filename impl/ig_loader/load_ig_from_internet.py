@@ -5,6 +5,7 @@ import os
 import json
 import re
 from pathlib import Path
+from urllib.parse import urljoin
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -42,16 +43,23 @@ def save_example_instances(config_path=None):
     os.makedirs(json_dir, exist_ok=True)
 
     # Get the artifacts page
-    response = requests.get(f"{base_url}/artifacts.html")
-
+    artifacts_url = f"{base_url}/artifacts.html"
+    response = requests.get(artifacts_url, timeout=30)
     soup = BeautifulSoup(response.text, 'html.parser')
 
+    # Newer IG templates render the artifacts table client-side from a JS data file;
+    # example instances are the rows of the "-ex-example" group (artifacts.html#-ex-example)
+    links = [
+        row["u"] for row in load_artifacts_table_rows(soup, artifacts_url)
+        if row.get("u") and row.get("gid") == "-ex-example"
+    ]
+
+    # Older IG templates render the examples in their own section with header and table
     example_text = soup.find(
         lambda tag: tag.name in ["h2", "h3", "h4", "h5", "h6"]
                     and re.search(r"Example:\s*Example Instances", tag.get_text(strip=True), re.I)
     )
 
-    links = []
     if example_text:
         section = example_text.find_next(["div", "table", "p"])
 
@@ -61,6 +69,9 @@ def save_example_instances(config_path=None):
         if section and section.name in ["div", "table"]:
             for a in section.find_all("a", href=True):
                 links.append(a["href"])
+
+    links = list(dict.fromkeys(links))
+    print(f"Found {len(links)} example instances on {artifacts_url}")
 
     save_links(links, json_dir, base_url)
 
@@ -79,16 +90,27 @@ def save_profiles(config_path=None):
     os.makedirs(json_dir, exist_ok=True)
 
     # Get the artifacts page
-    response = requests.get(f"{base_url}/artifacts.html")
-
+    artifacts_url = f"{base_url}/artifacts.html"
+    response = requests.get(artifacts_url, timeout=30)
     soup = BeautifulSoup(response.text, 'html.parser')
 
+    # Profiles reference the IG's extensions, so the validator needs both
+    # (e.g. "Structures: Resource Profiles", "Structures: Extension Definitions")
+    category_pattern = re.compile(r"profiles|extension definitions", re.I)
+
+    # Newer IG templates render the artifacts table client-side from a JS data file,
+    # grouped by category
+    links = [
+        row["u"] for row in load_artifacts_table_rows(soup, artifacts_url)
+        if row.get("u") and category_pattern.search(row.get("g", ""))
+    ]
+
+    # Older IG templates render one section per category, each with its own header and table
     profile_headers = soup.find_all(
         lambda tag: tag.name in ["h2", "h3", "h4", "h5", "h6"]
-                    and re.search(r"profiles", tag.get_text(strip=True), re.I)
+                    and category_pattern.search(tag.get_text(strip=True))
     )
 
-    links = []
     for header in profile_headers:
         section = header.find_next(["div", "table", "p"])
 
@@ -100,9 +122,32 @@ def save_profiles(config_path=None):
                 links.append(a["href"])
 
     links = list(dict.fromkeys(links))
+    print(f"Found {len(links)} profiles and extensions on {artifacts_url}")
 
     save_links(links, json_dir, base_url)
 
+
+def load_artifacts_table_rows(soup, page_url):
+    # Rows of the client-side artifacts table, read from the script that holds its data
+    # (window.artifactsTableData = {<lang>: {"rows": [{"g": <category>, "u": <page>, ...}]}})
+    script = soup.find("script", src=re.compile(r"artifacts-table-data\.js"))
+    if not script:
+        return []
+
+    data_url = urljoin(page_url, script["src"])
+    try:
+        response = requests.get(data_url, timeout=30)
+        response.raise_for_status()
+        js = response.text
+        data = json.loads(js[js.index("=") + 1:].strip().rstrip(";"))
+    except (requests.RequestException, ValueError) as e:
+        print(f"Error reading artifacts table data from {data_url}: {e}")
+        return []
+
+    # Pick the language block the same way the page does, based on <html lang="...">
+    lang = soup.html.get("lang", "") if soup.html else ""
+    block = data.get(lang) or data.get(lang.split("-")[0]) or next(iter(data.values()), {})
+    return block.get("rows", [])
 
 
 def save_links(links, json_dir, url):
@@ -140,7 +185,6 @@ def save_test_scripts(config_path=None):
 
     # Get the main test page
     response = requests.get(f"{base_url}/tests.html", timeout=30)
-
     soup = BeautifulSoup(response.text, 'html.parser')
 
     # Find all TestScript links
