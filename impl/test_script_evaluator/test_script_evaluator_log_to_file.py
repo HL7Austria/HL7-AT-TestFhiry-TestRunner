@@ -493,10 +493,7 @@ def load_testscript_data(testscript_path, resource_path) -> tuple[dict,list]:
     :return: Tuple of (testscript, resources) data.
     """
     testscript = utils.load_json(testscript_path)
-    if resource_path:
-        resources = utils.load_resource_list(resource_path)
-    else:
-        resources = None
+    resources = utils.load_resource_list(resource_path) if resource_path else []
     return testscript, resources
 
 def execute_actions(action: dict[str, Any]) -> None:
