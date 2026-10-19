@@ -3,6 +3,7 @@ import requests
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import quote
 
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
@@ -96,7 +97,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
             url = build_url(operation)
 
         if operation.get("encodeRequestUrl") == True:
-            url = requests.utils.quote(url, safe=":/?=")
+            url = quote(url, safe=":/?=")
 
 
         if sourceId:
