@@ -365,6 +365,9 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             response = int      
             #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
 
+    if response is None:
+        raise error.TestScriptError("No response to assert against: no operation has been executed yet")
+
     compare_val = assertion.get("value") #empty if there is none
     try:
 
@@ -425,7 +428,10 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         if "validateProfileId" in assertion:
             msg = ""
             if PROFILES:
-                msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
+                profile_ref = PROFILES.get(assertion["validateProfileId"])
+                if not profile_ref:
+                    raise error.TestScriptError(f"Profile {assertion['validateProfileId']} not found in testscript")
+                msg = validate.validate_profile_assertion(profile_ref, response)
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
                        
@@ -434,7 +440,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
-            validate.validate_resource(response, assertion.get("resource"), operator)
+            validate.validate_resource(response, assertion["resource"], operator)
         
         elif "headerField" in assertion:
             #mit value
@@ -442,7 +448,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
                 raise error.TestScriptError("headerFiedld operator value not valid")
-            validate.validate_headerfield(response, assertion.get("headerField"), compare_val, operator)
+            validate.validate_headerfield(response, assertion["headerField"], compare_val, operator)
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
@@ -458,14 +464,14 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "eval"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
                 raise error.TestScriptError("expression operator value not valid")
-            validate.validate_expression(response, assertion.get("expression"), operator, compare_val)
+            validate.validate_expression(response, assertion["expression"], operator, compare_val)
         
         elif "path" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            validate.validate_path(response, assertion.get("path"), compare_val, operator)
+            validate.validate_path(response, assertion["path"], compare_val, operator)
 
         
         if "minimumId" in assertion:
