@@ -839,7 +839,20 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
                 PROFILES[pid] = prof.get("reference")
         else:
             # R5 canonical form: prof is a URL string; id comes from _profile[idx]
-            pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
+            #pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
+            if isinstance(prof, str):
+                profile_canonical = prof
+                if profile_canonical.startswith("http"):
+                    profile_canonical = profile_canonical
+                    profile_canonical = profile_canonical[profile_canonical.rindex("/")+1:]
+                    print(f"Profile canonical ID extracted: {profile_canonical}")
+                else:
+                    profile_canonical = None
+            else:
+                profile_canonical = None
+
+            pid = profile_canonical
+
             if pid:
                 PROFILES[pid] = prof
              
@@ -1123,8 +1136,10 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
     except error.TestScriptError as tse:
         autodelete() #autodelete after everything went wrong
         trk = rt.get_result_tracker()
-        if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
+        if not trk.current_outcome:
+            # Failed before any phase started - open an outcome so the reason is recorded
+            trk.start_outcome("Setup", "Aborted")
+        trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
         already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
@@ -1135,8 +1150,10 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
                 trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
     except Exception as e:
         trk = rt.get_result_tracker()
-        if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
+        if not trk.current_outcome:
+            # Failed before any phase started - open an outcome so the reason is recorded
+            trk.start_outcome("Setup", "Aborted")
+        trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
         if trk.current_testscript:
             trk.current_testscript.outcome = "fail"
         already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
