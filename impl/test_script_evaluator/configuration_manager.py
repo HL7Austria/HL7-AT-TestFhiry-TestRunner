@@ -243,7 +243,7 @@ class ConfigManager:
                     f"Error: {e.msg}\n"
                     f"Line: {e.lineno}, Column: {e.colno}\n"
                 )
-                raise json.decoder.JSONDecodeError(message)
+                raise Exception(message)
 
 
         if not result:
