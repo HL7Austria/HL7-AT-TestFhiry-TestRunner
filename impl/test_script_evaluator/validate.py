@@ -410,9 +410,9 @@ def eval_compareTo(fixture: Interaction| Fixture, assertion : dict[str,Any]):
         else:
             body_use = fixture.body
 
-        return eval_expression(body_use, assertion.get("compareToSourceExpression"))
+        return eval_expression(body_use, assertion["compareToSourceExpression"])
     elif "compareToSourcePath" in assertion:
-        return eval_path(fixture.body, assertion.get("compareToSourcePath"))
+        return eval_path(fixture.body, assertion["compareToSourcePath"])
 
 def eval_expression(body : dict[str, Any], expression : str):
     """Evaluates a FHIRPath expression against a resource body.
@@ -514,7 +514,7 @@ def eval_xpath(body : str, path:str):
     result = root.xpath(path)
     return result
 
-def eval_json_path(body : str, path:str):
+def eval_json_path(body : str | dict, path:str):
     if isinstance(body,str):
         body = json.loads(body)
 
