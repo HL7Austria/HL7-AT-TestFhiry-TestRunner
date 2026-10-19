@@ -119,7 +119,9 @@ class ResultTracker:
         (elapsed time since start_outcome, 'pass', empty message, None).
 
         :param time_spent: Optional explicit duration in seconds.
-        :param result: Optional result string ('pass' or 'fail').
+        :param result: Optional result string: 'pass', 'fail' (an assertion
+            failed, i.e. the server under test misbehaved), 'error' (the
+            TestScript or the tool could not be executed) or 'skip'.
         :param message: Optional descriptive message or error text.
         :param error_type: Optional classification of any error (e.g. exception class name).
         """
@@ -142,9 +144,12 @@ class ResultTracker:
             self.current_testscript.total_time += time_spent
             if self.current_test_run:
                 self.current_test_run.total_time += time_spent
-            if result == "fail":
+            # precedence of the TestScript outcome: error > fail > skip > pass
+            if result == "error":
+                self.current_testscript.outcome = "error"
+            elif result == "fail" and self.current_testscript.outcome != "error":
                 self.current_testscript.outcome = "fail"
-            elif result == "skip" and self.current_testscript.outcome != "fail":
+            elif result == "skip" and self.current_testscript.outcome == "pass":
                 self.current_testscript.outcome = "skip"
             self.current_outcome = None
             self._phase_start_time = None

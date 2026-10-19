@@ -183,8 +183,10 @@ def execute_operation(operation: dict[str, Any]) -> None:
                     raise ValueError("No ID found in response or Location header")
             if isinstance(fixture, Fixture):
                 fixture.server_id = saved_resource_id
+    except error.TestScriptError:
+        raise
     except Exception as e:
-        raise error.TestScriptError(e)
+        raise error.TestScriptError(str(e) or type(e).__name__) from e
     
     
 
@@ -448,7 +450,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             check if first, last and next links
             --> Error needs to reflect what is missing
             """
-            raise NotImplementedError
+            raise NotImplementedError("navigationLinks assertions are not supported yet")
         
         elif "expression" in assertion:
             if not operator:
@@ -471,7 +473,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             find a way to check if this static fixture or previous response is inside the response
             --> find out if there is a library, find out if validator has that
             """
-            raise NotImplementedError
+            raise NotImplementedError("minimumId assertions are not supported yet")
         
         if "defaultManualCompletion" in assertion:
             raise error.TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
@@ -524,8 +526,9 @@ def execute_actions(action: dict[str, Any]) -> None:
     :raises AssertionError: If an assertion with ``stopTestOnFail`` true fails.
     :raises AssertionFailedContinueError: If an assertion with
         ``stopTestOnFail`` false or missing fails.
-    :raises TestExecutionError: If the operation or assertion raises any
-        non-assertion exception, wrapped with context.
+    :raises TestExecutionError: If the operation or assertion could not be
+        executed (invalid TestScript, unsupported feature, connection or
+        validator problem).  The original exception is kept as ``__cause__``.
     """
 
     try:
@@ -561,7 +564,7 @@ def execute_actions(action: dict[str, Any]) -> None:
         raise
 
     except Exception as e:
-        raise error.TestExecutionError(f"Test stopped: {str(e)}")
+        raise error.TestExecutionError(str(e) or type(e).__name__) from e
 
 def save_variables(variables : list) -> None:
     """
@@ -877,6 +880,16 @@ def autodelete() -> None:
             if fix.autodelete and fix.server_id != "":
                 requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
 
+def _error_cause(e: BaseException) -> str:
+    """
+    Returns the class name of the original exception behind ``e``, following
+    the ``raise ... from`` chain (e.g. ``ConnectionError`` instead of the
+    wrapping ``TestExecutionError``).
+    """
+    while e.__cause__ is not None:
+        e = e.__cause__
+    return type(e).__name__
+
 def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     """
     Executes the **setup** phase of a FHIR TestScript.
@@ -889,6 +902,9 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     with true the setup stops at once, otherwise the remaining setup actions
     still run.  Since the tests depend on the setup, any failed setup
     assertion aborts the TestScript afterwards.
+
+    A failed assertion is recorded as ``fail``; a fixture or action that
+    could not be executed is recorded as ``error``.
 
     :param setup_data: The ``setup`` dictionary from the TestScript JSON,
         or an empty dict when there is no explicit setup section.
@@ -907,6 +923,7 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     tracker.set_assertion_count(declared_asserts)
     error_message = ""
     error_type = None
+    failed = False
     warnings = []
     errors = []
     try:
@@ -914,10 +931,8 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
         if fixture_list: #if there are static fixtures to save
             try:
                 save_fixtures(resources, fixture_list)
-            except error.OperationError:
-                raise
             except Exception as e: #failure in autocreate
-                error_type = type(e).__name__
+                error_type = _error_cause(e)
                 error_message = f"Fixture initialization failed ({error_type}): {str(e)}"
                 raise error.TestScriptError(error_message) from e
 
@@ -928,39 +943,33 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
                 warnings.append(f"⚠ WARNING: {str(we)}")
             except error.AssertionFailedContinueError as e:
                 # stopTestOnFail false or missing - record and run the remaining setup actions
+                failed = True
                 errors.append(str(e))
 
         if errors:
             # the tests depend on the setup, so failed setup assertions abort the TestScript
-            error_type = "AssertionError"
             raise error.TestScriptError(f"Setup assertion failed: {'; '.join(errors)}")
 
     except error.TestScriptError:
         raise
     except AssertionError as ae: #stopTestOnFail true - stop the setup at once
+        failed = True
         error_message = f"Setup stopped: {str(ae)}"
-        error_type = "AssertionError"
         raise error.TestScriptError(error_message) from ae
-    except error.OperationError as oe:
-        error_message = f"Setup operation failed: {str(oe)}"
-        error_type = "OperationError"
-        raise error.TestScriptError(error_message) from oe # stop the whole testscript
-    except error.TestExecutionError as teE:
-        error_message = f"Setup action failed: {str(teE)}"
-        error_type = "TestExecutionError"
-        raise error.TestScriptError(error_message) from teE #stop the whole testscript
-    except Exception as e:
-        error_message = f"Setup failed unexpectedly ({type(e).__name__}): {str(e)}"
-        error_type = type(e).__name__
-        raise error.TestScriptError(error_message) from e
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_message = f"Setup stopped ({error_type}): {str(e)}"
+        raise error.TestScriptError(error_message) from e #stop the whole testscript
     finally:
-        result = "fail" if (error_message or errors) else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
-        elif not errors:
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_message:
+            result = "error"
+        else:
+            result = "pass"
+        messages = errors + ([error_message] if error_message else [])
+        if not messages:
             messages.append("Setup successful")
-        messages.extend(errors)
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
@@ -971,13 +980,14 @@ def TEST(test_data : dict) -> None:
     Iterates over all actions defined in the test.
     Assertion failures are recorded and the remaining actions still run,
     unless the assertion has ``stopTestOnFail`` set to true (raised as
-    ``AssertionError``) or a ``TestExecutionError`` occurs; both stop the
-    test.  The overall pass/fail result is recorded when the test ends.
+    ``AssertionError``) or an action could not be executed
+    (``TestExecutionError``); both stop the test, the next test still runs.
+
+    The test is recorded as ``fail`` if any assertion failed, as ``error``
+    if an action could not be executed, and as ``pass`` otherwise.
 
     :param test_data: A single ``test`` element dictionary from the
         TestScript JSON.
-    :raises TestScriptError: If an operation within the test fails
-        (wraps ``OperationError``).
     """
     #Test Capabilities --> if Error --> skip test --> maybe in main
 
@@ -1005,38 +1015,23 @@ def TEST(test_data : dict) -> None:
             except error.AssertionFailedContinueError as e:
                 failed = True
                 errors.append(str(e))
-            except AssertionError as e:
-                raise
-            except error.TestExecutionError as e:
-                raise
 
-    except error.OperationError as oe:
-        failed = True
-        error_message = f"Test operation failed: {str(oe)}"
-        error_type = "OperationError"
-        raise error.TestScriptError(error_message) from oe
-    except AssertionError as e:
+    except AssertionError as e: #stopTestOnFail true
         failed = True
         error_message = str(e)
-        error_type = type(e).__name__
-    except error.TestExecutionError as e:
-        failed = True
-        error_message = str(e)
-        error_type = type(e).__name__
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_message = f"Test stopped ({error_type}): {str(e)}"
         #test schould get stopped, and next test needs to start
     finally:
-        result = "fail" if (failed or error_message) else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
-            if errors:
-                messages.extend(errors)
-        elif errors:
-            messages.extend(errors)
-            error_type = "AssertionError"
-        elif failed:
-            messages.append("Test failed")
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_message:
+            result = "error"
         else:
+            result = "pass"
+        messages = errors + ([error_message] if error_message else [])
+        if not messages:
             messages.append("Test passed")
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
@@ -1050,7 +1045,9 @@ def TEARDOWN(teardown_data : dict) -> None:
     is set.  ``autodelete`` also runs when a teardown action fails.
 
     Failures are recorded in the Teardown outcome and not raised, as there
-    is nothing left to abort after the teardown.
+    is nothing left to abort after the teardown.  A failed assertion is
+    recorded as ``fail``; an action or autodelete that could not be executed
+    as ``error``.
 
     :param teardown_data: The ``teardown`` dictionary from the TestScript
         JSON, or an empty dict when there is no explicit teardown section.
@@ -1060,8 +1057,9 @@ def TEARDOWN(teardown_data : dict) -> None:
     teardown_actions = (teardown_data or {}).get("action", []) or []
     declared_asserts = sum(1 for a in teardown_actions if "assert" in a)
     tracker.set_assertion_count(declared_asserts)
-    error_message = ""
+    error_messages = []
     error_type = None
+    failed = False
     warnings = []
     errors = []
     try:
@@ -1072,32 +1070,31 @@ def TEARDOWN(teardown_data : dict) -> None:
                 warnings.append(f"⚠ WARNING: {str(we)}")
             except error.AssertionFailedContinueError as e:
                 # stopTestOnFail false or missing - record and run the remaining teardown actions
+                failed = True
                 errors.append(str(e))
-                error_type = "AssertionError"
 
     except AssertionError as ae: #stopTestOnFail true - skip the remaining teardown actions
-        error_message = f"Teardown stopped: {str(ae)}"
-        error_type = "AssertionError"
-    except error.TestExecutionError as teE:
-        error_message = f"Teardown action failed: {str(teE)}"
-        error_type = "TestExecutionError"
-    except Exception as e:
-        error_message = f"Teardown failed unexpectedly ({type(e).__name__}): {str(e)}"
-        error_type = type(e).__name__
+        failed = True
+        errors.append(f"Teardown stopped: {str(ae)}")
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_messages.append(f"Teardown stopped ({error_type}): {str(e)}")
 
     try:
         autodelete()
     except Exception as e:
-        errors.append(f"Autodelete of fixtures failed ({type(e).__name__}): {str(e)}")
         error_type = error_type or type(e).__name__
+        error_messages.append(f"Autodelete of fixtures failed ({type(e).__name__}): {str(e)}")
     finally:
-        result = "fail" if (error_message or errors) else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
-        elif not errors:
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_messages:
+            result = "error"
+        else:
+            result = "pass"
+        messages = errors + error_messages
+        if not messages:
             messages.append("Teardown successful")
-        messages.extend(errors)
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
@@ -1106,10 +1103,10 @@ def _record_abort(testscript: dict, message: str, error_type: str) -> None:
     Records the abort of a TestScript in the result tracker.
 
     A phase (Setup/Test/Teardown) that fails records its own failing outcome
-    before it raises.  An extra "Aborted" outcome is only added when nothing
-    has recorded the failure yet, e.g. when the TestScript is invalid and no
-    phase was started.  This way a single fault is counted only once.
-    The tests that did not run are recorded as skipped.
+    before it raises.  An extra "Aborted" outcome (recorded as ``error``) is
+    only added when nothing has recorded the failure yet, e.g. when the
+    TestScript is invalid and no phase was started.  This way a single fault
+    is counted only once.  The tests that did not run are recorded as skipped.
 
     :param testscript: The TestScript dictionary.
     :param message: Reason for the abort.
@@ -1119,14 +1116,13 @@ def _record_abort(testscript: dict, message: str, error_type: str) -> None:
     ts_result = trk.current_testscript
     if trk.current_outcome:
         # A phase was interrupted before it could record its result
-        trk.finish_outcome(result="fail", message=[message], error_type=error_type)
-    elif not ts_result or not ts_result.outcomes or ts_result.outcomes[-1].result != "fail":
+        trk.finish_outcome(result="error", message=[message], error_type=error_type)
+    elif not ts_result or not ts_result.outcomes or ts_result.outcomes[-1].result not in ("fail", "error"):
         # Failed before any phase recorded the failure
         trk.start_outcome("Setup", "Aborted")
-        trk.finish_outcome(result="fail", message=[message], error_type=error_type)
+        trk.finish_outcome(result="error", message=[message], error_type=error_type)
 
     if ts_result:
-        ts_result.outcome = "fail"
         tests_run = sum(1 for o in ts_result.outcomes if o.class_type == "Test")
         for test in testscript.get("test", [])[tests_run:]:
             trk.start_outcome("Test", test.get('name', 'Unnamed Test'))
@@ -1200,13 +1196,13 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
 
     except error.TestScriptError as tse:
         autodelete() #autodelete after everything went wrong
-        _record_abort(testscript, f"TestScript aborted: {str(tse)}", "TestScriptError")
+        _record_abort(testscript, f"TestScript aborted: {str(tse)}", _error_cause(tse))
     except Exception as e:
-        _record_abort(testscript, f"Unexpected error ({type(e).__name__}): {str(e)}", type(e).__name__)
+        _record_abort(testscript, f"Unexpected error ({type(e).__name__}): {str(e)}", _error_cause(e))
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
+            trk.finish_outcome(result="error", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
             
         FIXTURES.clear() 
         REQ_RESP.clear()
