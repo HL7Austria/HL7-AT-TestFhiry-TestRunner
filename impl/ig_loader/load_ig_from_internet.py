@@ -57,7 +57,7 @@ def save_example_instances(config_path=None):
     # Older IG templates render the examples in their own section with header and table
     example_text = soup.find(
         lambda tag: tag.name in ["h2", "h3", "h4", "h5", "h6"]
-                    and re.search(r"Example:\s*Example Instances", tag.get_text(strip=True), re.I)
+                    and bool(re.search(r"Example:\s*Example Instances", tag.get_text(strip=True), re.I))
     )
 
     if example_text:
@@ -108,7 +108,7 @@ def save_profiles(config_path=None):
     # Older IG templates render one section per category, each with its own header and table
     profile_headers = soup.find_all(
         lambda tag: tag.name in ["h2", "h3", "h4", "h5", "h6"]
-                    and category_pattern.search(tag.get_text(strip=True))
+                    and bool(category_pattern.search(tag.get_text(strip=True)))
     )
 
     for header in profile_headers:
@@ -190,7 +190,7 @@ def save_test_scripts(config_path=None):
     # Find all TestScript links
     links = [
         a["href"] for a in soup.find_all("a", href=True)
-        if a["href"].startswith("TestScript-")
+        if str(a["href"]).startswith("TestScript-")
     ]
 
     save_links(links, json_dir, base_url)
