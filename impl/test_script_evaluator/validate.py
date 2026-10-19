@@ -8,7 +8,7 @@ from jsonpath_ng import parse
 from impl.model.interaction import Interaction
 from impl.model.fixture import Fixture
 from typing import Literal, Any
-from lxml import etree
+import lxml.etree as etree
 import impl.test_script_evaluator.utils as utils
 import importlib
 import xml.etree.ElementTree as ET

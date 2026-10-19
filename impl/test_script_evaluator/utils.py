@@ -4,7 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Literal
 import re
-from lxml import etree
+import lxml.etree as etree
 from jsonpath_ng import parse as jp_parse
 
 
