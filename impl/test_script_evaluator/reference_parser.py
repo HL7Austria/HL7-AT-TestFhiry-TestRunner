@@ -1,7 +1,7 @@
 import json
 import re
 import xml.etree.ElementTree as ET
-from typing import Any, List, Union
+from typing import Any, List, Optional, Union
 
 
 def parse_references(body: Union[dict, str], fixture_ids: List[str]) -> List[str]:
@@ -34,7 +34,7 @@ def parse_references(body: Union[dict, str], fixture_ids: List[str]) -> List[str
     return references
 
 
-def _parse_json_references(obj: Any, fixture_ids: List[str], references: List[str] = None) -> List[str]:
+def _parse_json_references(obj: Any, fixture_ids: List[str], references: Optional[List[str]] = None) -> List[str]:
     """
     Recursively parses JSON object for reference fields.
 
@@ -83,7 +83,7 @@ def _parse_xml_references(xml_str: str, fixture_ids: List[str]) -> List[str]:
     return references
 
 
-def _extract_fixture_id_from_reference(reference: str, fixture_ids: List[str]) -> str:
+def _extract_fixture_id_from_reference(reference: str, fixture_ids: List[str]) -> Optional[str]:
     """
     Extracts a fixture ID from a reference string if it matches a known fixture.
 
