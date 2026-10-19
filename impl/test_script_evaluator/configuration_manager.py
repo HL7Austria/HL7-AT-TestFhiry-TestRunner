@@ -3,6 +3,39 @@ import os
 from pathlib import Path
 import impl.test_script_evaluator.utils as utils
 
+def fixture_basename_candidates(reference: str) -> list[str]:
+    """Derives the possible Example Instance file stems for a fixture reference.
+
+    Two spellings occur in practice and both must resolve:
+
+    * the IG publisher page name, ``Patient-HL7ATCorePatientExample.html``
+    * an R4 relative reference, ``Patient/HL7ATCorePatientExample``, which is what
+      SUSHI emits for ``* fixture.resource = Reference(HL7ATCorePatientExample)``
+
+    Example Instance files are named ``<ResourceType>-<id>``, so a relative reference
+    has to be rejoined with a dash rather than treated as a directory.
+
+    :param reference: The value of ``fixture.resource.reference``.
+    :returns: Candidate file stems, most specific first, without extension.
+    """
+    segments = [seg for seg in reference.split("/") if seg]
+    if not segments:
+        return []
+
+    stem = os.path.splitext(segments[-1])[0]
+    candidates = []
+
+    # "Patient/Foo" (or ".../fhir/Patient/Foo") -> "Patient-Foo"
+    if len(segments) >= 2:
+        candidates.append(f"{segments[-2]}-{stem}")
+
+    # "Patient-Foo.html" -> "Patient-Foo"; also the bare-id fallback for the case above
+    if stem not in candidates:
+        candidates.append(stem)
+
+    return candidates
+
+
 class ConfigManager:
     """
     Manages configuration loading and provides access to configuration values.
@@ -66,6 +99,19 @@ class ConfigManager:
         """
         return self.config.get("url", "")
     
+    @property
+    def fhir_version(self):
+        """
+        Gets the FHIR version the HL7 Validator CLI should validate against.
+
+        Without it the validator falls back to its newest supported version,
+        which reports R4 resources as invalid (e.g. TestScript.profile is a
+        Reference in R4 but a canonical in R5).
+
+        :return: FHIR version string, defaults to "4.0".
+        """
+        return self.config.get("fhirVersion", "4.0")
+
     @property
     def validator(self) -> bool:
         """
@@ -164,15 +210,27 @@ class ConfigManager:
                 for fixture in fixtures_raw:
                     fixture_ref = fixture.get("resource", {}).get("reference")
                     if fixture_ref:
-                        base_name = os.path.splitext(os.path.basename(fixture_ref))[0]
                         fixture_path = None
-                        for ext in [".json", ".xml"]:
-                            candidate = f"Example_Instances/{base_name}{ext}".replace("\\", "/")
-                            if os.path.exists(utils.get_full_path(candidate)):
-                                fixture_path = candidate
+                        tried = []
+                        for base_name in fixture_basename_candidates(fixture_ref):
+                            for ext in [".json", ".xml"]:
+                                candidate = f"Example_Instances/{base_name}{ext}".replace("\\", "/")
+                                tried.append(candidate)
+                                if os.path.exists(utils.get_full_path(candidate)):
+                                    fixture_path = candidate
+                                    break
+                            if fixture_path:
                                 break
-                        if fixture_path:
-                            fixture_list.append(fixture_path)
+                        if not fixture_path:
+                            # Must not be skipped: save_fixtures zips the loaded resources
+                            # against the full fixture list, so a dropped entry shifts every
+                            # later fixture onto the wrong body.
+                            raise Exception(
+                                f"No Example Instance found for fixture "
+                                f"'{fixture.get('id', '<no id>')}' referencing '{fixture_ref}' "
+                                f"in {ts_path}.\nTried: " + ", ".join(tried)
+                            )
+                        fixture_list.append(fixture_path)
 
                 result.append((ts_path, fixture_list))
 
@@ -229,4 +287,9 @@ def has_fhir_server():
 def get_validator():
     """Convenience function to get validator setting."""
     return get_config_manager().validator
+
+
+def get_fhir_version():
+    """Convenience function to get the FHIR version for the validator."""
+    return get_config_manager().fhir_version
 
