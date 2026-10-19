@@ -3,7 +3,7 @@ class TestExecutionError(Exception):
     pass
 
 class TestScriptError(Exception):
-    """Custom exception for stopTestOnFail """
+    """Raised when the whole TestScript has to be aborted"""
     pass
 
 class OperationError(Exception):
@@ -35,5 +35,5 @@ class WarningException(Exception):
     pass
 
 class AssertionFailedContinueError(Exception):
-    """Raised when an assertion fails but stopTestOnFail is false — execution continues"""
+    """Raised when an assertion fails and stopTestOnFail is false or missing — execution continues"""
     pass

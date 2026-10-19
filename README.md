@@ -464,6 +464,13 @@ Die folgende Tabelle zeigt, welche Felder aus der FHIR®-TestScript-Ressource im
 | Test–Assert    | requestURL       | URL des Requests          | –         | out of scope             |
 | Test–Assert    | response       | Response-Bezeichnung (okay, accepted usw.)          | –         | partiell             |
 | Test–Assert    | warningOnly       | Nur Warnung bei Fehlschlag          | –         | ✅             |
+| Test–Assert    | stopTestOnFail       | Abbruch des aktuellen Tests bei Fehlschlag (siehe unten)          | –         | ✅             |
+
+> **Hinweis zu `stopTestOnFail`:** Die R5-Spezifikation widerspricht sich bei diesem Element. Kurzbeschreibung und Definition („If this assert fails, will the current test execution stop?“) besagen, dass `true` den aktuellen Test abbricht. Der Kommentar besagt das Gegenteil, ist aber eine Kopie des `warningOnly`-Kommentars und wird als Fehler in der Spezifikation behandelt. Der TestRunner verhält sich daher so:
+>
+> * `true`: Der aktuelle Test wird abgebrochen. Die übrigen Tests und das Teardown laufen weiter.
+> * `false` oder nicht angegeben (R4 kennt das Element nicht): Der Fehlschlag wird protokolliert, der Test läuft mit den restlichen Actions weiter.
+> * `warningOnly` hat Vorrang: Ist es `true`, wird nur eine Warnung ausgegeben.
 
 
 ---

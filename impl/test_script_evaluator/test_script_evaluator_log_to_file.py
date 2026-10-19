@@ -503,20 +503,31 @@ def execute_actions(action: dict[str, Any]) -> None:
     assertion — to the corresponding execution function.
 
     Acts as the central routing point for every action inside the setup, test,
-    and teardown phases of a TestScript.  When an assertion carries
-    ``stopTestOnFail`` set to false, a failing assertion is logged but does not
-    abort the current test; otherwise the error propagates.
+    and teardown phases of a TestScript.  A failing assertion is handled
+    according to its flags:
+
+    * ``warningOnly`` true: reported as a warning, the test continues.
+    * ``stopTestOnFail`` true: the current test stops (the remaining tests
+      and the teardown still run).
+    * ``stopTestOnFail`` false or missing: the failure is recorded and the
+      test continues with its remaining actions.
+
+    ``stopTestOnFail`` follows the element's short name and definition
+    ("If this assert fails, will the current test execution stop?").  The
+    R5 spec details comments section says the opposite, but it is a copy of the
+    ``warningOnly`` comment and is treated as a spec error.  R4 does not have
+    the element, so a missing flag means "continue".
 
     :param action: Dictionary representing one action element from a FHIR
         TestScript phase (must contain either an ``operation`` or ``assert`` key).
-    :raises AssertionError: Re-raised when an assertion fails and
-        ``stopTestOnFail`` is not false.
+    :raises WarningException: If a ``warningOnly`` assertion fails.
+    :raises AssertionError: If an assertion with ``stopTestOnFail`` true fails.
+    :raises AssertionFailedContinueError: If an assertion with
+        ``stopTestOnFail`` false or missing fails.
     :raises TestExecutionError: If the operation or assertion raises any
         non-assertion exception, wrapped with context.
     """
 
-    stopTestOnFail = True
-    
     try:
         # WHEN – Operation
         if "operation" in action:
@@ -526,28 +537,26 @@ def execute_actions(action: dict[str, Any]) -> None:
          # THEN - Assertion
         elif "assert" in action:
             assertion = action["assert"]
-            stopTestOnFail = assertion.get("stopTestOnFail")
             execute_assertion(assertion)
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
-        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", True)
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", False)
         # Convert string values to boolean for robust comparison
         if isinstance(warningOnly, str):
             warningOnly = warningOnly.lower() == "true"
         if isinstance(stopTestOnFail, str):
             stopTestOnFail = stopTestOnFail.lower() == "true"
 
-
         if warningOnly:
             # Log warning but continue test
             raise error.WarningException(str(ae))
         elif stopTestOnFail:
-            # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
-            raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
+            # stopTestOnFail is true - stop the current test
+            raise AssertionError(f"Assertion failed (stopTestOnFail): {str(ae)}") from ae
         else:
-            # stopTestOnFail is false
-            raise ae
+            # stopTestOnFail is false or missing - record the failure, continue with remaining actions
+            raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
     except error.WarningException as we:
         raise
 
@@ -856,27 +865,6 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
             if pid:
                 PROFILES[pid] = prof
              
-def handle_assertion_error(e, stop_test_on_fail : bool) -> bool:
-    """
-    Logs a failed assertion and decides whether the current test should be
-    aborted or is allowed to continue.
-
-    Called when an ``AssertionError`` is caught inside ``execute_actions``.
-    If ``stop_test_on_fail`` is ``False`` the error is escalated to a
-    ``TestExecutionError`` so the caller can halt; otherwise the failure is
-    only recorded and execution may proceed.
-
-    :param e: The ``AssertionError`` exception that was raised.
-    :param stop_test_on_fail: When ``False``, the test must be stopped;
-        when ``True``, execution may continue despite the failure.
-    :returns: ``False`` to signal that the assertion failed but continuing
-        is allowed.
-    :raises TestExecutionError: If ``stop_test_on_fail`` is ``False``,
-        indicating the test must not continue.
-    """
-    if stop_test_on_fail == False:
-        raise error.TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
-    return False  # Test failed, but continuing allowed
 
 def autodelete() -> None:
         """
@@ -954,10 +942,10 @@ def TEST(test_data : dict) -> None:
     Executes a single **test** phase of a FHIR TestScript.
 
     Iterates over all actions defined in the test.
-    Assertion failures are logged and flagged but do not necessarily
-    abort the remaining actions; a ``TestExecutionError`` (e.g. from
-    ``stopTestOnFail``) does stop the test.  The overall pass/fail result
-    is logged after all actions have been attempted.
+    Assertion failures are recorded and the remaining actions still run,
+    unless the assertion has ``stopTestOnFail`` set to true (raised as
+    ``AssertionError``) or a ``TestExecutionError`` occurs; both stop the
+    test.  The overall pass/fail result is recorded when the test ends.
 
     :param test_data: A single ``test`` element dictionary from the
         TestScript JSON.
