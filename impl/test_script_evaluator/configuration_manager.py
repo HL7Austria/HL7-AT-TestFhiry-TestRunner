@@ -108,9 +108,9 @@ class ConfigManager:
         which reports R4 resources as invalid (e.g. TestScript.profile is a
         Reference in R4 but a canonical in R5).
 
-        :return: FHIR version string, defaults to "4.0".
+        :return: FHIR version string from ``validation.fhirVersion``, defaults to "4.0".
         """
-        return self.config.get("fhirVersion", "4.0")
+        return self.config.get("validation", {}).get("fhirVersion", "4.0")
 
     @property
     def validator(self) -> bool:

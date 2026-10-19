@@ -223,7 +223,10 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
     "Test_Scripts/TestScript-beispiel.json"
   ],
   "fhirServer": "<fhirServer>",
-  "results_path": ""
+  "results_path": "",
+  "validation": {
+    "fhirVersion": "4.0"
+  }
 }
 ```
 
@@ -234,6 +237,7 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 | `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
 | `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
 | `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
+| `validation`    | Nein    | Einstellungen für den HL7 Validator CLI. `validation.fhirVersion` legt die FHIR®-Version fest, gegen die validiert wird (z. B. `"4.0"` oder `"5.0"`). Standard: `"4.0"`. |
 
 > **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
 > ```
