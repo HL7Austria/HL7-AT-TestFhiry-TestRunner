@@ -1007,11 +1007,14 @@ def TEST(test_data : dict) -> None:
                 errors.append(str(e))
             except AssertionError as e:
                 raise
-            except error.OperationError as oe:
-                raise error.TestScriptError("Test operation failed: ", oe)
             except error.TestExecutionError as e:
                 raise
 
+    except error.OperationError as oe:
+        failed = True
+        error_message = f"Test operation failed: {str(oe)}"
+        error_type = "OperationError"
+        raise error.TestScriptError(error_message) from oe
     except AssertionError as e:
         failed = True
         error_message = str(e)
@@ -1044,12 +1047,13 @@ def TEARDOWN(teardown_data : dict) -> None:
 
     Runs every teardown action (operations and assertions) and afterwards
     calls ``autodelete`` to remove all static fixtures whose ``autodelete`` flag
-    is set.
+    is set.  ``autodelete`` also runs when a teardown action fails.
+
+    Failures are recorded in the Teardown outcome and not raised, as there
+    is nothing left to abort after the teardown.
 
     :param teardown_data: The ``teardown`` dictionary from the TestScript
         JSON, or an empty dict when there is no explicit teardown section.
-    :raises TestScriptError: If a teardown operation fails
-        (wraps ``OperationError``).
     """
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Teardown", "Teardown")
@@ -1059,28 +1063,74 @@ def TEARDOWN(teardown_data : dict) -> None:
     error_message = ""
     error_type = None
     warnings = []
+    errors = []
     try:
         for action in teardown_data.get("action", []):
             try:
                 execute_actions(action)
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
-        
+            except error.AssertionFailedContinueError as e:
+                # stopTestOnFail false or missing - record and run the remaining teardown actions
+                errors.append(str(e))
+                error_type = "AssertionError"
+
+    except AssertionError as ae: #stopTestOnFail true - skip the remaining teardown actions
+        error_message = f"Teardown stopped: {str(ae)}"
+        error_type = "AssertionError"
+    except error.TestExecutionError as teE:
+        error_message = f"Teardown action failed: {str(teE)}"
+        error_type = "TestExecutionError"
+    except Exception as e:
+        error_message = f"Teardown failed unexpectedly ({type(e).__name__}): {str(e)}"
+        error_type = type(e).__name__
+
+    try:
         autodelete()
-        
-    except error.OperationError as oe:
-        error_message = "Teardown operation failed: " + str(oe)
-        error_type = "OperationError"
-        raise error.TestScriptError("Teardown operation failed: " , oe)
+    except Exception as e:
+        errors.append(f"Autodelete of fixtures failed ({type(e).__name__}): {str(e)}")
+        error_type = error_type or type(e).__name__
     finally:
-        result = "fail" if error_message else "pass"
+        result = "fail" if (error_message or errors) else "pass"
         messages = []
         if error_message:
             messages.append(error_message)
-        else:
+        elif not errors:
             messages.append("Teardown successful")
+        messages.extend(errors)
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
+
+def _record_abort(testscript: dict, message: str, error_type: str) -> None:
+    """
+    Records the abort of a TestScript in the result tracker.
+
+    A phase (Setup/Test/Teardown) that fails records its own failing outcome
+    before it raises.  An extra "Aborted" outcome is only added when nothing
+    has recorded the failure yet, e.g. when the TestScript is invalid and no
+    phase was started.  This way a single fault is counted only once.
+    The tests that did not run are recorded as skipped.
+
+    :param testscript: The TestScript dictionary.
+    :param message: Reason for the abort.
+    :param error_type: Error classification for the outcome.
+    """
+    trk = rt.get_result_tracker()
+    ts_result = trk.current_testscript
+    if trk.current_outcome:
+        # A phase was interrupted before it could record its result
+        trk.finish_outcome(result="fail", message=[message], error_type=error_type)
+    elif not ts_result or not ts_result.outcomes or ts_result.outcomes[-1].result != "fail":
+        # Failed before any phase recorded the failure
+        trk.start_outcome("Setup", "Aborted")
+        trk.finish_outcome(result="fail", message=[message], error_type=error_type)
+
+    if ts_result:
+        ts_result.outcome = "fail"
+        tests_run = sum(1 for o in ts_result.outcomes if o.class_type == "Test")
+        for test in testscript.get("test", [])[tests_run:]:
+            trk.start_outcome("Test", test.get('name', 'Unnamed Test'))
+            trk.finish_outcome(result="skip", message=["Skipped: TestScript aborted"])
 
 def test_fhir_operations(testscript_data : dict, testscript_path=""):
     """
@@ -1150,33 +1200,9 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
 
     except error.TestScriptError as tse:
         autodelete() #autodelete after everything went wrong
-        trk = rt.get_result_tracker()
-        if not trk.current_outcome:
-            # Failed before any phase started - open an outcome so the reason is recorded
-            trk.start_outcome("Setup", "Aborted")
-        trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
-        if trk.current_testscript:
-            trk.current_testscript.outcome = "fail"
-        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
-        for test in testscript.get("test", []):
-            test_name = test.get('name', 'Unnamed Test')
-            if test_name not in already_run:
-                trk.start_outcome("Test", test_name)
-                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
+        _record_abort(testscript, f"TestScript aborted: {str(tse)}", "TestScriptError")
     except Exception as e:
-        trk = rt.get_result_tracker()
-        if not trk.current_outcome:
-            # Failed before any phase started - open an outcome so the reason is recorded
-            trk.start_outcome("Setup", "Aborted")
-        trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
-        if trk.current_testscript:
-            trk.current_testscript.outcome = "fail"
-        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
-        for test in testscript.get("test", []):
-            test_name = test.get('name', 'Unnamed Test')
-            if test_name not in already_run:
-                trk.start_outcome("Test", test_name)
-                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
+        _record_abort(testscript, f"Unexpected error ({type(e).__name__}): {str(e)}", type(e).__name__)
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
