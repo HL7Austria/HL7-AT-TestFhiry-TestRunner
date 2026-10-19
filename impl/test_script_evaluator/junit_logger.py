@@ -1,6 +1,5 @@
 from impl.test_script_evaluator.result_tracker import ResultTracker
 from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure
-from datetime import datetime
 from pathlib import Path
 import impl.test_script_evaluator.configuration_manager as conf_man
 def construct_junit(tracker: ResultTracker) -> JUnitXml:
@@ -58,7 +57,7 @@ def fill_and_save(tracker: ResultTracker):
     
     junit_dir = Path(results_dir) / "Junit"
     junit_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xml"
+    filename = f"test_results_{tracker.run_file_stamp()}.xml"
     filepath = junit_dir / filename
     junit = construct_junit(tracker)
     

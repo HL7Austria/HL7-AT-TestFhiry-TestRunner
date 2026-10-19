@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 
 from impl.test_script_evaluator.result_tracker import ResultTracker
@@ -70,7 +69,7 @@ def save_summary(tracker: ResultTracker):
 
     txt_dir = Path(results_dir) / "Txt-files"
     txt_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+    filename = f"test_results_{tracker.run_file_stamp()}.txt"
     filepath = txt_dir / filename
 
     try:

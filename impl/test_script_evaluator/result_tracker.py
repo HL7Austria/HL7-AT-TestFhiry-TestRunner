@@ -67,6 +67,23 @@ class ResultTracker:
             timestamp=datetime.now().isoformat()
         )
     
+    def run_file_stamp(self) -> str:
+        """Formats the run timestamp for use in result filenames.
+
+        Derived from the timestamp of the current run so that the JUnit XML and
+        the summary text file of one run share a name. The millisecond part
+        keeps back-to-back runs from overwriting each other - two runs can
+        easily start within the same second when validation is skipped.
+
+        :returns: Timestamp string such as ``2026-09-15_12-41-15-123``.
+        """
+        stamp = self.current_test_run.timestamp if self.current_test_run else None
+        try:
+            moment = datetime.fromisoformat(stamp) if stamp else datetime.now()
+        except (TypeError, ValueError):
+            moment = datetime.now()
+        return moment.strftime("%Y-%m-%d_%H-%M-%S-") + f"{moment.microsecond // 1000:03d}"
+
     def initialize_testscript(self, name: str, url: str):
         """Begins tracking results for a single TestScript.
 
