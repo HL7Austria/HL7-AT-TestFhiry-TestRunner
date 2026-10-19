@@ -23,7 +23,7 @@ REQ_RESP = [] # responses
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
 
-FHIR_SERVER_BASE = None
+FHIR_SERVER_BASE: str = ""
 
 def replacer(match) -> str:
     """
@@ -1143,7 +1143,7 @@ def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""
     """
 
     global FHIR_SERVER_BASE
-    FHIR_SERVER_BASE = conf_man.get_fhir_server()
+    FHIR_SERVER_BASE = conf_man.get_fhir_server() or ""
 
     if not conf_man.has_fhir_server():
         tracker = rt.get_result_tracker()
