@@ -28,8 +28,10 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
 
             first_msg = phase.message[0] if phase.message else ""
             extra_msgs = phase.message[1:]
-            if phase.result == "fail":
-                if phase.error_type == "TestScriptError":
+            if phase.result in ("fail", "error"):
+                # Failure: an assertion failed (server under test misbehaved)
+                # Error: the TestScript or the tool could not be executed
+                if phase.result == "error":
                     case.result = [Error(message=first_msg, type_=phase.error_type)]
                 else:
                     case.result = [Failure(message=first_msg, type_=phase.error_type)]

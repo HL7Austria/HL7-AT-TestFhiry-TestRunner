@@ -79,7 +79,7 @@ Pro TestScript-Ausführung wird ein Ergebnisobjekt mit folgenden Feldern angeleg
 |------|--------------|
 | `name` | Name oder ID des TestScripts |
 | `url` | Kanonische URL des TestScripts (`TestScript.url`, `1..1` laut FHIR R4) |
-| `outcome` | Gesamtergebnis: `pass`, `fail` oder `skip` |
+| `outcome` | Gesamtergebnis: `pass`, `fail`, `error` oder `skip` (Vorrang: `error` > `fail` > `skip` > `pass`) |
 | `outcomes` | Liste der Phasen-Ergebnisse (siehe unten) |
 
 Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Ergebnisobjekt:
@@ -90,9 +90,17 @@ Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Erg
 | `name` | Name der Phase (Testname bzw. `"Setup"`/`"Teardown"`) |
 | `time_spent` | Laufzeit der Phase in Sekunden |
 | `assertion_count` | Anzahl der deklarierten Assertions in der Phase |
-| `result` | Phasenergebnis: `pass`, `fail` oder `skip` |
+| `result` | Phasenergebnis: `pass`, `fail`, `error` oder `skip` (siehe unten) |
 | `message` | Fehler- oder Erfolgsmeldung der Phase |
-| `error_type` | Fehlerklasse bei Fehlschlag (z.B. `AssertionError`, `TestExecutionError`) |
+| `error_type` | Ursprüngliche Fehlerklasse (z.B. `AssertionError`, `ConnectionError`, `NotImplementedError`) |
+
+**Bedeutung der Ergebnisse** (in der JUnit-Datei als `<failure>` bzw. `<error>`):
+
+| Ergebnis | Bedeutung | Wer muss handeln? |
+|----------|-----------|-------------------|
+| `fail` | Eine Assertion ist fehlgeschlagen – der FHIR-Server verhält sich nicht wie erwartet. | Server-Entwickler:innen |
+| `error` | Der Test konnte nicht ausgeführt werden – z.B. ungültiges TestScript, nicht unterstütztes Feature, Server nicht erreichbar, Validator-Problem oder Fixture konnte nicht angelegt werden. | TestScript-Autor:innen bzw. Betrieb des TestRunners |
+| `skip` | Der Test wurde nicht ausgeführt, weil das TestScript vorher abgebrochen wurde oder kein FHIR-Server konfiguriert ist. | – |
 
 ---
 

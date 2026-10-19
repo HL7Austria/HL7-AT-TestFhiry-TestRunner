@@ -19,20 +19,28 @@ def format_summary(tracker: ResultTracker) -> str:
     total_scripts = len(run.testscript_results)
     passed_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "pass")
     failed_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "fail")
+    error_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "error")
     skipped_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "skip")
-    
+
     lines.append(f"Total TestScripts: {total_scripts}")
     lines.append(f"passed: {passed_scripts}")
     lines.append(f"failed: {failed_scripts}")
+    lines.append(f"errors: {error_scripts}")
     lines.append(f"skipped: {skipped_scripts}")
     lines.append("-" * 34)
-    
+
     if failed_scripts > 0:
         lines.append("failed TestScripts:")
         for ts in run.testscript_results:
             if ts.outcome == "fail":
                 lines.append(ts.name)
-    
+
+    if error_scripts > 0:
+        lines.append("TestScripts with errors (TestScript or tool could not be executed):")
+        for ts in run.testscript_results:
+            if ts.outcome == "error":
+                lines.append(ts.name)
+
     return "\n".join(lines)
 
 
