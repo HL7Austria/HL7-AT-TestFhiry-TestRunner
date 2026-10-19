@@ -219,26 +219,62 @@ def validate_resource(response: Interaction, expected: str, operator: operator_t
     _, resource = utils.extract_fhir_meta(body)
     validate_operator(operator, resource, expected)
 
-def execute_validator(cmd : str) -> list[str]:
-    """Runs a shell command and returns its stdout as a list of lines.
+def get_validator_jar() -> Path:
+    """Resolves the path of the HL7 Validator CLI JAR and checks it is present.
 
-    Used to invoke the FHIR HL7 Validator CLI JAR.
-
-    :param cmd: The full command-line string to execute.
-    :returns: List of output lines (with line endings preserved).
-    :raises ValueError: If the subprocess stdout pipe could not be opened.
+    :returns: Path to ``validator_cli.jar`` below the configured base path.
+    :raises ValidatorError: If the JAR is missing.
     """
-    popen = subprocess.Popen(cmd,stdout=subprocess.PIPE, shell=True)
+    jar = Path(conf_man.get_config_manager().path) / "validator_cli.jar"
+    if not jar.is_file():
+        raise error.ValidatorError(
+            f"FHIR validator not found at {jar}. Download validator_cli.jar into "
+            "that folder, or run with --novalidator to skip profile validation."
+        )
+    return jar
 
-    if popen.stdout is None:
-        raise ValueError("Something went wrong with the subprocess")
-    
-    raw = popen.stdout.read()
-    popen.stdout.close()
-    popen.wait()
+def cleanup_temp(path: Path, temp_dir: Path) -> None:
+    """Removes a temporary resource file and its directory if they still exist.
 
-    decoded = raw.decode("utf-8")
-    output = decoded.splitlines(keepends=True)
+    :param path: The temporary file written for the validator.
+    :param temp_dir: The directory holding it.
+    """
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    try:
+        os.rmdir(temp_dir)
+    except OSError:
+        pass
+
+def execute_validator(cmd : list[str]) -> list[str]:
+    """Runs the FHIR HL7 Validator CLI and returns its stdout as a list of lines.
+
+    :param cmd: The command to execute, as an argv list.
+    :returns: List of output lines (with line endings preserved).
+    :raises ValidatorError: If the validator could not be started or exited
+        without writing anything to stdout. Empty output is indistinguishable
+        from a clean validation in ``check_result``, so it must not be treated
+        as a pass.
+    """
+    try:
+        completed = subprocess.run(cmd, capture_output=True)
+    except (FileNotFoundError, NotADirectoryError) as e:
+        raise error.ValidatorError(
+            f"Could not run the FHIR validator: '{cmd[0]}' not found. "
+            "Profile validation needs a Java runtime on the PATH."
+        ) from e
+
+    output = completed.stdout.decode("utf-8", errors="replace").splitlines(keepends=True)
+
+    if not output:
+        stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+        message = (
+            f"The FHIR validator produced no output (exit code {completed.returncode}), "
+            f"so nothing could be validated.\nCommand: {' '.join(cmd)}"
+        )
+        raise error.ValidatorError(f"{message}\n{stderr}" if stderr else message)
 
     return output
 
@@ -255,7 +291,7 @@ def validateTS(testScript: dict[str, Any]) -> None:
     if conf_man.get_validator():
         return #return to main function without stopping the TestScript
     base_path = Path(conf_man.get_config_manager().path)
-    validator = base_path / "validator_cli.jar"
+    validator = get_validator_jar()
     temp_dir = base_path / "temp"
     path = temp_dir / "temp.json"
     ts_string = json.dumps(testScript)
@@ -264,12 +300,14 @@ def validateTS(testScript: dict[str, Any]) -> None:
     with open(path, "w") as f:
         f.write(ts_string)
 
-    cmd = f"java -jar {validator} {path} -tx n/a"
-    output = execute_validator(cmd)
-    os.remove(path)
-    os.rmdir(temp_dir)
+    cmd = ["java", "-jar", str(validator), str(path),
+           "-version", conf_man.get_fhir_version(), "-tx", "n/a"]
+    try:
+        output = execute_validator(cmd)
+    finally:
+        cleanup_temp(path, temp_dir)
 
-    try: 
+    try:
         check_result(output)
     except AssertionError as ae:
         raise Exception("TestScript not valid: " + str(ae))
@@ -290,6 +328,7 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     if conf_man.get_validator():
         raise error.WarningException("Validator has been disabled")
     base_path = Path(conf_man.get_config_manager().path)
+    validator = get_validator_jar()
     temp_dir = base_path / "temp"
     pathF = temp_dir / "temp"
     if utils.string_type(response.body) == "json":
@@ -301,16 +340,18 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
 
     prof_folder = base_path / "Profiles"
     resource = pathF
-    validator = base_path / "validator_cli.jar"
 
     os.makedirs(temp_dir, exist_ok=True)
     with open(resource, "w") as f:
         f.write(response.body)
 
-    cmd = f"java -jar {validator} -ig {prof_folder} {resource} -profile {profileRef} -tx n/a"
-    output = execute_validator(cmd)
-    os.remove(resource)
-    os.rmdir(temp_dir)
+    cmd = ["java", "-jar", str(validator), "-ig", str(prof_folder),
+           str(resource), "-profile", profileRef,
+           "-version", conf_man.get_fhir_version(), "-tx", "n/a"]
+    try:
+        output = execute_validator(cmd)
+    finally:
+        cleanup_temp(resource, temp_dir)
 
     return check_result(output)
 
