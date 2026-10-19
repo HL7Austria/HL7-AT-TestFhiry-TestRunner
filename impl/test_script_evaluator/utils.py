@@ -100,12 +100,9 @@ def load_resource_list(paths : list[str]) -> list:
     """Loads multiple FHIR resource files (JSON or XML) from the given paths.
 
     :param paths: List of relative path strings to resource files.
-    :returns: List of parsed JSON dicts or raw XML strings, or ``None`` if ``paths`` is empty.
+    :returns: List of parsed JSON dicts or raw XML strings (empty if ``paths`` is empty).
     """
     resource_list = []
-
-    if not paths:
-        return None
 
     for path in paths:
         resource_list.append(load_resource(path))
