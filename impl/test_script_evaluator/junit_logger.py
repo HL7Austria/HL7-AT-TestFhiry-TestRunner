@@ -1,7 +1,12 @@
 from impl.test_script_evaluator.result_tracker import ResultTracker
-from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure
+from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure, IntAttr
 from pathlib import Path
 import impl.test_script_evaluator.configuration_manager as conf_man
+
+class PhaseTestCase(TestCase):
+    """TestCase that also writes the phase's assertion count."""
+    assertions = IntAttr()
+
 def construct_junit(tracker: ResultTracker) -> JUnitXml:
     """
     Constructs the Body of a JUnit style xml from a ResultTracker object.
@@ -11,17 +16,16 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
     
     :raises Exception: If the tracker is empty
     """
-    if not tracker:
+    if not tracker or not tracker.current_test_run:
         raise Exception("tracker needs to be filled before saving as Junit XML")
     
     res_junit = JUnitXml()
     res_junit.time = tracker.current_test_run.total_time
     for testscrpt in tracker.current_test_run.testscript_results:
         suite = TestSuite(testscrpt.name)
-        suite.classname = "TestScript"
         suite.time = testscrpt.total_time
         for phase in testscrpt.outcomes:
-            case = TestCase(phase.name)
+            case = PhaseTestCase(phase.name)
             case.classname = phase.class_type
             case.assertions = phase.assertion_count
             case.time = phase.time_spent
