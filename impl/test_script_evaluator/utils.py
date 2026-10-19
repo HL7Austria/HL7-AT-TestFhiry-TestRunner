@@ -44,11 +44,12 @@ def get_fixture(testscript: dict) -> list[dict]:
         fixtures.append(fixture)
     return fixtures
 
-def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
+def get_profile(testscript : dict) -> tuple[list, list[dict]]:
     """Extracts profile references and their corresponding IDs from a TestScript.
 
     :param testscript: Parsed TestScript JSON dictionary.
-    :returns: Tuple of (profile reference list, profile ID list).
+    :returns: Tuple of (profile entries - canonical URLs (R5) or Reference objects (R4),
+        ``_profile`` primitive-extension objects).
     """
     profiles = []
     profile_ids = []
