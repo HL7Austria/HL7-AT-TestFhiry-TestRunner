@@ -885,13 +885,19 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     references so they point to server-assigned IDs, and then runs every
     setup action in order.
 
+    Setup assertions follow the same ``stopTestOnFail`` rules as in a test:
+    with true the setup stops at once, otherwise the remaining setup actions
+    still run.  Since the tests depend on the setup, any failed setup
+    assertion aborts the TestScript afterwards.
+
     :param setup_data: The ``setup`` dictionary from the TestScript JSON,
         or an empty dict when there is no explicit setup section.
     :param fixture_list: List of raw fixture definition dictionaries from
         the TestScript.
     :param resources: List of parsed JSON bodies of the Example Instance
         files that back the fixtures.
-    :raises TestScriptError: If a setup operation fails
+    :raises TestScriptError: If fixture creation, a setup operation or a
+        setup assertion fails
     """
     global FIXTURES
     tracker = rt.get_result_tracker()
@@ -904,34 +910,55 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     warnings = []
     errors = []
     try:
-        
+
         if fixture_list: #if there are static fixtures to save
-            save_fixtures(resources, fixture_list)
+            try:
+                save_fixtures(resources, fixture_list)
+            except error.OperationError:
+                raise
+            except Exception as e: #failure in autocreate
+                error_type = type(e).__name__
+                error_message = f"Fixture initialization failed ({error_type}): {str(e)}"
+                raise error.TestScriptError(error_message) from e
+
         for action in setup_data.get("action", []):
             try:
                 execute_actions(action)
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
-        
+            except error.AssertionFailedContinueError as e:
+                # stopTestOnFail false or missing - record and run the remaining setup actions
+                errors.append(str(e))
+
+        if errors:
+            # the tests depend on the setup, so failed setup assertions abort the TestScript
+            error_type = "AssertionError"
+            raise error.TestScriptError(f"Setup assertion failed: {'; '.join(errors)}")
+
+    except error.TestScriptError:
+        raise
+    except AssertionError as ae: #stopTestOnFail true - stop the setup at once
+        error_message = f"Setup stopped: {str(ae)}"
+        error_type = "AssertionError"
+        raise error.TestScriptError(error_message) from ae
     except error.OperationError as oe:
-        error_message = "Setup operation failed: " + str(oe)
+        error_message = f"Setup operation failed: {str(oe)}"
         error_type = "OperationError"
-        raise error.TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
+        raise error.TestScriptError(error_message) from oe # stop the whole testscript
     except error.TestExecutionError as teE:
         error_message = f"Setup action failed: {str(teE)}"
         error_type = "TestExecutionError"
-        raise error.TestScriptError("Setup failed: " , teE) #stop the whole testscript
-    
-    except Exception as e: #usually only failure in autocreate
-        error_message = f"Fixture initialization failed ({type(e).__name__}): {str(e)}"
+        raise error.TestScriptError(error_message) from teE #stop the whole testscript
+    except Exception as e:
+        error_message = f"Setup failed unexpectedly ({type(e).__name__}): {str(e)}"
         error_type = type(e).__name__
-        raise error.TestScriptError(error_message)
+        raise error.TestScriptError(error_message) from e
     finally:
         result = "fail" if (error_message or errors) else "pass"
         messages = []
         if error_message:
             messages.append(error_message)
-        else:
+        elif not errors:
             messages.append("Setup successful")
         messages.extend(errors)
         messages.extend(warnings)
