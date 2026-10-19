@@ -851,8 +851,8 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
                 PROFILES[pid] = prof.get("reference")
         else:
             # R5 canonical form: prof is a URL string; id comes from _profile[idx]
-            #pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
-            if isinstance(prof, str):
+            pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
+            if pid is None and isinstance(prof, str):
                 profile_canonical = prof
                 if profile_canonical.startswith("http"):
                     profile_canonical = profile_canonical
@@ -863,7 +863,7 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
             else:
                 profile_canonical = None
 
-            pid = profile_canonical
+            pid = profile_canonical if profile_canonical is not None else pid
 
             if pid:
                 PROFILES[pid] = prof
