@@ -652,6 +652,9 @@ def eval_variable(var : Variable):
             if fixture.source_id == sourceId:
                 fix = fixture
 
+        if fix is None:
+            raise error.TestScriptError(f"Variable {var.name}: no fixture or response found for sourceId {sourceId}")
+
         if var.headerField:
             if not isinstance(fix, Interaction):
                 raise TypeError("Field \"headerField\" cannot be evaluated from a Fixture!")
