@@ -42,7 +42,7 @@ def replacer(match) -> str:
     var_name = match.group(1)
     for var in VARIABLES:
         if var.name == var_name:
-            return eval_variable(var)
+            return str(eval_variable(var))
     
     raise Exception(f"Variable {var_name} could not be found")
 
