@@ -1,5 +1,5 @@
 import json
-import requests
+import logging
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -15,8 +15,12 @@ import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.reference_parser as reference_parser
 import impl.test_script_evaluator.dependency_resolver as dependency_resolver
 import impl.test_script_evaluator.result_tracker as rt
+import impl.test_script_evaluator.communication_logger as comm_log
+
+log = logging.getLogger("testrunner.executor")
 
 last_interaction = None
+asserted_interaction = None # interaction the last assertion was evaluated against
 
 FIXTURES = [] # static Fixtures
 REQ_RESP = [] # responses
@@ -46,6 +50,27 @@ def replacer(match) -> str:
     
     raise Exception(f"Variable {var_name} could not be found")
 
+VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+def resolve_variables(element: dict[str, Any]) -> dict[str, Any]:
+    """
+    Replaces every variable placeholder (``${varName}``) in an operation or
+    assertion with the value of the variable and logs the values used.
+
+    :param element: Operation or assert dictionary from the TestScript.
+    :returns: A copy of ``element`` with the variables replaced.
+    """
+    json_str = json.dumps(element)
+    values = {}
+    def resolve(match) -> str:
+        if match.group(1) not in values:
+            values[match.group(1)] = replacer(match)
+        return values[match.group(1)]
+    result = VARIABLE_PATTERN.sub(resolve, json_str)
+    for name, value in values.items():
+        log.debug("Variable ${%s} = '%s'", name, value)
+    return json.loads(result)
+
 def execute_operation(operation: dict[str, Any]) -> None:
     """
     Executes a single FHIR TestScript operation against the configured FHIR server.
@@ -64,10 +89,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
     try:
 
             # do I want to check if variables are in the right place?
-        pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-        json_str = json.dumps(operation)
-        result = pattern.sub(replacer, json_str)
-        operation = json.loads(result)
+        operation = resolve_variables(operation)
 
         #get all Info from operation
         method = operation.get("method")
@@ -99,6 +121,9 @@ def execute_operation(operation: dict[str, Any]) -> None:
         if operation.get("encodeRequestUrl") == True:
             url = quote(url, safe=":/?=")
 
+        log.info("Operation %s", _describe_operation(operation, method))
+        if operation.get("description"):
+            log.debug("Operation description: %s", operation["description"])
 
         if sourceId:
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -116,16 +141,16 @@ def execute_operation(operation: dict[str, Any]) -> None:
 
         match (method):
             case "get":
-                response = requests.get(url, headers=headers)
+                request_id, response = comm_log.send_request("get", url, headers)
             case "post":
                 if not fixture:
                     if not (operation_type == "search" or operation_type == "capabilities"):
                         raise error.TestScriptError("No Fixture found in POST!")
                     else:
-                        response = requests.post(url, headers=headers)
+                        request_id, response = comm_log.send_request("post", url, headers)
                 else:
                     body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
-                    response = requests.post(url, headers=headers, data=body_data)
+                    request_id, response = comm_log.send_request("post", url, headers, body_data)
             case "put":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PUT!")
@@ -139,16 +164,16 @@ def execute_operation(operation: dict[str, Any]) -> None:
                 else:
                     fixture.body = re.sub(r'(<id[^>]*value=")[^"]*("/>)', r'\g<1>' + update_id + r'\g<2>', fixture.body)
                     body_data = fixture.body
-                response = requests.put(url, headers=headers, data=body_data)
+                request_id, response = comm_log.send_request("put", url, headers, body_data)
             case "delete":
-                response = requests.delete(url, headers=headers)
+                request_id, response = comm_log.send_request("delete", url, headers)
             case "head":
-                response = requests.head(url, headers=headers)
+                request_id, response = comm_log.send_request("head", url, headers)
             case "patch":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PATCH!")
                 body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
-                response = requests.patch(url, headers=headers, data=body_data)
+                request_id, response = comm_log.send_request("patch", url, headers, body_data)
             case _:
                 raise error.TestScriptError(f"Method {method} not supported.")
 
@@ -158,7 +183,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
             # integrity errors returned as a non-2xx OperationOutcome).
             if not (200 <= response.status_code < 300):
                 raise error.TestScriptError(
-                    f"Create operation failed: HTTP {response.status_code} {response.reason} - "
+                    f"Create operation failed ({request_id}): HTTP {response.status_code} {response.reason} - "
                     f"{response.text[:500]}"
                 )
             saved_resource_id = ""
@@ -184,6 +209,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
                     raise ValueError("No ID found in response or Location header")
             if isinstance(fixture, Fixture):
                 fixture.server_id = saved_resource_id
+            log.debug("%s created resource id '%s'", request_id, saved_resource_id)
     except error.TestScriptError:
         raise
     except Exception as e:
@@ -197,6 +223,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
     last_interaction.status_code = response.status_code
     last_interaction.reason = response.reason
     last_interaction.res_id = int_id
+    last_interaction.request_id = request_id
     
 
     if int_id != None:
@@ -348,13 +375,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         expression, path, minimumId) is not yet implemented.
     """
     global last_interaction
+    global asserted_interaction
     global REQ_RESP
 
+    asserted_interaction = None
     #--> not checking if the variable is at the right place!
-    pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-    json_str = json.dumps(assertion)
-    result = pattern.sub(replacer, json_str)
-    assertion = json.loads(result)
+    assertion = resolve_variables(assertion)
 
     operator = assertion.get("operator")
     response = last_interaction
@@ -367,6 +393,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
 
     if response is None:
         raise error.TestScriptError("No response to assert against: no operation has been executed yet")
+    asserted_interaction = response
 
     compare_val = assertion.get("value") #empty if there is none
     try:
@@ -432,6 +459,8 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 if not profile_ref:
                     raise error.TestScriptError(f"Profile {assertion['validateProfileId']} not found in testscript")
                 msg = validate.validate_profile_assertion(profile_ref, response)
+                if msg.strip():
+                    log.debug("Validator warnings and information:%s", msg.rstrip())
             else:
                 raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
                        
@@ -544,7 +573,10 @@ def execute_actions(action: dict[str, Any]) -> None:
          # THEN - Assertion
         elif "assert" in action:
             assertion = action["assert"]
+            if assertion.get("description"):
+                log.debug("Assert description: %s", assertion["description"])
             execute_assertion(assertion)
+            log.info("Assert passed: %s%s", _describe_assertion(assertion), _request_ref())
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
@@ -555,20 +587,71 @@ def execute_actions(action: dict[str, Any]) -> None:
         if isinstance(stopTestOnFail, str):
             stopTestOnFail = stopTestOnFail.lower() == "true"
 
+        description = _describe_assertion(action.get("assert", {}))
         if warningOnly:
             # Log warning but continue test
+            log.warning("Assert failed (warningOnly): %s%s - %s", description, _request_ref(), ae)
             raise error.WarningException(str(ae))
         elif stopTestOnFail:
             # stopTestOnFail is true - stop the current test
+            log.error("Assert failed (stopTestOnFail): %s%s - %s", description, _request_ref(), ae)
             raise AssertionError(f"Assertion failed (stopTestOnFail): {str(ae)}") from ae
         else:
             # stopTestOnFail is false or missing - record the failure, continue with remaining actions
+            log.error("Assert failed: %s%s - %s", description, _request_ref(), ae)
             raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
     except error.WarningException as we:
+        log.warning("Assert not checked: %s - %s", _describe_assertion(action.get("assert", {})), we)
         raise
 
     except Exception as e:
+        kind = "Assert" if "assert" in action else "Operation"
+        log.error("%s could not be executed (%s): %s", kind, _error_cause(e), str(e) or type(e).__name__)
+        log.debug("Traceback:", exc_info=True)
         raise error.TestExecutionError(str(e) or type(e).__name__) from e
+
+def _describe_operation(operation: dict[str, Any], method: str) -> str:
+    """
+    Short description of an operation for the log, e.g.
+    ``create Patient (POST, sourceId patient-create, responseId create-response)``.
+    """
+    op_type = operation.get("type", {}).get("code") or "operation"
+    text = f"{op_type} {operation.get('resource') or ''}".strip()
+    details = [method.upper()]
+    for field in ("sourceId", "targetId", "params", "responseId", "requestId"):
+        if operation.get(field):
+            details.append(f"{field} {operation[field]}")
+    return f"{text} ({', '.join(details)})"
+
+def _describe_assertion(assertion: dict[str, Any]) -> str:
+    """
+    Short description of an assertion for the log, e.g. ``responseCode in '200,201'``
+    or ``expression 'Patient.id' equals 'abc' on read-response``.
+    """
+    operator = assertion.get("operator")
+    checks = []
+    for check in ("responseCode", "response", "contentType", "resource"):
+        if check in assertion:
+            checks.append(" ".join(filter(None, [check, operator, f"'{assertion[check]}'"])))
+    for check in ("validateProfileId", "headerField", "expression", "path", "minimumId", "navigationLinks"):
+        if check in assertion:
+            text = " ".join(filter(None, [f"{check} '{assertion[check]}'", operator]))
+            if "value" in assertion:
+                text += f" '{assertion['value']}'"
+            elif "compareToSourceId" in assertion:
+                text += f" {assertion['compareToSourceId']}"
+            checks.append(text)
+    if not checks:
+        return assertion.get("label") or assertion.get("description") or "assertion"
+    text = ", ".join(checks)
+    if assertion.get("sourceId"):
+        text += f" on {assertion['sourceId']}"
+    return text
+
+def _request_ref() -> str:
+    """Reference to the communication log of the response the last assertion was evaluated against."""
+    request_id = getattr(asserted_interaction, "request_id", None)
+    return f" [{request_id}]" if request_id else ""
 
 def save_variables(variables : list) -> None:
     """
@@ -608,6 +691,14 @@ def save_variables(variables : list) -> None:
             raise error.TestScriptError(f"Variable {var_id} is not filled!")
 
         VARIABLES.append(variable)
+        log.debug("Variable %s defined (%s)", var_id, _variable_source(variable))
+
+def _variable_source(variable: Variable) -> str:
+    """Where the value of a variable comes from, for the log."""
+    for field in ("expression", "path", "headerField"):
+        if getattr(variable, field) is not None:
+            return f"{field} '{getattr(variable, field)}' on {variable.sourceId}"
+    return f"defaultValue '{variable.defaultValue}'"
 
 def eval_variable(var : Variable):
     """
@@ -744,6 +835,9 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     # Parse references for each fixture
     for fixture in all_fixtures:
         fixture.references = reference_parser.parse_references(fixture.body, fixture_ids)
+        log.debug("Fixture '%s': %s/%s (autocreate=%s, autodelete=%s, references=%s)",
+                  fixture.source_id, fixture.type, fixture.fixture_id,
+                  fixture.autocreate, fixture.autodelete, fixture.references or "none")
 
     autocreate_fixtures = [f for f in all_fixtures if f.autocreate]
     non_autocreate_fixtures = [f for f in all_fixtures if not f.autocreate]
@@ -752,6 +846,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     if autocreate_fixtures:
         try:
             ordered_fixtures = dependency_resolver.resolve_creation_order(autocreate_fixtures)
+            log.debug("Fixture creation order: %s", ", ".join(f.source_id or "?" for f in ordered_fixtures))
             fixture_id_to_server_id = {}
 
             # Create static fixtures sequentially
@@ -769,10 +864,11 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
 
                 resource_type = fixture.type
                 url = f"{FHIR_SERVER_BASE}/{resource_type}"
+                log.info("Creating fixture '%s' (%s/%s)", fixture.source_id, resource_type, fixture.fixture_id)
 
                 if is_xml:
                     headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
-                    response = requests.post(url, headers=headers, data=resolved_body)
+                    request_id, response = comm_log.send_request("post", url, headers, resolved_body)
                 else:
                     if isinstance(resolved_body, dict):
                         body_data = json.dumps(resolved_body, ensure_ascii=False)
@@ -781,7 +877,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                     else:
                         body_data = str(resolved_body)
                     headers = {"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"}
-                    response = requests.post(url, headers=headers, data=body_data)
+                    request_id, response = comm_log.send_request("post", url, headers, body_data)
 
                 # Extract server ID from response
                 if response.status_code >= 200 and response.status_code < 300:
@@ -807,14 +903,15 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                             server_id = ""
 
                     if not server_id:
-                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id}")
+                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id} ({request_id})")
 
                     # Update static fixture with server ID
                     fixture.server_id = server_id
                     fixture_id_to_server_id[fixture.fixture_id] = server_id
                     fixture.references_resolved = True
+                    log.info("Fixture '%s' created as %s/%s", fixture.source_id, resource_type, server_id)
                 else:
-                    raise Exception(f"Failed to create fixture {fixture.fixture_id}: {response.status_code} - {response.text[:500]}")
+                    raise Exception(f"Failed to create fixture {fixture.fixture_id} ({request_id}): {response.status_code} - {response.text[:500]}")
 
             # Validate all references are resolved
             dependency_resolver.validate_all_references_resolved(autocreate_fixtures)
@@ -864,7 +961,7 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
                 if profile_canonical.startswith("http"):
                     profile_canonical = profile_canonical
                     profile_canonical = profile_canonical[profile_canonical.rindex("/")+1:]
-                    print(f"Profile canonical ID extracted: {profile_canonical}")
+                    log.debug("Profile canonical ID extracted: %s", profile_canonical)
                 else:
                     profile_canonical = None
             else:
@@ -874,6 +971,8 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
 
             if pid:
                 PROFILES[pid] = prof
+    for pid, ref in PROFILES.items():
+        log.debug("Profile '%s' -> %s", pid, ref)
 
 
 def autodelete() -> None:
@@ -885,7 +984,11 @@ def autodelete() -> None:
         global FIXTURES
         for fix in FIXTURES:
             if fix.autodelete and fix.server_id != "":
-                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+                log.info("Autodelete of fixture '%s' (%s/%s)", fix.source_id, fix.type, fix.server_id)
+                request_id, response = comm_log.send_request("delete", f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+                if not response.ok:
+                    log.warning("Autodelete of fixture '%s' returned HTTP %s [%s]",
+                                fix.source_id, response.status_code, request_id)
 
 def _error_cause(e: BaseException) -> str:
     """
@@ -923,6 +1026,7 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
         setup assertion fails
     """
     global FIXTURES
+    log.info("--- Setup")
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Setup", "Setup")
     setup_actions = (setup_data or {}).get("action", []) or []
@@ -941,6 +1045,7 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
             except Exception as e: #failure in autocreate
                 error_type = _error_cause(e)
                 error_message = f"Fixture initialization failed ({error_type}): {str(e)}"
+                log.debug("Traceback:", exc_info=True)
                 raise error.TestScriptError(error_message) from e
 
         for action in setup_data.get("action", []):
@@ -1004,6 +1109,7 @@ def TEST(test_data : dict) -> None:
     error_type = None
     warnings = []
     errors = []
+    log.info("--- Test '%s'", test_name)
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -1059,6 +1165,7 @@ def TEARDOWN(teardown_data : dict) -> None:
     :param teardown_data: The ``teardown`` dictionary from the TestScript
         JSON, or an empty dict when there is no explicit teardown section.
     """
+    log.info("--- Teardown")
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Teardown", "Teardown")
     teardown_actions = (teardown_data or {}).get("action", []) or []
@@ -1092,6 +1199,7 @@ def TEARDOWN(teardown_data : dict) -> None:
     except Exception as e:
         error_type = error_type or type(e).__name__
         error_messages.append(f"Autodelete of fixtures failed ({type(e).__name__}): {str(e)}")
+        log.error("%s", error_messages[-1])
     finally:
         if failed:
             result, error_type = "fail", "AssertionError"
@@ -1119,6 +1227,7 @@ def _record_abort(testscript: dict, message: str, error_type: str) -> None:
     :param message: Reason for the abort.
     :param error_type: Error classification for the outcome.
     """
+    log.error("%s", message)
     trk = rt.get_result_tracker()
     ts_result = trk.current_testscript
     if trk.current_outcome:
@@ -1158,6 +1267,7 @@ def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""
         tracker = rt.get_result_tracker()
         ts_temp, _ = testscript_data
         nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
+        log.warning("TestScript '%s' skipped: no FHIR server configured", nm)
         tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))
         tracker.start_outcome("Setup", "Skipped")
         tracker.finish_outcome(result="skip", message=["No FHIR server configured"], error_type="Skipped")
@@ -1168,6 +1278,10 @@ def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""
     tracker = rt.get_result_tracker()
     testscript_name = testscript.get('name', testscript.get('id', 'Unnamed TestScript'))
     tracker.initialize_testscript(testscript_name, testscript.get("url", testscript_path or ""))
+    log.info("TestScript '%s' (%s)", testscript_name, testscript.get("url", "no url"))
+    log.debug("%d fixture(s), %d variable(s), %d profile(s), %d test(s)",
+              len(testscript.get("fixture", [])), len(testscript.get("variable", [])),
+              len(testscript.get("profile", [])), len(testscript.get("test", [])))
 
     try:
 
@@ -1199,11 +1313,16 @@ def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""
         autodelete() #autodelete after everything went wrong
         _record_abort(testscript, f"TestScript aborted: {str(tse)}", _error_cause(tse))
     except Exception as e:
+        log.debug("Traceback:", exc_info=True)
         _record_abort(testscript, f"Unexpected error ({type(e).__name__}): {str(e)}", _error_cause(e))
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
             trk.finish_outcome(result="error", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
+        ts_result = trk.current_testscript
+        if ts_result:
+            level = logging.INFO if ts_result.outcome == "pass" else logging.WARNING if ts_result.outcome == "skip" else logging.ERROR
+            log.log(level, "TestScript '%s' finished: %s (%.2f s)", ts_result.name, ts_result.outcome.upper(), ts_result.total_time)
             
         FIXTURES.clear() 
         REQ_RESP.clear()

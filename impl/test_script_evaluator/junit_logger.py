@@ -49,25 +49,21 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
         res_junit.add_testsuite(suite)
     return res_junit
 
-def fill_and_save(tracker: ResultTracker):
-    results_dir = None
-    cm = conf_man.get_config_manager()
-    
-    if getattr(cm, "results_path", None):
-        results_dir = cm.results_path
-    elif getattr(cm, "path", None):
-        results_dir = Path(cm.path) / "Result"
-    else:
-        base = Path(__file__).resolve().parent.parent
-        results_dir = base / "Results"
-    
-    junit_dir = Path(results_dir) / "Junit"
+def fill_and_save(tracker: ResultTracker) -> Path:
+    """
+    Saves the JUnit XML of the run to the Junit subdirectory of the results path.
+
+    :param tracker: filled ResultTracker
+    :return: Path of the written file
+    """
+    junit_dir = conf_man.get_config_manager().results_dir / "Junit"
     junit_dir.mkdir(parents=True, exist_ok=True)
     filename = f"test_results_{tracker.run_file_stamp()}.xml"
     filepath = junit_dir / filename
     junit = construct_junit(tracker)
     
     save_xml(junit, str(filepath))
+    return filepath
 
 def save_xml(body: JUnitXml, filepath: str):
     """saves xml file with body as content"""

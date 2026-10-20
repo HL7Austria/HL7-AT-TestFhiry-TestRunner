@@ -1,7 +1,9 @@
 import json
+import logging
 import re
 import subprocess
 import os
+import time
 from pathlib import Path
 from fhirpathpy import evaluate
 from jsonpath_ng import parse
@@ -15,6 +17,9 @@ import xml.etree.ElementTree as ET
 import xmltodict
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
+
+log = logging.getLogger("testrunner.validator")
+
 operator_type = Literal['equals', 'notEquals', 'in', 'notIn', 'greaterThan', 'lessThan', 'empty', 'notEmpty', 'contains', 'notContains', 'eval', 'manualEval']
 
 
@@ -258,6 +263,8 @@ def execute_validator(cmd : list[str]) -> list[str]:
         from a clean validation in ``check_result``, so it must not be treated
         as a pass.
     """
+    log.debug("Running the FHIR validator: %s", " ".join(cmd))
+    start = time.perf_counter()
     try:
         completed = subprocess.run(cmd, capture_output=True)
     except (FileNotFoundError, NotADirectoryError) as e:
@@ -267,6 +274,8 @@ def execute_validator(cmd : list[str]) -> list[str]:
         ) from e
 
     output = completed.stdout.decode("utf-8", errors="replace").splitlines(keepends=True)
+    log.debug("FHIR validator finished in %.1f s with exit code %s", time.perf_counter() - start, completed.returncode)
+    log.debug("FHIR validator output:\n%s", "".join(output).rstrip())
 
     if not output:
         stderr = completed.stderr.decode("utf-8", errors="replace").strip()
@@ -289,6 +298,7 @@ def validateTS(testScript: dict[str, Any]) -> None:
         ``AssertionError`` from ``check_result``).
     """
     if conf_man.get_validator():
+        log.debug("TestScript validation skipped (--novalidator)")
         return #return to main function without stopping the TestScript
     base_path = Path(conf_man.get_config_manager().path)
     validator = get_validator_jar()
@@ -311,6 +321,7 @@ def validateTS(testScript: dict[str, Any]) -> None:
         check_result(output)
     except AssertionError as ae:
         raise Exception("TestScript not valid: " + str(ae))
+    log.info("TestScript is valid (FHIR %s)", conf_man.get_fhir_version())
 
 def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     """Validates a server response body against a FHIR StructureDefinition profile.
@@ -345,6 +356,7 @@ def validate_profile_assertion(profileRef: str, response: Interaction) -> str:
     with open(resource, "w") as f:
         f.write(response.body)
 
+    log.info("Validating the response against profile %s", profileRef)
     cmd = ["java", "-jar", str(validator), "-ig", str(prof_folder),
            str(resource), "-profile", profileRef,
            "-version", conf_man.get_fhir_version(), "-tx", "n/a"]

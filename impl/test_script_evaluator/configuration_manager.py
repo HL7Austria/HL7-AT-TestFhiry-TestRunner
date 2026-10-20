@@ -53,8 +53,6 @@ class ConfigManager:
         self.config_path = Path(config_path)
         self._validator = noval
         self.config = self._load_config()
-        print(self.config)
-        
 
     def _load_config(self):
         """
@@ -147,6 +145,77 @@ class ConfigManager:
         :return: results_path string or empty string if not configured.
         """
         return self.config.get("results_path", "")
+
+    @property
+    def results_dir(self) -> Path:
+        """
+        Gets the folder the results of a run are written to (JUnit XML, summary,
+        log file and communication logs).
+
+        :return: ``results_path`` if configured, else ``<path>/Result``, else ``impl/Results``.
+        """
+        if self.results_path:
+            return Path(self.results_path)
+        if self.path:
+            return Path(self.path) / "Result"
+        return Path(__file__).resolve().parent.parent / "Results"
+
+    @property
+    def validator_jar(self) -> Path:
+        """
+        Gets the location of the HL7 Validator CLI.
+
+        :return: Path of ``validator_cli.jar`` in the configured ``path``.
+        """
+        return Path(self.path) / "validator_cli.jar"
+
+    @property
+    def logging_settings(self) -> dict:
+        """
+        Gets the ``logging`` object from configuration.
+
+        :return: Logging settings, or an empty dict if not configured.
+        """
+        settings = self.config.get("logging")
+        return settings if isinstance(settings, dict) else {}
+
+    @property
+    def log_console_level(self):
+        """
+        Gets the level of the console output (``logging.consoleLevel``).
+
+        :return: Level name such as "INFO", or None if not configured.
+        """
+        return self.logging_settings.get("consoleLevel")
+
+    @property
+    def log_file_level(self):
+        """
+        Gets the level of the log file (``logging.fileLevel``).
+
+        :return: Level name such as "DEBUG", or None if not configured.
+        """
+        return self.logging_settings.get("fileLevel")
+
+    @property
+    def communication_logs(self) -> bool:
+        """
+        Gets whether every request and response is written to the communication
+        logs (``logging.communicationLogs``).
+
+        :return: The setting, defaults to True.
+        """
+        return _flag(self.logging_settings.get("communicationLogs"), True)
+
+    @property
+    def include_communication_in_log(self) -> bool:
+        """
+        Gets whether every request and response is also written into the log
+        (``logging.includeCommunicationInLog``).
+
+        :return: The setting, defaults to False.
+        """
+        return _flag(self.logging_settings.get("includeCommunicationInLog"), False)
 
     def get(self, key, default=None):
         """
@@ -249,6 +318,15 @@ class ConfigManager:
         if not result:
             raise FileExistsError("No valid TestScripts found!")
         return result
+
+def _flag(value, default: bool) -> bool:
+    """Reads a boolean setting that may also be given as "true"/"false"."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
 # Singleton instance for easy import
 _config_manager = None
 
