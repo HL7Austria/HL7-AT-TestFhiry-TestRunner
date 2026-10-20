@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+from pathlib import Path
 from impl.test_script_evaluator.configuration_manager import init_config_manager, get_config_manager, get_testscript_pairs
 from impl.test_script_evaluator.test_script_evaluator_log_to_file import (
     load_testscript_data,
@@ -33,18 +34,27 @@ if __name__ == "__main__":
         log_setup.log_configuration(get_config_manager(), run_stamp, log_file, comm_dir)
         testscript_pairs = get_testscript_pairs()
         log_setup.log_testscripts(testscript_pairs)
-        for index, (testscript_path, resource_path) in enumerate(testscript_pairs, start=1):
+        for index, (testscript_path, resource_path, problem) in enumerate(testscript_pairs, start=1):
             log.info("===== TestScript %d/%d: %s", index, len(testscript_pairs), testscript_path)
             comm_log.start_testscript(index, testscript_path)
+            # A TestScript that cannot be loaded or run is reported as an error, never dropped
             try:
+                if problem:
+                    raise problem
                 testscript_data = load_testscript_data(testscript_path, resource_path)
                 test_fhir_operations(testscript_data, testscript_path)
             except Exception as e:
                 log.error("TestScript %s could not be run (%s): %s", testscript_path, type(e).__name__, e)
                 log.debug("Traceback:", exc_info=True)
+                tracker.record_testscript_error(
+                    Path(testscript_path).stem, testscript_path,
+                    f"TestScript could not be loaded ({type(e).__name__}): {e}", type(e).__name__
+                )
     except Exception as e:
         log.critical("%s", e)
         log.debug("Traceback:", exc_info=True)
+        if tracker is not None:
+            tracker.record_testscript_error("Faulty Configuration", args.config, str(e), type(e).__name__)
         sys.exit(1)
     finally:
         if tracker is not None:

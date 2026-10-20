@@ -103,6 +103,11 @@ Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Erg
 | `error` | Der Test konnte nicht ausgeführt werden – z.B. ungültiges TestScript, nicht unterstütztes Feature, Server nicht erreichbar, Validator-Problem oder Fixture konnte nicht angelegt werden. | TestScript-Autor:innen bzw. Betrieb des TestRunners |
 | `skip` | Der Test wurde nicht ausgeführt, weil das TestScript vorher abgebrochen wurde oder kein FHIR-Server konfiguriert ist. | – |
 
+**Nicht ladbare TestScripts und Konfigurationsfehler** gehen nicht verloren, sondern erscheinen ebenfalls als `error` im Bericht:
+
+* Kann ein TestScript nicht geladen werden (Datei fehlt, ungültiges JSON, Example Instance zu einer Fixture nicht gefunden), wird es mit dem Dateinamen und der Phase `Load` als `error` eingetragen. Die übrigen TestScripts laufen weiter.
+* Ist `path` leer oder kein existierendes Verzeichnis, oder werden keine TestScripts gefunden, wird ein Eintrag `Configuration` als `error` angelegt und das Programm mit Exit-Code `1` beendet.
+
 ---
 
 ## Systemüberblick und Architektur

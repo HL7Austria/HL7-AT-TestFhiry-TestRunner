@@ -161,6 +161,22 @@ class ResultTracker:
             self.current_outcome = None
             self._phase_start_time = None
     
+    def record_testscript_error(self, name: str, url: str, message: str, error_type: str):
+        """Records a TestScript that could not be run at all as an ``error``.
+
+        Used when a TestScript cannot be loaded (file missing, invalid JSON,
+        Example Instance not found) or the configuration is invalid, so the
+        problem shows up in the report instead of being silently dropped.
+
+        :param name: Name for the report, e.g. the file name of the TestScript.
+        :param url: Path of the TestScript (or config file).
+        :param message: Reason why the TestScript could not be run.
+        :param error_type: Class name of the original exception.
+        """
+        self.initialize_testscript(name, url)
+        self.start_outcome("Setup", "Load")
+        self.finish_outcome(time_spent=0.0, result="error", message=[message], error_type=error_type)
+
     def increment_assertion_count(self):
         """Increments the assertion counter on the current phase outcome, if any."""
         if self.current_outcome:
