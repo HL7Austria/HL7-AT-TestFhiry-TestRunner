@@ -1,3 +1,7 @@
+class ConfigurationError(Exception):
+    """Raised when config.json is incomplete or points to missing locations"""
+    pass
+
 class TestExecutionError(Exception):
     """Custom exception for test execution errors """
     pass

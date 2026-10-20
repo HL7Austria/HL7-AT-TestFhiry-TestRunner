@@ -155,15 +155,17 @@ def log_configuration(cm: ConfigManager, run_stamp: str, log_file: Path | None, 
                                "validateProfileId assertions will fail (run with --novalidator to skip them)", jar)
 
 
-def log_testscripts(pairs: list[tuple[str, list[str]]]) -> None:
+def log_testscripts(pairs: list[tuple[str, list[str], Exception | None]]) -> None:
     """
     Logs the TestScripts that will be run and the Example Instances backing their fixtures.
 
-    :param pairs: List of ``(testscript_path, [fixture_paths...])``.
+    :param pairs: List of ``(testscript_path, [fixture_paths...], problem)``.
     """
     config_log.info("%d TestScript(s) to run:", len(pairs))
-    for index, (testscript_path, fixture_paths) in enumerate(pairs, start=1):
+    for index, (testscript_path, fixture_paths, problem) in enumerate(pairs, start=1):
         config_log.info("  %d. %s", index, testscript_path)
+        if problem:
+            config_log.warning("       cannot be loaded: %s", problem)
         for fixture_path in fixture_paths:
             config_log.debug("       fixture: %s", fixture_path)
 
