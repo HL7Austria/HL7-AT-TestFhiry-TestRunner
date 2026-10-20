@@ -21,7 +21,7 @@ class TestOutcome:
     time_spent: float
     assertion_count: int
     result: str
-    messages: List[str]
+    message: List[str]
     error_type: Optional[str] = None
 
 @dataclass
@@ -107,12 +107,12 @@ class ResultTracker:
         self.current_outcome = TestOutcome(
             class_type=class_type, name=name,
             time_spent=0.0, assertion_count=0,
-            result="pass", messages=[]
+            result="pass", message=[]
         )
         self._phase_start_time = time.time()
     
-    def finish_outcome(self, time_spent: float = None, result: str = None, 
-                      message: str = None, error_type: Optional[str] = None):
+    def finish_outcome(self, time_spent: Optional[float] = None, result: Optional[str] = None,
+                      message: Optional[List[str]] = None, error_type: Optional[str] = None):
         """Finalizes the current phase outcome, records it under the current TestScript, and clears it.
 
         If time/result/message/error_type are not provided, sensible defaults are used
@@ -122,7 +122,7 @@ class ResultTracker:
         :param result: Optional result string: 'pass', 'fail' (an assertion
             failed, i.e. the server under test misbehaved), 'error' (the
             TestScript or the tool could not be executed) or 'skip'.
-        :param message: Optional descriptive message or error text.
+        :param message: Optional list of descriptive messages or error texts.
         :param error_type: Optional classification of any error (e.g. exception class name).
         """
         if self.current_outcome is None:
