@@ -287,11 +287,29 @@ def execute_validator(cmd : list[str]) -> list[str]:
 
     return output
 
+def strip_stop_test_on_fail(testScript: dict[str, Any]) -> dict[str, Any]:
+    """Returns a copy of the TestScript without ``assert.stopTestOnFail``.
+
+    ``stopTestOnFail`` only exists in R5, but the runner also honours it in
+    R4 TestScripts. Validating against R4 would reject it as an unknown
+    property, so it is removed from the copy that is sent to the validator.
+
+    :param testScript: Parsed TestScript JSON dictionary (left unchanged).
+    :returns: A deep copy without ``stopTestOnFail`` in any assert.
+    """
+    stripped = json.loads(json.dumps(testScript))
+    phases = [stripped.get("setup"), *stripped.get("test", []), stripped.get("teardown")]
+    for phase in filter(None, phases):
+        for action in phase.get("action", []):
+            action.get("assert", {}).pop("stopTestOnFail", None)
+    return stripped
+
 def validateTS(testScript: dict[str, Any]) -> None:
     """Validates a FHIR TestScript resource using the HL7 Validator CLI.
 
     Serialises the TestScript to a temporary JSON file, runs the validator,
-    and removes the temp file afterwards.
+    and removes the temp file afterwards. For FHIR versions before R5,
+    ``assert.stopTestOnFail`` is removed first (see ``strip_stop_test_on_fail``).
 
     :param testScript: Parsed TestScript JSON dictionary.
     :raises Exception: If the validator reports errors (wraps the
@@ -304,6 +322,8 @@ def validateTS(testScript: dict[str, Any]) -> None:
     validator = get_validator_jar()
     temp_dir = base_path / "temp"
     path = temp_dir / "temp.json"
+    if not conf_man.get_fhir_version().startswith("5"):
+        testScript = strip_stop_test_on_fail(testScript)
     ts_string = json.dumps(testScript)
 
     os.makedirs(temp_dir, exist_ok=True)
