@@ -1,7 +1,10 @@
+import logging
 from pathlib import Path
 
 from impl.test_script_evaluator.result_tracker import ResultTracker
 import impl.test_script_evaluator.configuration_manager as conf_man
+
+log = logging.getLogger("testrunner.summary")
 
 def format_summary(tracker: ResultTracker) -> str:
     """
@@ -44,16 +47,17 @@ def format_summary(tracker: ResultTracker) -> str:
     return "\n".join(lines)
 
 
-def print_summary(tracker: ResultTracker):
+def log_summary(tracker: ResultTracker):
     """
-    Prints the test summary to console.
+    Writes the test summary to the log (console and log file).
 
     :param tracker: filled ResultTracker
     """
-    summary = format_summary(tracker)
-    print(summary)
+    log.info("===== Summary")
+    for line in format_summary(tracker).splitlines():
+        log.info("%s", line)
 
-def save_summary(tracker: ResultTracker):
+def save_summary(tracker: ResultTracker) -> Path:
     """
     Saves the test summary to a text file.
 
@@ -61,21 +65,12 @@ def save_summary(tracker: ResultTracker):
     with a timestamp-based filename.
 
     :param tracker: filled ResultTracker
+    :return: Path of the written file
     :raises Exception: if the file could not be saved correctly
     """
     summary = format_summary(tracker) # summary str
 
-    cm = conf_man.get_config_manager()
-    
-    if getattr(cm, "results_path", None):
-        results_dir = cm.results_path
-    elif getattr(cm, "path", None):
-        results_dir = Path(cm.path) / "Result"
-    else:
-        base = Path(__file__).resolve().parent.parent
-        results_dir = base / "Results"
-
-    txt_dir = Path(results_dir) / "Txt-files"
+    txt_dir = conf_man.get_config_manager().results_dir / "Txt-files"
     txt_dir.mkdir(parents=True, exist_ok=True)
     filename = f"test_results_{tracker.run_file_stamp()}.txt"
     filepath = txt_dir / filename
@@ -84,6 +79,7 @@ def save_summary(tracker: ResultTracker):
         filepath.write_text(summary)
     except Exception as e:
         raise Exception("Txt File could not be saved correctly!")
+    return filepath
 
 
 

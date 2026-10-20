@@ -5,9 +5,14 @@ import json
 from pathlib import Path
 import time
 from dataclasses import asdict
+import logging
 
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
+
+log = logging.getLogger("testrunner.results")
+
+_RESULT_LEVELS = {"pass": logging.INFO, "skip": logging.WARNING, "fail": logging.ERROR, "error": logging.ERROR}
 
 @dataclass
 class TestOutcome:
@@ -141,6 +146,8 @@ class ResultTracker:
             self.current_outcome.message = message
             self.current_outcome.error_type = error_type
             self.current_testscript.outcomes.append(self.current_outcome)
+            log.log(_RESULT_LEVELS.get(result, logging.INFO), "%s '%s' result: %s (%.2f s)",
+                    self.current_outcome.class_type, self.current_outcome.name, result.upper(), time_spent)
             self.current_testscript.total_time += time_spent
             if self.current_test_run:
                 self.current_test_run.total_time += time_spent

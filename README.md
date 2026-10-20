@@ -70,6 +70,7 @@ Während der Ausführung sammelt der `ResultTracker` (`result_tracker.py`) alle 
 **Wo wird gespeichert?**
 
 * **JUnit-Datei**: Am Ende jedes Programmlaufs wird eine JUnit-style XML-Datei `test_results_<Zeitstempel>.xml` im `Junit/`-Ordner abgelegt (Standard: `<path>/Result/Junit/`, konfigurierbar über `results_path`).
+* **Log-Datei und Kommunikations-Logs**: siehe [Logging](#logging).
 
 **Was wird gespeichert?**
 
@@ -124,7 +125,11 @@ Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Erg
 │  ├─ Example_Instances/       # Wird automatisch erstellt und enthält Example Instances
 │  ├─ Profiles/                # Wird automatisch erstellt und enthält Profile
 │  ├─ Test_Scripts/            # Wird automatisch erstellt und enthält Test-Scripts
-│  └─ Results/                 # Wird automatisch erstellt und enthält Log-Dateien
+│  └─ Result/                  # Wird automatisch erstellt (oder <results_path>/)
+│     ├─ Junit/                 # JUnit-XML pro Lauf
+│     ├─ Txt-files/             # Zusammenfassung pro Lauf
+│     ├─ Logs/                  # Log-Datei pro Lauf
+│     └─ communication_logs/    # Requests/Responses pro Lauf
 
 ```
 ### Verzeichnis-Zweck
@@ -137,7 +142,7 @@ Jede Phase (Setup, jeder einzelne Test, Teardown) erzeugt ein eigenes Phasen-Erg
 **Test_Scripts/:** Wird im `path`-Verzeichnis automatisch erstellt. Enthält alle Test-Skripte.
 
 
-**Results/:** Wird automatisch erstellt. Standardmäßig im `path`-Verzeichnis, oder im `results_path`-Verzeichnis falls konfiguriert. Enthält die Log-Dateien der Ausführungen.
+**Result/:** Wird automatisch erstellt. Standardmäßig im `path`-Verzeichnis, oder im `results_path`-Verzeichnis falls konfiguriert. Enthält die Ergebnisse, Log-Dateien und Kommunikations-Logs der Ausführungen (siehe [Logging](#logging)).
 
 
 **exception/:** Enthält alle benutzerdefinierten Exceptions.
@@ -226,6 +231,12 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
   "results_path": "",
   "validation": {
     "fhirVersion": "4.0"
+  },
+  "logging": {
+    "consoleLevel": "INFO",
+    "fileLevel": "DEBUG",
+    "communicationLogs": true,
+    "includeCommunicationInLog": false
   }
 }
 ```
@@ -236,8 +247,9 @@ Vor der Ausführung muss eine `config.json` erstellt werden. Beispiel:
 | `path`          | Ja      | Pfad zum **Überordner**, der die Unterordner `Profiles/`, `Example_Instances/`, `Test_Scripts/` und die `validator_cli.jar` enthält (bzw. in dem sie erstellt werden). |
 | `testscripts`   | Nein    | Liste von TestScript-Pfaden (relativ zu `path`). Wenn leer, werden alle `.json`-Dateien aus `Test_Scripts/` verwendet.                                        |
 | `fhirServer`    | Ja      | URL des FHIR®-Servers, gegen den die Tests ausgeführt werden.                                                                                                 |
-| `results_path`  | Nein    | Pfad, in dem ein Unterordner `Junit/` mit den erzeugten JUnit-XML-Dateien erstellt wird. Wenn leer, wird `Result/Junit/` im `path`-Verzeichnis angelegt.                                                  |
+| `results_path`  | Nein    | Pfad, in dem die Unterordner `Junit/`, `Txt-files/`, `Logs/` und `communication_logs/` erstellt werden. Wenn leer, wird `Result/` im `path`-Verzeichnis verwendet.                                                  |
 | `validation`    | Nein    | Einstellungen für den HL7 Validator CLI. `validation.fhirVersion` legt die FHIR®-Version fest, gegen die validiert wird (z. B. `"4.0"` oder `"5.0"`). Standard: `"4.0"`. |
+| `logging`       | Nein    | Einstellungen für Konsole, Log-Datei und Kommunikations-Logs, siehe [Logging](#logging). |
 
 > **Wichtig:** Der Wert von `path` muss auf den **Überordner** zeigen, der folgende Struktur enthält (oder in dem sie angelegt wird):
 > ```
@@ -282,6 +294,45 @@ Beispiel:
 python -m impl --config impl/config.json --novalidator
 ```
 
+### Logging
+
+Jeder Lauf schreibt sein Log gleichzeitig auf die **Konsole** und in eine **Log-Datei**. Zu Beginn werden die Konfiguration und die Umgebung protokolliert (Config-Datei, FHIR®-Server, Ergebnis-Ordner, Validator-JAR und Java-Version, Logging-Einstellungen, auszuführende TestScripts) und vor Einstellungen gewarnt, die den Lauf scheitern lassen (z. B. fehlender FHIR®-Server oder fehlende `validator_cli.jar`). Danach folgen pro TestScript die Phasen, Fixtures, Operationen, Assertions und deren Ergebnisse.
+
+```
+<results>/
+├─ Logs/test_run_<Zeitstempel>.log
+└─ communication_logs/test_run_<Zeitstempel>/
+   ├─ 01_TestScript-testscript-patient-create-at-core/
+   │  └─ REQ-0001_POST_Patient/
+   │     ├─ request.http     # Request-Zeile, Header und Body wie gesendet
+   │     └─ response.http    # Status-Zeile, Header und Body wie empfangen
+   └─ 02_TestScript-testscript-patient-update-at-core/
+      ├─ REQ-0002_PUT_Patient_HL7ATCorePatientUpdateTestExample/
+      └─ ...
+```
+
+Log-Datei, JUnit-XML und Zusammenfassung eines Laufs tragen denselben Zeitstempel.
+
+**Kommunikations-Logs:** Jeder Request an den FHIR®-Server bekommt eine laufweit eindeutige **Request-ID** (`REQ-0001`, `REQ-0002`, …). Request und Response werden ungefiltert in einem eigenen Ordner abgelegt; der Ordnername beginnt mit der Request-ID. Kam keine Response zurück (z. B. Server nicht erreichbar), liegt statt `response.http` eine `error.txt` im Ordner. Komprimierte Response-Bodies werden entpackt gespeichert.
+
+Im Log verweist jede Zeile, die einen Request betrifft, auf die Request-ID und den Ordner relativ zum `communication_logs/test_run_<Zeitstempel>/`-Ordner. Auch Assertions nennen die Request-ID der Response, gegen die sie geprüft wurden:
+
+```
+11:20:14 INFO    Operation create Patient (POST, sourceId patient-create, responseId create-response)
+11:20:14 INFO    REQ-0001 POST http://localhost:8080/fhir/Patient -> 201 Created (20 ms) [01_TestScript-testscript-patient-create-at-core/REQ-0001_POST_Patient]
+11:20:14 INFO    Assert passed: responseCode in '200,201' [REQ-0001]
+11:22:29 ERROR   Assert failed (stopTestOnFail): contentType 'xml' [REQ-0028] - Expected 'application/fhir+json;charset=UTF-8' to contain 'xml'
+```
+
+**Einstellungen** (Objekt `logging` in der `config.json`, alle optional):
+
+| Feld                        | Standard | Beschreibung |
+| --------------------------- | -------- | ------------ |
+| `consoleLevel`              | `INFO`   | Level der Konsolen-Ausgabe (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). |
+| `fileLevel`                 | `DEBUG`  | Level der Log-Datei. Auf `DEBUG` enthält sie zusätzlich Beschreibungen der Actions, Variablenwerte, Fixture-Details, Validator-Aufrufe samt Ausgabe und Tracebacks. |
+| `communicationLogs`         | `true`   | Requests und Responses im Ordner `communication_logs/` ablegen. Die Request-IDs stehen auch bei `false` im Log. |
+| `includeCommunicationInLog` | `false`  | Requests und Responses zusätzlich vollständig ins Log schreiben (als `DEBUG`-Einträge, also nur wenn `consoleLevel` oder `fileLevel` auf `DEBUG` steht). |
+
 ---
 
 ## Codebase Overview
@@ -309,6 +360,8 @@ python -m impl --config impl/config.json --novalidator
 
 **Hauptdateien:**
 - `configuration_manager.py` → Lädt und verwaltet Konfigurationseinstellungen. 
+- `log_setup.py` → Richtet Konsolen- und Datei-Log ein und protokolliert Konfiguration und Umgebung.
+- `communication_logger.py` → Sendet die Requests an den FHIR®-Server, vergibt Request-IDs und schreibt die Kommunikations-Logs.
 - `dependency_resolver.py` → Bestimmt Erstellungsreihenfolge und löst Referenzen auf.
 - `reference_parser.py` → Durchsucht Fhir-Ressourcen auf Referenzen.
 - `test_script_evaluator_log_to_file.py` → Hauptskript für die Evaluierung von Test-Scripts. 
