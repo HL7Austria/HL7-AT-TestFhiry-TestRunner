@@ -864,7 +864,7 @@ def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None
 
             if pid:
                 PROFILES[pid] = prof
-             
+
 
 def autodelete() -> None:
         """
@@ -1125,7 +1125,7 @@ def _record_abort(testscript: dict, message: str, error_type: str) -> None:
             trk.start_outcome("Test", test.get('name', 'Unnamed Test'))
             trk.finish_outcome(result="skip", message=["Skipped: TestScript aborted"])
 
-def test_fhir_operations(testscript_data : dict, testscript_path=""):
+def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
@@ -1178,18 +1178,12 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
         if variable_list:
             save_variables(variable_list)
 
-        if testscript.get("setup"): #there can only be one Setup
-            SETUP(testscript.get("setup"),fixture_list, resources)
-        else:
-            SETUP({},fixture_list, resources)
+        SETUP(testscript.get("setup") or {}, fixture_list, resources) #there can only be one Setup
             
         for test in testscript.get("test", []):
             TEST(test)  
 
-        if testscript.get("teardown"): #there can only be one Setup
-            TEARDOWN(testscript.get("teardown"))
-        else:
-            TEARDOWN({})
+        TEARDOWN(testscript.get("teardown") or {}) #there can only be one Teardown
 
     except error.TestScriptError as tse:
         autodelete() #autodelete after everything went wrong
