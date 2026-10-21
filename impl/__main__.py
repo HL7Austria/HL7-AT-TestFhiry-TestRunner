@@ -62,4 +62,3 @@ if __name__ == "__main__":
             except Exception as e:
                 log.critical("Error while saving the JUnit XML: %s", e)
                 raise
-        logging.shutdown()
