@@ -108,7 +108,7 @@
         {
           "assert": {
             "description": "Validate that the returned resource conforms to the base FHIR Patient profile.",
-            "direction": "request",
+            "direction": "response",
             "validateProfileId": "at-core-patient-profile",
             "warningOnly": false
           }
