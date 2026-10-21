@@ -1,6 +1,18 @@
 {
-  "url": "https://fhir.hl7.at/r4-core-80-include-testscripts",
-  "path": "",
-  "testscripts": ["<path_to>/impl/Test_Scripts/TestScript-testscript-patient-update-at-core.json"],
-  "fhirServer" : "<fhir_Server>"
+  "url": "<url_zum_IG>",
+  "path": "C:/Pfad/zum/Überordner",
+  "testscripts": [
+    "Test_Scripts/TestScript-beispiel.json"
+  ],
+  "fhirServer": "<fhirServer>",
+  "results_path": "",
+  "validation": {
+    "fhirVersion": "4.0"
+  },
+  "logging": {
+    "consoleLevel": "INFO",
+    "fileLevel": "DEBUG",
+    "communicationLogs": true,
+    "includeCommunicationInLog": false
+  }
 }
