@@ -3,7 +3,8 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
-from urllib.parse import quote
+
+from requests.utils import requote_uri
 
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
@@ -119,7 +120,8 @@ def execute_operation(operation: dict[str, Any]) -> None:
             url = build_url(operation)
 
         if operation.get("encodeRequestUrl") == True:
-            url = quote(url, safe=":/?=")
+            # percent-encode what is not encoded yet; keeps the delimiters (?, &, =) and existing %XX escapes
+            url = requote_uri(url)
 
         log.info("Operation %s", _describe_operation(operation, method))
         if operation.get("description"):
@@ -281,7 +283,11 @@ def build_url(operation :dict [str, Any]) -> str:
             if not resource:
                 raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
-            url += "/" + resource + "/"
+            url += "/" + resource
+        # params is the path after [type] and starts with "/" or "?" ("/[id]", "?name=value");
+        # a bare "[id]" still gets its separator
+        if not params.startswith(("/", "?")):
+            params = "/" + params
         return url + params
     else:
         if not op_type:
@@ -457,12 +463,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             if PROFILES:
                 profile_ref = PROFILES.get(assertion["validateProfileId"])
                 if not profile_ref:
-                    raise error.TestScriptError(f"Profile {assertion['validateProfileId']} not found in testscript")
+                    raise AssertionError(f"Profile {assertion['validateProfileId']} not found in testscript")
                 msg = validate.validate_profile_assertion(profile_ref, response)
                 if msg.strip():
                     log.debug("Validator warnings and information:%s", msg.rstrip())
             else:
-                raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
+                raise AssertionError("No profiles found in testscript, but validateProfileId asserted")
                        
         elif "resource" in assertion:
             if not operator:
