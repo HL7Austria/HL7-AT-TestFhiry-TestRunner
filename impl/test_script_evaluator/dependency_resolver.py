@@ -1,5 +1,6 @@
 import json
 import re
+import xml.etree.ElementTree as ET
 from collections import deque
 from typing import Any, Dict, List, Union
 
@@ -73,7 +74,6 @@ def replace_references(body: Union[dict, str], fixture_id_to_server_id: Dict[str
     elif isinstance(body, str):
         # Try XML first
         try:
-            import xml.etree.ElementTree as ET
             ET.fromstring(body)
             return _replace_xml_references(body, fixture_id_to_server_id)
         except ET.ParseError:

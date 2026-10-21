@@ -5,9 +5,14 @@ import json
 from pathlib import Path
 import time
 from dataclasses import asdict
+import logging
 
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
+
+log = logging.getLogger("testrunner.results")
+
+_RESULT_LEVELS = {"pass": logging.INFO, "skip": logging.WARNING, "fail": logging.ERROR, "error": logging.ERROR}
 
 @dataclass
 class TestOutcome:
@@ -21,7 +26,7 @@ class TestOutcome:
     time_spent: float
     assertion_count: int
     result: str
-    messages: List[str]
+    message: List[str]
     error_type: Optional[str] = None
 
 @dataclass
@@ -67,6 +72,23 @@ class ResultTracker:
             timestamp=datetime.now().isoformat()
         )
     
+    def run_file_stamp(self) -> str:
+        """Formats the run timestamp for use in result filenames.
+
+        Derived from the timestamp of the current run so that the JUnit XML and
+        the summary text file of one run share a name. The millisecond part
+        keeps back-to-back runs from overwriting each other - two runs can
+        easily start within the same second when validation is skipped.
+
+        :returns: Timestamp string such as ``2026-09-15_12-41-15-123``.
+        """
+        stamp = self.current_test_run.timestamp if self.current_test_run else None
+        try:
+            moment = datetime.fromisoformat(stamp) if stamp else datetime.now()
+        except (TypeError, ValueError):
+            moment = datetime.now()
+        return moment.strftime("%Y-%m-%d_%H-%M-%S-") + f"{moment.microsecond // 1000:03d}"
+
     def initialize_testscript(self, name: str, url: str):
         """Begins tracking results for a single TestScript.
 
@@ -90,20 +112,22 @@ class ResultTracker:
         self.current_outcome = TestOutcome(
             class_type=class_type, name=name,
             time_spent=0.0, assertion_count=0,
-            result="pass", messages=[]
+            result="pass", message=[]
         )
         self._phase_start_time = time.time()
     
-    def finish_outcome(self, time_spent: float = None, result: str = None, 
-                      message: str = None, error_type: Optional[str] = None):
+    def finish_outcome(self, time_spent: Optional[float] = None, result: Optional[str] = None,
+                      message: Optional[List[str]] = None, error_type: Optional[str] = None):
         """Finalizes the current phase outcome, records it under the current TestScript, and clears it.
 
         If time/result/message/error_type are not provided, sensible defaults are used
         (elapsed time since start_outcome, 'pass', empty message, None).
 
         :param time_spent: Optional explicit duration in seconds.
-        :param result: Optional result string ('pass' or 'fail').
-        :param message: Optional descriptive message or error text.
+        :param result: Optional result string: 'pass', 'fail' (an assertion
+            failed, i.e. the server under test misbehaved), 'error' (the
+            TestScript or the tool could not be executed) or 'skip'.
+        :param message: Optional list of descriptive messages or error texts.
         :param error_type: Optional classification of any error (e.g. exception class name).
         """
         if self.current_outcome is None:
@@ -122,16 +146,37 @@ class ResultTracker:
             self.current_outcome.message = message
             self.current_outcome.error_type = error_type
             self.current_testscript.outcomes.append(self.current_outcome)
+            log.log(_RESULT_LEVELS.get(result, logging.INFO), "%s '%s' result: %s (%.2f s)",
+                    self.current_outcome.class_type, self.current_outcome.name, result.upper(), time_spent)
             self.current_testscript.total_time += time_spent
             if self.current_test_run:
                 self.current_test_run.total_time += time_spent
-            if result == "fail":
+            # precedence of the TestScript outcome: error > fail > skip > pass
+            if result == "error":
+                self.current_testscript.outcome = "error"
+            elif result == "fail" and self.current_testscript.outcome != "error":
                 self.current_testscript.outcome = "fail"
-            elif result == "skip" and self.current_testscript.outcome != "fail":
+            elif result == "skip" and self.current_testscript.outcome == "pass":
                 self.current_testscript.outcome = "skip"
             self.current_outcome = None
             self._phase_start_time = None
     
+    def record_testscript_error(self, name: str, url: str, message: str, error_type: str):
+        """Records a TestScript that could not be run at all as an ``error``.
+
+        Used when a TestScript cannot be loaded (file missing, invalid JSON,
+        Example Instance not found) or the configuration is invalid, so the
+        problem shows up in the report instead of being silently dropped.
+
+        :param name: Name for the report, e.g. the file name of the TestScript.
+        :param url: Path of the TestScript (or config file).
+        :param message: Reason why the TestScript could not be run.
+        :param error_type: Class name of the original exception.
+        """
+        self.initialize_testscript(name, url)
+        self.start_outcome("Setup", "Load")
+        self.finish_outcome(time_spent=0.0, result="error", message=[message], error_type=error_type)
+
     def increment_assertion_count(self):
         """Increments the assertion counter on the current phase outcome, if any."""
         if self.current_outcome:

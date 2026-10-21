@@ -1,8 +1,12 @@
 from impl.test_script_evaluator.result_tracker import ResultTracker
-from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure
-from datetime import datetime
+from junitparser import TestCase, TestSuite, JUnitXml, Skipped, Error, Failure, IntAttr
 from pathlib import Path
 import impl.test_script_evaluator.configuration_manager as conf_man
+
+class PhaseTestCase(TestCase):
+    """TestCase that also writes the phase's assertion count."""
+    assertions = IntAttr()
+
 def construct_junit(tracker: ResultTracker) -> JUnitXml:
     """
     Constructs the Body of a JUnit style xml from a ResultTracker object.
@@ -12,25 +16,26 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
     
     :raises Exception: If the tracker is empty
     """
-    if not tracker:
+    if not tracker or not tracker.current_test_run:
         raise Exception("tracker needs to be filled before saving as Junit XML")
     
     res_junit = JUnitXml()
     res_junit.time = tracker.current_test_run.total_time
     for testscrpt in tracker.current_test_run.testscript_results:
         suite = TestSuite(testscrpt.name)
-        suite.classname = "TestScript"
         suite.time = testscrpt.total_time
         for phase in testscrpt.outcomes:
-            case = TestCase(phase.name)
+            case = PhaseTestCase(phase.name)
             case.classname = phase.class_type
             case.assertions = phase.assertion_count
             case.time = phase.time_spent
 
             first_msg = phase.message[0] if phase.message else ""
             extra_msgs = phase.message[1:]
-            if phase.result == "fail":
-                if phase.error_type == "TestScriptError":
+            if phase.result in ("fail", "error"):
+                # Failure: an assertion failed (server under test misbehaved)
+                # Error: the TestScript or the tool could not be executed
+                if phase.result == "error":
                     case.result = [Error(message=first_msg, type_=phase.error_type)]
                 else:
                     case.result = [Failure(message=first_msg, type_=phase.error_type)]
@@ -44,25 +49,21 @@ def construct_junit(tracker: ResultTracker) -> JUnitXml:
         res_junit.add_testsuite(suite)
     return res_junit
 
-def fill_and_save(tracker: ResultTracker):
-    results_dir = None
-    cm = conf_man.get_config_manager()
-    
-    if getattr(cm, "results_path", None):
-        results_dir = cm.results_path
-    elif getattr(cm, "path", None):
-        results_dir = Path(cm.path) / "Result"
-    else:
-        base = Path(__file__).resolve().parent.parent
-        results_dir = base / "Results"
-    
-    junit_dir = Path(results_dir) / "Junit"
+def fill_and_save(tracker: ResultTracker) -> Path:
+    """
+    Saves the JUnit XML of the run to the Junit subdirectory of the results path.
+
+    :param tracker: filled ResultTracker
+    :return: Path of the written file
+    """
+    junit_dir = conf_man.get_config_manager().results_dir / "Junit"
     junit_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xml"
+    filename = f"test_results_{tracker.run_file_stamp()}.xml"
     filepath = junit_dir / filename
     junit = construct_junit(tracker)
     
     save_xml(junit, str(filepath))
+    return filepath
 
 def save_xml(body: JUnitXml, filepath: str):
     """saves xml file with body as content"""

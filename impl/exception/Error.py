@@ -1,9 +1,13 @@
+class ConfigurationError(Exception):
+    """Raised when config.json is incomplete or points to missing locations"""
+    pass
+
 class TestExecutionError(Exception):
     """Custom exception for test execution errors """
     pass
 
 class TestScriptError(Exception):
-    """Custom exception for stopTestOnFail """
+    """Raised when the whole TestScript has to be aborted"""
     pass
 
 class OperationError(Exception):
@@ -22,10 +26,18 @@ class ReferenceResolutionError(Exception):
     """General reference parsing/resolution errors"""
     pass
 
+class ValidatorError(TestExecutionError):
+    """Raised when the HL7 Validator CLI could not be run at all.
+
+    Subclasses TestExecutionError so a broken validator stops the test and is
+    reported as a failure, instead of being mistaken for a clean validation.
+    """
+    pass
+
 class WarningException(Exception):
     """Exception for non-critical warnings that should not stop test execution"""
     pass
 
 class AssertionFailedContinueError(Exception):
-    """Raised when an assertion fails but stopTestOnFail is false — execution continues"""
+    """Raised when an assertion fails and stopTestOnFail is false or missing — execution continues"""
     pass

@@ -1,8 +1,10 @@
 import json
-import requests
+import logging
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
+
+from requests.utils import requote_uri
 
 import impl.test_script_evaluator.configuration_manager as conf_man
 import impl.exception.Error as error
@@ -14,15 +16,19 @@ import impl.test_script_evaluator.utils as utils
 import impl.test_script_evaluator.reference_parser as reference_parser
 import impl.test_script_evaluator.dependency_resolver as dependency_resolver
 import impl.test_script_evaluator.result_tracker as rt
+import impl.test_script_evaluator.communication_logger as comm_log
+
+log = logging.getLogger("testrunner.executor")
 
 last_interaction = None
+asserted_interaction = None # interaction the last assertion was evaluated against
 
 FIXTURES = [] # static Fixtures
 REQ_RESP = [] # responses
 VARIABLES = []
 PROFILES = {} #saving profilesIDs with the references
 
-FHIR_SERVER_BASE = None
+FHIR_SERVER_BASE: str = ""
 
 def replacer(match) -> str:
     """
@@ -41,9 +47,30 @@ def replacer(match) -> str:
     var_name = match.group(1)
     for var in VARIABLES:
         if var.name == var_name:
-            return eval_variable(var)
+            return str(eval_variable(var))
     
     raise Exception(f"Variable {var_name} could not be found")
+
+VARIABLE_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+def resolve_variables(element: dict[str, Any]) -> dict[str, Any]:
+    """
+    Replaces every variable placeholder (``${varName}``) in an operation or
+    assertion with the value of the variable and logs the values used.
+
+    :param element: Operation or assert dictionary from the TestScript.
+    :returns: A copy of ``element`` with the variables replaced.
+    """
+    json_str = json.dumps(element)
+    values = {}
+    def resolve(match) -> str:
+        if match.group(1) not in values:
+            values[match.group(1)] = replacer(match)
+        return values[match.group(1)]
+    result = VARIABLE_PATTERN.sub(resolve, json_str)
+    for name, value in values.items():
+        log.debug("Variable ${%s} = '%s'", name, value)
+    return json.loads(result)
 
 def execute_operation(operation: dict[str, Any]) -> None:
     """
@@ -63,10 +90,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
     try:
 
             # do I want to check if variables are in the right place?
-        pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-        json_str = json.dumps(operation)
-        result = pattern.sub(replacer, json_str)
-        operation = json.loads(result)
+        operation = resolve_variables(operation)
 
         #get all Info from operation
         method = operation.get("method")
@@ -96,8 +120,12 @@ def execute_operation(operation: dict[str, Any]) -> None:
             url = build_url(operation)
 
         if operation.get("encodeRequestUrl") == True:
-            url = requests.utils.quote(url, safe=":/?=")
+            # percent-encode what is not encoded yet; keeps the delimiters (?, &, =) and existing %XX escapes
+            url = requote_uri(url)
 
+        log.info("Operation %s", _describe_operation(operation, method))
+        if operation.get("description"):
+            log.debug("Operation description: %s", operation["description"])
 
         if sourceId:
             fixture = next((fix for fix in FIXTURES if fix.source_id == sourceId), None)
@@ -115,16 +143,16 @@ def execute_operation(operation: dict[str, Any]) -> None:
 
         match (method):
             case "get":
-                response = requests.get(url, headers=headers)
+                request_id, response = comm_log.send_request("get", url, headers)
             case "post":
                 if not fixture:
                     if not (operation_type == "search" or operation_type == "capabilities"):
                         raise error.TestScriptError("No Fixture found in POST!")
                     else:
-                        response = requests.post(url, headers=headers)
+                        request_id, response = comm_log.send_request("post", url, headers)
                 else:
                     body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
-                    response = requests.post(url, headers=headers, data=body_data)
+                    request_id, response = comm_log.send_request("post", url, headers, body_data)
             case "put":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PUT!")
@@ -138,20 +166,28 @@ def execute_operation(operation: dict[str, Any]) -> None:
                 else:
                     fixture.body = re.sub(r'(<id[^>]*value=")[^"]*("/>)', r'\g<1>' + update_id + r'\g<2>', fixture.body)
                     body_data = fixture.body
-                response = requests.put(url, headers=headers, data=body_data)
+                request_id, response = comm_log.send_request("put", url, headers, body_data)
             case "delete":
-                response = requests.delete(url, headers=headers)
+                request_id, response = comm_log.send_request("delete", url, headers)
             case "head":
-                response = requests.head(url, headers=headers)
+                request_id, response = comm_log.send_request("head", url, headers)
             case "patch":
                 if not fixture:
                     raise error.TestScriptError("No Fixture found in PATCH!")
                 body_data = json.dumps(fixture.body) if utils.string_type(fixture.body) == "json" else fixture.body
-                response = requests.patch(url, headers=headers, data=body_data)
+                request_id, response = comm_log.send_request("patch", url, headers, body_data)
             case _:
                 raise error.TestScriptError(f"Method {method} not supported.")
 
         if operation_type == "create":
+            # Surface the real server error instead of a misleading "No ID found"
+            # message when the create is rejected (e.g. validation / referential
+            # integrity errors returned as a non-2xx OperationOutcome).
+            if not (200 <= response.status_code < 300):
+                raise error.TestScriptError(
+                    f"Create operation failed ({request_id}): HTTP {response.status_code} {response.reason} - "
+                    f"{response.text[:500]}"
+                )
             saved_resource_id = ""
             location = response.headers.get("Location", "")
             if location:
@@ -175,8 +211,11 @@ def execute_operation(operation: dict[str, Any]) -> None:
                     raise ValueError("No ID found in response or Location header")
             if isinstance(fixture, Fixture):
                 fixture.server_id = saved_resource_id
+            log.debug("%s created resource id '%s'", request_id, saved_resource_id)
+    except error.TestScriptError:
+        raise
     except Exception as e:
-        raise error.TestScriptError(e)
+        raise error.TestScriptError(str(e) or type(e).__name__) from e
     
     
 
@@ -186,6 +225,7 @@ def execute_operation(operation: dict[str, Any]) -> None:
     last_interaction.status_code = response.status_code
     last_interaction.reason = response.reason
     last_interaction.res_id = int_id
+    last_interaction.request_id = request_id
     
 
     if int_id != None:
@@ -243,7 +283,11 @@ def build_url(operation :dict [str, Any]) -> str:
             if not resource:
                 raise error.TestScriptError(f"Resource-Type is needed for Operation {op_type} {params}")
         if resource:
-            url += "/" + resource + "/"
+            url += "/" + resource
+        # params is the path after [type] and starts with "/" or "?" ("/[id]", "?name=value");
+        # a bare "[id]" still gets its separator
+        if not params.startswith(("/", "?")):
+            params = "/" + params
         return url + params
     else:
         if not op_type:
@@ -337,13 +381,12 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         expression, path, minimumId) is not yet implemented.
     """
     global last_interaction
+    global asserted_interaction
     global REQ_RESP
 
+    asserted_interaction = None
     #--> not checking if the variable is at the right place!
-    pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-    json_str = json.dumps(assertion)
-    result = pattern.sub(replacer, json_str)
-    assertion = json.loads(result)
+    assertion = resolve_variables(assertion)
 
     operator = assertion.get("operator")
     response = last_interaction
@@ -353,6 +396,10 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         if int.res_id == assertion.get("sourceId"):
             response = int      
             #--> testing only interactions, get possible fixture id or variables for eval --> assert.value
+
+    if response is None:
+        raise error.TestScriptError("No response to assert against: no operation has been executed yet")
+    asserted_interaction = response
 
     compare_val = assertion.get("value") #empty if there is none
     try:
@@ -414,16 +461,21 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
         if "validateProfileId" in assertion:
             msg = ""
             if PROFILES:
-                msg = validate.validate_profile_assertion(PROFILES.get(assertion.get("validateProfileId")), response)
+                profile_ref = PROFILES.get(assertion["validateProfileId"])
+                if not profile_ref:
+                    raise AssertionError(f"Profile {assertion['validateProfileId']} not found in testscript")
+                msg = validate.validate_profile_assertion(profile_ref, response)
+                if msg.strip():
+                    log.debug("Validator warnings and information:%s", msg.rstrip())
             else:
-                raise error.TestScriptError("No profiles found in testscript, but validateProfileId asserted")
+                raise AssertionError("No profiles found in testscript, but validateProfileId asserted")
                        
         elif "resource" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals"]:
                 raise error.TestScriptError("resource operator value not valid")
-            validate.validate_resource(response, assertion.get("resource"), operator)
+            validate.validate_resource(response, assertion["resource"], operator)
         
         elif "headerField" in assertion:
             #mit value
@@ -431,7 +483,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains" ]:
                 raise error.TestScriptError("headerFiedld operator value not valid")
-            validate.validate_headerfield(response, assertion.get("headerField"), compare_val, operator)
+            validate.validate_headerfield(response, assertion["headerField"], compare_val, operator)
             
         elif "navigationLinks" in assertion:
             #operator will be ignored
@@ -440,21 +492,21 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             check if first, last and next links
             --> Error needs to reflect what is missing
             """
-            raise NotImplementedError
+            raise NotImplementedError("navigationLinks assertions are not supported yet")
         
         elif "expression" in assertion:
             if not operator:
                 operator = "eval"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains", "eval" ]:
                 raise error.TestScriptError("expression operator value not valid")
-            validate.validate_expression(response, assertion.get("expression"), operator, compare_val)
+            validate.validate_expression(response, assertion["expression"], operator, compare_val)
         
         elif "path" in assertion:
             if not operator:
                 operator = "equals"
             elif operator not in ["equals", "notEquals", "in", "notIn", "greaterThan", "lessThan", "empty", "notEmpty", "contains", "notContains"]:
                 raise error.TestScriptError("path operator value not valid")
-            validate.validate_path(response, assertion.get("path"), compare_val, operator)
+            validate.validate_path(response, assertion["path"], compare_val, operator)
 
         
         if "minimumId" in assertion:
@@ -463,7 +515,7 @@ def execute_assertion(assertion : dict[str,Any]) -> None:
             find a way to check if this static fixture or previous response is inside the response
             --> find out if there is a library, find out if validator has that
             """
-            raise NotImplementedError
+            raise NotImplementedError("minimumId assertions are not supported yet")
         
         if "defaultManualCompletion" in assertion:
             raise error.TestScriptError("defaultManualCompletion is not supported as this is an automating Tool")
@@ -483,10 +535,7 @@ def load_testscript_data(testscript_path, resource_path) -> tuple[dict,list]:
     :return: Tuple of (testscript, resources) data.
     """
     testscript = utils.load_json(testscript_path)
-    if resource_path:
-        resources = utils.load_resource_list(resource_path)
-    else:
-        resources = None
+    resources = utils.load_resource_list(resource_path) if resource_path else []
     return testscript, resources
 
 def execute_actions(action: dict[str, Any]) -> None:
@@ -495,20 +544,32 @@ def execute_actions(action: dict[str, Any]) -> None:
     assertion — to the corresponding execution function.
 
     Acts as the central routing point for every action inside the setup, test,
-    and teardown phases of a TestScript.  When an assertion carries
-    ``stopTestOnFail`` set to false, a failing assertion is logged but does not
-    abort the current test; otherwise the error propagates.
+    and teardown phases of a TestScript.  A failing assertion is handled
+    according to its flags:
+
+    * ``warningOnly`` true: reported as a warning, the test continues.
+    * ``stopTestOnFail`` true: the current test stops (the remaining tests
+      and the teardown still run).
+    * ``stopTestOnFail`` false or missing: the failure is recorded and the
+      test continues with its remaining actions.
+
+    ``stopTestOnFail`` follows the element's short name and definition
+    ("If this assert fails, will the current test execution stop?").  The
+    R5 spec details comments section says the opposite, but it is a copy of the
+    ``warningOnly`` comment and is treated as a spec error.  R4 does not have
+    the element, so a missing flag means "continue".
 
     :param action: Dictionary representing one action element from a FHIR
         TestScript phase (must contain either an ``operation`` or ``assert`` key).
-    :raises AssertionError: Re-raised when an assertion fails and
-        ``stopTestOnFail`` is not false.
-    :raises TestExecutionError: If the operation or assertion raises any
-        non-assertion exception, wrapped with context.
+    :raises WarningException: If a ``warningOnly`` assertion fails.
+    :raises AssertionError: If an assertion with ``stopTestOnFail`` true fails.
+    :raises AssertionFailedContinueError: If an assertion with
+        ``stopTestOnFail`` false or missing fails.
+    :raises TestExecutionError: If the operation or assertion could not be
+        executed (invalid TestScript, unsupported feature, connection or
+        validator problem).  The original exception is kept as ``__cause__``.
     """
 
-    stopTestOnFail = True
-    
     try:
         # WHEN – Operation
         if "operation" in action:
@@ -518,33 +579,85 @@ def execute_actions(action: dict[str, Any]) -> None:
          # THEN - Assertion
         elif "assert" in action:
             assertion = action["assert"]
-            stopTestOnFail = assertion.get("stopTestOnFail")
+            if assertion.get("description"):
+                log.debug("Assert description: %s", assertion["description"])
             execute_assertion(assertion)
+            log.info("Assert passed: %s%s", _describe_assertion(assertion), _request_ref())
 
     except AssertionError as ae:
         warningOnly = action.get("assert", {}).get("warningOnly", False)
-        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", True)
+        stopTestOnFail = action.get("assert", {}).get("stopTestOnFail", False)
         # Convert string values to boolean for robust comparison
         if isinstance(warningOnly, str):
             warningOnly = warningOnly.lower() == "true"
         if isinstance(stopTestOnFail, str):
             stopTestOnFail = stopTestOnFail.lower() == "true"
 
-
+        description = _describe_assertion(action.get("assert", {}))
         if warningOnly:
             # Log warning but continue test
+            log.warning("Assert failed (warningOnly): %s%s - %s", description, _request_ref(), ae)
             raise error.WarningException(str(ae))
         elif stopTestOnFail:
-            # stopTestOnFail is true - log error, mark as failed, but continue with remaining assertions
-            raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
+            # stopTestOnFail is true - stop the current test
+            log.error("Assert failed (stopTestOnFail): %s%s - %s", description, _request_ref(), ae)
+            raise AssertionError(f"Assertion failed (stopTestOnFail): {str(ae)}") from ae
         else:
-            # stopTestOnFail is false
-            raise ae
+            # stopTestOnFail is false or missing - record the failure, continue with remaining actions
+            log.error("Assert failed: %s%s - %s", description, _request_ref(), ae)
+            raise error.AssertionFailedContinueError(f"Assertion failed: {str(ae)}")
     except error.WarningException as we:
+        log.warning("Assert not checked: %s - %s", _describe_assertion(action.get("assert", {})), we)
         raise
 
     except Exception as e:
-        raise error.TestExecutionError(f"Test stopped: {str(e)}")
+        kind = "Assert" if "assert" in action else "Operation"
+        log.error("%s could not be executed (%s): %s", kind, _error_cause(e), str(e) or type(e).__name__)
+        log.debug("Traceback:", exc_info=True)
+        raise error.TestExecutionError(str(e) or type(e).__name__) from e
+
+def _describe_operation(operation: dict[str, Any], method: str) -> str:
+    """
+    Short description of an operation for the log, e.g.
+    ``create Patient (POST, sourceId patient-create, responseId create-response)``.
+    """
+    op_type = operation.get("type", {}).get("code") or "operation"
+    text = f"{op_type} {operation.get('resource') or ''}".strip()
+    details = [method.upper()]
+    for field in ("sourceId", "targetId", "params", "responseId", "requestId"):
+        if operation.get(field):
+            details.append(f"{field} {operation[field]}")
+    return f"{text} ({', '.join(details)})"
+
+def _describe_assertion(assertion: dict[str, Any]) -> str:
+    """
+    Short description of an assertion for the log, e.g. ``responseCode in '200,201'``
+    or ``expression 'Patient.id' equals 'abc' on read-response``.
+    """
+    operator = assertion.get("operator")
+    checks = []
+    for check in ("responseCode", "response", "contentType", "resource"):
+        if check in assertion:
+            checks.append(" ".join(filter(None, [check, operator, f"'{assertion[check]}'"])))
+    for check in ("validateProfileId", "headerField", "expression", "path", "minimumId", "navigationLinks"):
+        if check in assertion:
+            text = " ".join(filter(None, [f"{check} '{assertion[check]}'", operator]))
+            if "value" in assertion:
+                text += f" '{assertion['value']}'"
+            elif "compareToSourceId" in assertion:
+                text += f" {assertion['compareToSourceId']}"
+            checks.append(text)
+    if not checks:
+        return assertion.get("label") or assertion.get("description") or "assertion"
+    text = ", ".join(checks)
+    if assertion.get("sourceId"):
+        text += f" on {assertion['sourceId']}"
+    return text
+
+def _request_ref() -> str:
+    """Reference to the communication log of the response the last assertion was evaluated against."""
+    request_id = getattr(asserted_interaction, "request_id", None)
+    return f" [{request_id}]" if request_id else ""
 
 def save_variables(variables : list) -> None:
     """
@@ -584,6 +697,14 @@ def save_variables(variables : list) -> None:
             raise error.TestScriptError(f"Variable {var_id} is not filled!")
 
         VARIABLES.append(variable)
+        log.debug("Variable %s defined (%s)", var_id, _variable_source(variable))
+
+def _variable_source(variable: Variable) -> str:
+    """Where the value of a variable comes from, for the log."""
+    for field in ("expression", "path", "headerField"):
+        if getattr(variable, field) is not None:
+            return f"{field} '{getattr(variable, field)}' on {variable.sourceId}"
+    return f"defaultValue '{variable.defaultValue}'"
 
 def eval_variable(var : Variable):
     """
@@ -627,6 +748,9 @@ def eval_variable(var : Variable):
         for fixture in FIXTURES:
             if fixture.source_id == sourceId:
                 fix = fixture
+
+        if fix is None:
+            raise error.TestScriptError(f"Variable {var.name}: no fixture or response found for sourceId {sourceId}")
 
         if var.headerField:
             if not isinstance(fix, Interaction):
@@ -717,6 +841,9 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     # Parse references for each fixture
     for fixture in all_fixtures:
         fixture.references = reference_parser.parse_references(fixture.body, fixture_ids)
+        log.debug("Fixture '%s': %s/%s (autocreate=%s, autodelete=%s, references=%s)",
+                  fixture.source_id, fixture.type, fixture.fixture_id,
+                  fixture.autocreate, fixture.autodelete, fixture.references or "none")
 
     autocreate_fixtures = [f for f in all_fixtures if f.autocreate]
     non_autocreate_fixtures = [f for f in all_fixtures if not f.autocreate]
@@ -725,6 +852,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
     if autocreate_fixtures:
         try:
             ordered_fixtures = dependency_resolver.resolve_creation_order(autocreate_fixtures)
+            log.debug("Fixture creation order: %s", ", ".join(f.source_id or "?" for f in ordered_fixtures))
             fixture_id_to_server_id = {}
 
             # Create static fixtures sequentially
@@ -742,10 +870,11 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
 
                 resource_type = fixture.type
                 url = f"{FHIR_SERVER_BASE}/{resource_type}"
+                log.info("Creating fixture '%s' (%s/%s)", fixture.source_id, resource_type, fixture.fixture_id)
 
                 if is_xml:
                     headers = {"Content-Type": "application/fhir+xml", "Accept": "application/fhir+xml"}
-                    response = requests.post(url, headers=headers, data=resolved_body)
+                    request_id, response = comm_log.send_request("post", url, headers, resolved_body)
                 else:
                     if isinstance(resolved_body, dict):
                         body_data = json.dumps(resolved_body, ensure_ascii=False)
@@ -754,7 +883,7 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                     else:
                         body_data = str(resolved_body)
                     headers = {"Content-Type": "application/fhir+json", "Accept": "application/fhir+json"}
-                    response = requests.post(url, headers=headers, data=body_data)
+                    request_id, response = comm_log.send_request("post", url, headers, body_data)
 
                 # Extract server ID from response
                 if response.status_code >= 200 and response.status_code < 300:
@@ -780,14 +909,15 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
                             server_id = ""
 
                     if not server_id:
-                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id}")
+                        raise Exception(f"No ID found in response for fixture {fixture.fixture_id} ({request_id})")
 
                     # Update static fixture with server ID
                     fixture.server_id = server_id
                     fixture_id_to_server_id[fixture.fixture_id] = server_id
                     fixture.references_resolved = True
+                    log.info("Fixture '%s' created as %s/%s", fixture.source_id, resource_type, server_id)
                 else:
-                    raise Exception(f"Failed to create fixture {fixture.fixture_id}: {response.status_code} - {response.text[:500]}")
+                    raise Exception(f"Failed to create fixture {fixture.fixture_id} ({request_id}): {response.status_code} - {response.text[:500]}")
 
             # Validate all references are resolved
             dependency_resolver.validate_all_references_resolved(autocreate_fixtures)
@@ -804,40 +934,52 @@ def save_fixtures(resources:list, fix_list:list[dict]) -> None:
         if not fixture.references:
             fixture.references_resolved = True
     
-def save_profile(profilerefs : list[str], profile_ids : list[dict[str,str]]) -> None:
+def save_profile(profilerefs : list, profile_ids : list[dict[str, str]]) -> None:
     """
     Stores FHIR StructureDefinition profile references in the global
     ``PROFILES`` dictionary, keyed by their TestScript-local ID.
 
-    :param profilerefs: List of profile canonical URL references.
-    :param profile_ids: List of dictionaries each containing an ``id`` key
-        that serves as the TestScript-local identifier for the profile.
+    Supports both TestScript ``profile`` encodings:
+
+    * **R5 ``canonical[]``** – ``profilerefs`` holds canonical URL strings and the
+      element IDs are supplied out-of-band via the ``_profile`` primitive-extension
+      array (``profile_ids``), paired positionally.
+    * **R4 ``Reference``** – each entry in ``profilerefs`` is an object of the form
+      ``{"id": ..., "reference": ...}`` and ``profile_ids`` is empty.
+
+    :param profilerefs: List of profile entries – canonical URL strings (R5) or
+        ``Reference`` objects (R4).
+    :param profile_ids: List of ``_profile`` primitive-extension objects, each
+        containing an ``id`` key (R5 only; empty for R4).
     """
     global PROFILES
-    for prof, pId in zip(profilerefs, profile_ids):
-        PROFILES[pId.get("id")] = prof
-             
-def handle_assertion_error(e, stop_test_on_fail : bool) -> bool:
-    """
-    Logs a failed assertion and decides whether the current test should be
-    aborted or is allowed to continue.
+    for idx, prof in enumerate(profilerefs):
+        if isinstance(prof, dict):
+            # R4 Reference form: {"id": ..., "reference": ...}
+            pid = prof.get("id")
+            if pid:
+                PROFILES[pid] = prof.get("reference")
+        else:
+            # R5 canonical form: prof is a URL string; id comes from _profile[idx]
+            pid = profile_ids[idx].get("id") if idx < len(profile_ids) and isinstance(profile_ids[idx], dict) else None
+            if pid is None and isinstance(prof, str):
+                profile_canonical = prof
+                if profile_canonical.startswith("http"):
+                    profile_canonical = profile_canonical
+                    profile_canonical = profile_canonical[profile_canonical.rindex("/")+1:]
+                    log.debug("Profile canonical ID extracted: %s", profile_canonical)
+                else:
+                    profile_canonical = None
+            else:
+                profile_canonical = None
 
-    Called when an ``AssertionError`` is caught inside ``execute_actions``.
-    If ``stop_test_on_fail`` is ``False`` the error is escalated to a
-    ``TestExecutionError`` so the caller can halt; otherwise the failure is
-    only recorded and execution may proceed.
+            pid = profile_canonical if profile_canonical is not None else pid
 
-    :param e: The ``AssertionError`` exception that was raised.
-    :param stop_test_on_fail: When ``False``, the test must be stopped;
-        when ``True``, execution may continue despite the failure.
-    :returns: ``False`` to signal that the assertion failed but continuing
-        is allowed.
-    :raises TestExecutionError: If ``stop_test_on_fail`` is ``False``,
-        indicating the test must not continue.
-    """
-    if stop_test_on_fail == False:
-        raise error.TestExecutionError(f"Test stopped due to stopTestOnFail: {str(e)}")
-    return False  # Test failed, but continuing allowed
+            if pid:
+                PROFILES[pid] = prof
+    for pid, ref in PROFILES.items():
+        log.debug("Profile '%s' -> %s", pid, ref)
+
 
 def autodelete() -> None:
         """
@@ -848,7 +990,21 @@ def autodelete() -> None:
         global FIXTURES
         for fix in FIXTURES:
             if fix.autodelete and fix.server_id != "":
-                requests.delete(f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+                log.info("Autodelete of fixture '%s' (%s/%s)", fix.source_id, fix.type, fix.server_id)
+                request_id, response = comm_log.send_request("delete", f"{FHIR_SERVER_BASE}/{fix.type}/{fix.server_id}")
+                if not response.ok:
+                    log.warning("Autodelete of fixture '%s' returned HTTP %s [%s]",
+                                fix.source_id, response.status_code, request_id)
+
+def _error_cause(e: BaseException) -> str:
+    """
+    Returns the class name of the original exception behind ``e``, following
+    the ``raise ... from`` chain (e.g. ``ConnectionError`` instead of the
+    wrapping ``TestExecutionError``).
+    """
+    while e.__cause__ is not None:
+        e = e.__cause__
+    return type(e).__name__
 
 def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     """
@@ -858,15 +1014,25 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     references so they point to server-assigned IDs, and then runs every
     setup action in order.
 
+    Setup assertions follow the same ``stopTestOnFail`` rules as in a test:
+    with true the setup stops at once, otherwise the remaining setup actions
+    still run.  Since the tests depend on the setup, any failed setup
+    assertion aborts the TestScript afterwards.
+
+    A failed assertion is recorded as ``fail``; a fixture or action that
+    could not be executed is recorded as ``error``.
+
     :param setup_data: The ``setup`` dictionary from the TestScript JSON,
         or an empty dict when there is no explicit setup section.
     :param fixture_list: List of raw fixture definition dictionaries from
         the TestScript.
     :param resources: List of parsed JSON bodies of the Example Instance
         files that back the fixtures.
-    :raises TestScriptError: If a setup operation fails
+    :raises TestScriptError: If fixture creation, a setup operation or a
+        setup assertion fails
     """
     global FIXTURES
+    log.info("--- Setup")
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Setup", "Setup")
     setup_actions = (setup_data or {}).get("action", []) or []
@@ -874,39 +1040,54 @@ def SETUP(setup_data : dict, fixture_list : list, resources) -> None:
     tracker.set_assertion_count(declared_asserts)
     error_message = ""
     error_type = None
+    failed = False
     warnings = []
     errors = []
     try:
-        
+
         if fixture_list: #if there are static fixtures to save
-            save_fixtures(resources, fixture_list)
+            try:
+                save_fixtures(resources, fixture_list)
+            except Exception as e: #failure in autocreate
+                error_type = _error_cause(e)
+                error_message = f"Fixture initialization failed ({error_type}): {str(e)}"
+                log.debug("Traceback:", exc_info=True)
+                raise error.TestScriptError(error_message) from e
+
         for action in setup_data.get("action", []):
             try:
                 execute_actions(action)
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
-        
-    except error.OperationError as oe:
-        error_message = "Setup operation failed: " + str(oe)
-        error_type = "OperationError"
-        raise error.TestScriptError("Setup operation failed: ", oe)# stop the whole testscript
-    except error.TestExecutionError as teE:
-        error_message = f"Setup action failed: {str(teE)}"
-        error_type = "TestExecutionError"
-        raise error.TestScriptError("Setup failed: " , teE) #stop the whole testscript
-    
-    except Exception as e: #usually only failure in autocreate
-        error_message = f"Fixture initialization failed ({type(e).__name__}): {str(e)}"
-        error_type = type(e).__name__
-        raise error.TestScriptError(error_message)
+            except error.AssertionFailedContinueError as e:
+                # stopTestOnFail false or missing - record and run the remaining setup actions
+                failed = True
+                errors.append(str(e))
+
+        if errors:
+            # the tests depend on the setup, so failed setup assertions abort the TestScript
+            raise error.TestScriptError(f"Setup assertion failed: {'; '.join(errors)}")
+
+    except error.TestScriptError:
+        raise
+    except AssertionError as ae: #stopTestOnFail true - stop the setup at once
+        failed = True
+        error_message = f"Setup stopped: {str(ae)}"
+        raise error.TestScriptError(error_message) from ae
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_message = f"Setup stopped ({error_type}): {str(e)}"
+        raise error.TestScriptError(error_message) from e #stop the whole testscript
     finally:
-        result = "fail" if (error_message or errors) else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_message:
+            result = "error"
         else:
+            result = "pass"
+        messages = errors + ([error_message] if error_message else [])
+        if not messages:
             messages.append("Setup successful")
-        messages.extend(errors)
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
@@ -915,15 +1096,16 @@ def TEST(test_data : dict) -> None:
     Executes a single **test** phase of a FHIR TestScript.
 
     Iterates over all actions defined in the test.
-    Assertion failures are logged and flagged but do not necessarily
-    abort the remaining actions; a ``TestExecutionError`` (e.g. from
-    ``stopTestOnFail``) does stop the test.  The overall pass/fail result
-    is logged after all actions have been attempted.
+    Assertion failures are recorded and the remaining actions still run,
+    unless the assertion has ``stopTestOnFail`` set to true (raised as
+    ``AssertionError``) or an action could not be executed
+    (``TestExecutionError``); both stop the test, the next test still runs.
+
+    The test is recorded as ``fail`` if any assertion failed, as ``error``
+    if an action could not be executed, and as ``pass`` otherwise.
 
     :param test_data: A single ``test`` element dictionary from the
         TestScript JSON.
-    :raises TestScriptError: If an operation within the test fails
-        (wraps ``OperationError``).
     """
     #Test Capabilities --> if Error --> skip test --> maybe in main
 
@@ -933,6 +1115,7 @@ def TEST(test_data : dict) -> None:
     error_type = None
     warnings = []
     errors = []
+    log.info("--- Test '%s'", test_name)
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Test", test_name)
     test_actions = (test_data or {}).get("action", []) or []
@@ -951,35 +1134,23 @@ def TEST(test_data : dict) -> None:
             except error.AssertionFailedContinueError as e:
                 failed = True
                 errors.append(str(e))
-            except AssertionError as e:
-                raise
-            except error.OperationError as oe:
-                raise error.TestScriptError("Test operation failed: ", oe)
-            except error.TestExecutionError as e:
-                raise
 
-    except AssertionError as e:
+    except AssertionError as e: #stopTestOnFail true
         failed = True
         error_message = str(e)
-        error_type = type(e).__name__
-    except error.TestExecutionError as e:
-        failed = True
-        error_message = str(e)
-        error_type = type(e).__name__
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_message = f"Test stopped ({error_type}): {str(e)}"
         #test schould get stopped, and next test needs to start
     finally:
-        result = "fail" if (failed or error_message) else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
-            if errors:
-                messages.extend(errors)
-        elif errors:
-            messages.extend(errors)
-            error_type = "AssertionError"
-        elif failed:
-            messages.append("Test failed")
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_message:
+            result = "error"
         else:
+            result = "pass"
+        messages = errors + ([error_message] if error_message else [])
+        if not messages:
             messages.append("Test passed")
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
@@ -990,45 +1161,96 @@ def TEARDOWN(teardown_data : dict) -> None:
 
     Runs every teardown action (operations and assertions) and afterwards
     calls ``autodelete`` to remove all static fixtures whose ``autodelete`` flag
-    is set.
+    is set.  ``autodelete`` also runs when a teardown action fails.
+
+    Failures are recorded in the Teardown outcome and not raised, as there
+    is nothing left to abort after the teardown.  A failed assertion is
+    recorded as ``fail``; an action or autodelete that could not be executed
+    as ``error``.
 
     :param teardown_data: The ``teardown`` dictionary from the TestScript
         JSON, or an empty dict when there is no explicit teardown section.
-    :raises TestScriptError: If a teardown operation fails
-        (wraps ``OperationError``).
     """
+    log.info("--- Teardown")
     tracker = rt.get_result_tracker()
     tracker.start_outcome("Teardown", "Teardown")
     teardown_actions = (teardown_data or {}).get("action", []) or []
     declared_asserts = sum(1 for a in teardown_actions if "assert" in a)
     tracker.set_assertion_count(declared_asserts)
-    error_message = ""
+    error_messages = []
     error_type = None
+    failed = False
     warnings = []
+    errors = []
     try:
         for action in teardown_data.get("action", []):
             try:
                 execute_actions(action)
             except error.WarningException as we:
                 warnings.append(f"⚠ WARNING: {str(we)}")
-        
+            except error.AssertionFailedContinueError as e:
+                # stopTestOnFail false or missing - record and run the remaining teardown actions
+                failed = True
+                errors.append(str(e))
+
+    except AssertionError as ae: #stopTestOnFail true - skip the remaining teardown actions
+        failed = True
+        errors.append(f"Teardown stopped: {str(ae)}")
+    except Exception as e: #action could not be executed
+        error_type = _error_cause(e)
+        error_messages.append(f"Teardown stopped ({error_type}): {str(e)}")
+
+    try:
         autodelete()
-        
-    except error.OperationError as oe:
-        error_message = "Teardown operation failed: " + str(oe)
-        error_type = "OperationError"
-        raise error.TestScriptError("Teardown operation failed: " , oe)
+    except Exception as e:
+        error_type = error_type or type(e).__name__
+        error_messages.append(f"Autodelete of fixtures failed ({type(e).__name__}): {str(e)}")
+        log.error("%s", error_messages[-1])
     finally:
-        result = "fail" if error_message else "pass"
-        messages = []
-        if error_message:
-            messages.append(error_message)
+        if failed:
+            result, error_type = "fail", "AssertionError"
+        elif error_messages:
+            result = "error"
         else:
+            result = "pass"
+        messages = errors + error_messages
+        if not messages:
             messages.append("Teardown successful")
         messages.extend(warnings)
         tracker.finish_outcome(result=result, message=messages, error_type=error_type)
 
-def test_fhir_operations(testscript_data : dict, testscript_path=""):
+def _record_abort(testscript: dict, message: str, error_type: str) -> None:
+    """
+    Records the abort of a TestScript in the result tracker.
+
+    A phase (Setup/Test/Teardown) that fails records its own failing outcome
+    before it raises.  An extra "Aborted" outcome (recorded as ``error``) is
+    only added when nothing has recorded the failure yet, e.g. when the
+    TestScript is invalid and no phase was started.  This way a single fault
+    is counted only once.  The tests that did not run are recorded as skipped.
+
+    :param testscript: The TestScript dictionary.
+    :param message: Reason for the abort.
+    :param error_type: Error classification for the outcome.
+    """
+    log.error("%s", message)
+    trk = rt.get_result_tracker()
+    ts_result = trk.current_testscript
+    if trk.current_outcome:
+        # A phase was interrupted before it could record its result
+        trk.finish_outcome(result="error", message=[message], error_type=error_type)
+    elif not ts_result or not ts_result.outcomes or ts_result.outcomes[-1].result not in ("fail", "error"):
+        # Failed before any phase recorded the failure
+        trk.start_outcome("Setup", "Aborted")
+        trk.finish_outcome(result="error", message=[message], error_type=error_type)
+
+    if ts_result:
+        tests_run = sum(1 for o in ts_result.outcomes if o.class_type == "Test")
+        for test in testscript.get("test", [])[tests_run:]:
+            trk.start_outcome("Test", test.get('name', 'Unnamed Test'))
+            trk.finish_outcome(result="skip", message=["Skipped: TestScript aborted"])
+
+def test_fhir_operations(testscript_data : tuple[dict, list], testscript_path=""):
     """
     Main entry point that orchestrates a complete FHIR TestScript run.
 
@@ -1045,12 +1267,13 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
     """
 
     global FHIR_SERVER_BASE
-    FHIR_SERVER_BASE = conf_man.get_fhir_server()
+    FHIR_SERVER_BASE = conf_man.get_fhir_server() or ""
 
     if not conf_man.has_fhir_server():
         tracker = rt.get_result_tracker()
         ts_temp, _ = testscript_data
         nm = ts_temp.get('name', ts_temp.get('id', 'Unnamed TestScript'))
+        log.warning("TestScript '%s' skipped: no FHIR server configured", nm)
         tracker.initialize_testscript(nm, ts_temp.get("url", testscript_path or ""))
         tracker.start_outcome("Setup", "Skipped")
         tracker.finish_outcome(result="skip", message=["No FHIR server configured"], error_type="Skipped")
@@ -1061,6 +1284,10 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
     tracker = rt.get_result_tracker()
     testscript_name = testscript.get('name', testscript.get('id', 'Unnamed TestScript'))
     tracker.initialize_testscript(testscript_name, testscript.get("url", testscript_path or ""))
+    log.info("TestScript '%s' (%s)", testscript_name, testscript.get("url", "no url"))
+    log.debug("%d fixture(s), %d variable(s), %d profile(s), %d test(s)",
+              len(testscript.get("fixture", [])), len(testscript.get("variable", [])),
+              len(testscript.get("profile", [])), len(testscript.get("test", [])))
 
     try:
 
@@ -1081,48 +1308,27 @@ def test_fhir_operations(testscript_data : dict, testscript_path=""):
         if variable_list:
             save_variables(variable_list)
 
-        if testscript.get("setup"): #there can only be one Setup
-            SETUP(testscript.get("setup"),fixture_list, resources)
-        else:
-            SETUP({},fixture_list, resources)
+        SETUP(testscript.get("setup") or {}, fixture_list, resources) #there can only be one Setup
             
         for test in testscript.get("test", []):
             TEST(test)  
 
-        if testscript.get("teardown"): #there can only be one Setup
-            TEARDOWN(testscript.get("teardown"))
-        else:
-            TEARDOWN({})
+        TEARDOWN(testscript.get("teardown") or {}) #there can only be one Teardown
 
     except error.TestScriptError as tse:
         autodelete() #autodelete after everything went wrong
-        trk = rt.get_result_tracker()
-        if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=[f"TestScript aborted: {str(tse)}"], error_type="TestScriptError")
-        if trk.current_testscript:
-            trk.current_testscript.outcome = "fail"
-        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
-        for test in testscript.get("test", []):
-            test_name = test.get('name', 'Unnamed Test')
-            if test_name not in already_run:
-                trk.start_outcome("Test", test_name)
-                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
+        _record_abort(testscript, f"TestScript aborted: {str(tse)}", _error_cause(tse))
     except Exception as e:
-        trk = rt.get_result_tracker()
-        if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=[f"Unexpected error ({type(e).__name__}): {str(e)}"], error_type=type(e).__name__)
-        if trk.current_testscript:
-            trk.current_testscript.outcome = "fail"
-        already_run = {o.name for o in trk.current_testscript.outcomes} if trk.current_testscript else set()
-        for test in testscript.get("test", []):
-            test_name = test.get('name', 'Unnamed Test')
-            if test_name not in already_run:
-                trk.start_outcome("Test", test_name)
-                trk.finish_outcome(result="skip", message=["Skipped: Setup failed"])
+        log.debug("Traceback:", exc_info=True)
+        _record_abort(testscript, f"Unexpected error ({type(e).__name__}): {str(e)}", _error_cause(e))
     finally:
         trk = rt.get_result_tracker()
         if trk.current_outcome:
-            trk.finish_outcome(result="fail", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
+            trk.finish_outcome(result="error", message=["Execution interrupted unexpectedly - phase did not complete"], error_type="Aborted")
+        ts_result = trk.current_testscript
+        if ts_result:
+            level = logging.INFO if ts_result.outcome == "pass" else logging.WARNING if ts_result.outcome == "skip" else logging.ERROR
+            log.log(level, "TestScript '%s' finished: %s (%.2f s)", ts_result.name, ts_result.outcome.upper(), ts_result.total_time)
             
         FIXTURES.clear() 
         REQ_RESP.clear()

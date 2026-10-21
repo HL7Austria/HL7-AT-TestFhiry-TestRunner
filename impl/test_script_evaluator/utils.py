@@ -4,7 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Literal
 import re
-from lxml import etree
+import lxml.etree as etree
 from jsonpath_ng import parse as jp_parse
 
 
@@ -44,11 +44,12 @@ def get_fixture(testscript: dict) -> list[dict]:
         fixtures.append(fixture)
     return fixtures
 
-def get_profile(testscript : dict) -> tuple[list[str], list[str]]:
+def get_profile(testscript : dict) -> tuple[list, list[dict]]:
     """Extracts profile references and their corresponding IDs from a TestScript.
 
     :param testscript: Parsed TestScript JSON dictionary.
-    :returns: Tuple of (profile reference list, profile ID list).
+    :returns: Tuple of (profile entries - canonical URLs (R5) or Reference objects (R4),
+        ``_profile`` primitive-extension objects).
     """
     profiles = []
     profile_ids = []
@@ -100,12 +101,9 @@ def load_resource_list(paths : list[str]) -> list:
     """Loads multiple FHIR resource files (JSON or XML) from the given paths.
 
     :param paths: List of relative path strings to resource files.
-    :returns: List of parsed JSON dicts or raw XML strings, or ``None`` if ``paths`` is empty.
+    :returns: List of parsed JSON dicts or raw XML strings (empty if ``paths`` is empty).
     """
     resource_list = []
-
-    if not paths:
-        return None
 
     for path in paths:
         resource_list.append(load_resource(path))

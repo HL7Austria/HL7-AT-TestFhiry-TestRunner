@@ -1,8 +1,10 @@
-from datetime import datetime
+import logging
 from pathlib import Path
 
 from impl.test_script_evaluator.result_tracker import ResultTracker
 import impl.test_script_evaluator.configuration_manager as conf_man
+
+log = logging.getLogger("testrunner.summary")
 
 def format_summary(tracker: ResultTracker) -> str:
     """
@@ -20,33 +22,42 @@ def format_summary(tracker: ResultTracker) -> str:
     total_scripts = len(run.testscript_results)
     passed_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "pass")
     failed_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "fail")
+    error_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "error")
     skipped_scripts = sum(1 for ts in run.testscript_results if ts.outcome == "skip")
-    
+
     lines.append(f"Total TestScripts: {total_scripts}")
     lines.append(f"passed: {passed_scripts}")
     lines.append(f"failed: {failed_scripts}")
+    lines.append(f"errors: {error_scripts}")
     lines.append(f"skipped: {skipped_scripts}")
     lines.append("-" * 34)
-    
+
     if failed_scripts > 0:
         lines.append("failed TestScripts:")
         for ts in run.testscript_results:
             if ts.outcome == "fail":
                 lines.append(ts.name)
-    
+
+    if error_scripts > 0:
+        lines.append("TestScripts with errors (TestScript or tool could not be executed):")
+        for ts in run.testscript_results:
+            if ts.outcome == "error":
+                lines.append(ts.name)
+
     return "\n".join(lines)
 
 
-def print_summary(tracker: ResultTracker):
+def log_summary(tracker: ResultTracker):
     """
-    Prints the test summary to console.
+    Writes the test summary to the log (console and log file).
 
     :param tracker: filled ResultTracker
     """
-    summary = format_summary(tracker)
-    print(summary)
+    log.info("===== Summary")
+    for line in format_summary(tracker).splitlines():
+        log.info("%s", line)
 
-def save_summary(tracker: ResultTracker):
+def save_summary(tracker: ResultTracker) -> Path:
     """
     Saves the test summary to a text file.
 
@@ -54,29 +65,21 @@ def save_summary(tracker: ResultTracker):
     with a timestamp-based filename.
 
     :param tracker: filled ResultTracker
+    :return: Path of the written file
     :raises Exception: if the file could not be saved correctly
     """
     summary = format_summary(tracker) # summary str
 
-    cm = conf_man.get_config_manager()
-    
-    if getattr(cm, "results_path", None):
-        results_dir = cm.results_path
-    elif getattr(cm, "path", None):
-        results_dir = Path(cm.path) / "Result"
-    else:
-        base = Path(__file__).resolve().parent.parent
-        results_dir = base / "Results"
-
-    txt_dir = Path(results_dir) / "Txt-files"
+    txt_dir = conf_man.get_config_manager().results_dir / "Txt-files"
     txt_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"test_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+    filename = f"test_results_{tracker.run_file_stamp()}.txt"
     filepath = txt_dir / filename
 
     try:
         filepath.write_text(summary)
     except Exception as e:
         raise Exception("Txt File could not be saved correctly!")
+    return filepath
 
 
 
